@@ -47,3 +47,14 @@ check(bootstrap_lane.include?('verify_apple_access!'), 'Admin bootstrap must ver
 check(!beta_lane.include?('verify_apple_access!'), 'Developer readonly upload must not require Apple certificate/profile management permissions')
 check(beta_lane.include?('with_match_signing(key, readonly: true)'), 'Developer upload must remain match readonly')
 puts 'PASS: Admin-only portal permission probe; Developer readonly TestFlight does not require management permissions.'
+
+diagnostic = workflows.fetch('diagnose-signing.yml')
+diagnostic_job = diagnostic.fetch('jobs').fetch('diagnose')
+check((diagnostic['on'] || diagnostic[true]).keys == ['workflow_dispatch'], 'read-only diagnosis is manual only')
+check(diagnostic_job['environment'] == 'signing-bootstrap', 'read-only diagnosis uses the Admin environment')
+check(diagnostic_job['if'].include?("github.ref == 'refs/heads/main'"), 'read-only diagnosis only main')
+check(!diagnostic_job.fetch('env').key?('MATCH_PASSWORD') && !diagnostic_job.fetch('env').key?('SIGNING_REPO_PAT'), 'read-only diagnosis receives no match credentials')
+check(diagnostic_job.fetch('steps').any? { |step| step['run'] == 'python3 scripts/run_signing_lane.py diagnose_signing' }, 'read-only diagnostic uses safe wrapper')
+diagnostic_lane = fastfile.split('lane :diagnose_signing do', 2).last.split('lane :initialize_signing do', 2).first
+check(diagnostic_lane.include?('verify_apple_access!') && !diagnostic_lane.include?('with_match_signing') && !diagnostic_lane.match?(/\bmatch\(/), 'diagnostic lane never invokes match')
+puts 'PASS: independent manual read-only diagnosis; no signing assets or match credentials.'

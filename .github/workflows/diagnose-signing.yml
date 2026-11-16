@@ -1,0 +1,40 @@
+name: Diagnose Apple Signing (read only)
+on:
+  workflow_dispatch:
+env:
+  FASTLANE_OPT_OUT_USAGE: '1'
+  FASTLANE_SKIP_UPDATE_CHECK: '1'
+permissions:
+  contents: read
+concurrency:
+  group: apple-release
+  cancel-in-progress: false
+jobs:
+  diagnose:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    environment: signing-bootstrap
+    runs-on: macos-15
+    timeout-minutes: 10
+    env:
+      ASC_KEY_ID: ${{ secrets.SIGNING_ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.SIGNING_ASC_ISSUER_ID }}
+      ASC_API_KEY_P8: ${{ secrets.SIGNING_ASC_API_KEY_P8 }}
+      APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID || secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Validate configuration without reading match credentials
+        run: python3 scripts/check_release_secrets.py --team --trusted-dispatch
+      - uses: ruby/setup-ruby@4a9ddd6f338a97768b8006bf671dfbad383215f4
+        with:
+          ruby-version: '3.3'
+          bundler: '2.5.23'
+      - name: Install locked tooling
+        run: |
+          bundle config set path vendor/bundle
+          bundle config set frozen true
+          bundle install --jobs 4
+      - name: Read-only API diagnosis (no match or certificate changes)
+        run: python3 scripts/run_signing_lane.py diagnose_signing
+      # No API responses, credentials or private logs are uploaded as artifacts.

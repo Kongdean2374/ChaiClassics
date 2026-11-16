@@ -83,3 +83,9 @@ Actions → Prepare App Store：main、已測版本、精確 build number、prov
 Apple 官方 [SDK minimum requirements](https://developer.apple.com/news/upcoming-requirements/?id=04282026a)：2026-04-28 起需 Xcode 26+／iOS 26 SDK。本次 macOS CI 使用 Xcode 26.3／SDK 26.2。正式上傳前仍要查當前條件，尤其 2027-04 SDK 27 要求。
 
 本次僅修正 bootstrap 環境／金鑰映射，依使用者要求未觸發 Initialize Signing，也未建立／撤銷任何 Apple 憑證。
+
+## 安全診斷更新
+
+Run 43810107847 的舊 APPLE_ACCESS 不能證明 403，現已移除「所有 UnexpectedResponse = 權限不足」的分類。初始化保留管理 API／Team／Bundle ID 檢查，但改為三個固定 HTTPS GET 各讀一頁；HTTP 狀態在任何格式化前分類，公開 log 只有資源、HTTP、固定類別與少數 allowlisted Apple code。TestFlight 的 Developer readonly 路徑不受影響。
+
+新增獨立的手動 **Diagnose Apple Signing (read only)**，使用 signing-bootstrap Admin Key，但沒有 match PAT／密碼、不呼叫 match、不變更 Apple 資產。此次不會自動執行它或初始化。完整取證限制、錯誤碼與 Apple 後台設定判斷見 [APPLE_SIGNING_DIAGNOSTICS.md](APPLE_SIGNING_DIAGNOSTICS.md)。

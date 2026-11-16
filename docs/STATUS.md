@@ -26,3 +26,5 @@
 簽署架構已改為私人 ChaiClassics-Signing/main 的 fastlane match：Initialize Signing 手動建立／加密推送，TestFlight readonly，ASC_API_KEY_P8 為原始文字，不要求手動 p12。新版本結果以 Actions 為準；不得把程式修改與實際 Apple 生成／上傳混為一談。
 
 首次初始化環境已按使用者設定改為 signing-bootstrap；三個 SIGNING_ASC_* Admin Secrets 僅映射至初始化 Job 的 ASC_*。一般 TestFlight 維持 Developer Key，共用 Team ID／PAT／MATCH_PASSWORD 保留。本次明確不執行初始化；真實 Apple 簽署資產狀態未因此改變。
+
+Run 43810107847 的診斷缺陷已確認：舊 APPLE_ACCESS 丟失 HTTP 與資源，不足以證明權限問題。已加入分資源／HTTP 的安全診斷與獨立手動唯讀 workflow；實際 Apple 根因仍無法由已刪除的舊私密 log 還原。本次不重跑 Initialize Signing、不執行 Apple 請求、不修改任何憑證。詳見 APPLE_SIGNING_DIAGNOSTICS.md。

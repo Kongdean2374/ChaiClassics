@@ -17,3 +17,5 @@ macOS 工作使用臨時 keychain，結束恢復原 keychain 清單與本 App �
 依賴由 Gemfile.lock 鎖定，actions pin commit。CI 用臨時測試金鑰驗證原始 PEM、readonly、權限與日誌抑制，不使用真 Apple 資產。實際 Apple 建立／簽署／上傳只有手動簽署流程才能驗證。
 
 App 執行期沒有網路、帳號、analytics、廣告或推播；開發部署工具的 API 存取不進 App。隱私問卷仍需依實際二進位填寫。進度只在本機，卸載可能移除。
+
+Apple API 診斷不依賴任意例外文字判定權限。獨立唯讀流程只允許三個固定 GET、HTTPS 固定 host、不跟隨 redirect／pagination、不重試；它不接收 match credentials。安全 IPC 僅准固定資源、數字 HTTP、固定分類及明確 allowlist code，禁止 request／response／headers／exception 原文。未知／格式／網路／5xx 不宣稱權限不足。report 與原始子程序 log 都在結束時刪除、不上傳 artifact。

@@ -33,6 +33,14 @@ class SigningPreflightTests(unittest.TestCase):
             with self.assertRaises(checks.ConfigurationError) as error: checks.validate_environment(env)
             self.assertNotIn(key, str(error.exception))
 
+    def test_readonly_team_check_requires_no_match_secrets(self):
+        env = self.env()
+        del env['SIGNING_REPO_PAT']; del env['MATCH_PASSWORD']
+        checks.validate_environment(env, team=True)
+        del env['APPLE_TEAM_ID']
+        with self.assertRaisesRegex(checks.ConfigurationError, 'APPLE_TEAM_ID'):
+            checks.validate_environment(env, team=True)
+
     def test_trusted_manual_main_only(self):
         checks.validate_trusted_dispatch(dict(GITHUB_EVENT_NAME='workflow_dispatch', GITHUB_REF='refs/heads/main'))
         for event,ref in [('push','refs/heads/main'),('pull_request','refs/heads/main'),('workflow_dispatch','refs/heads/feature')]:

@@ -6,10 +6,12 @@ REPO = 'Kongdean2374/ChaiClassics-Signing'
 class ConfigurationError(Exception):
     pass
 
-def validate_environment(env, signing=False):
+def validate_environment(env, signing=False, team=False):
     names = ['ASC_KEY_ID', 'ASC_ISSUER_ID', 'ASC_API_KEY_P8']
+    if signing or team:
+        names += ['APPLE_TEAM_ID']
     if signing:
-        names += ['APPLE_TEAM_ID', 'SIGNING_REPO_PAT', 'MATCH_PASSWORD']
+        names += ['SIGNING_REPO_PAT', 'MATCH_PASSWORD']
     missing = [name for name in names if not env.get(name, '').strip()]
     if missing:
         raise ConfigurationError('Missing configuration: ' + ', '.join(missing) + '. APPLE_TEAM_ID may be a workflow input, Repository Variable or Secret. See docs/RELEASING.md')
@@ -24,7 +26,7 @@ def validate_environment(env, signing=False):
     result = subprocess.run(['openssl', 'pkey', '-check', '-noout'], input=pem.encode(), capture_output=True)
     if result.returncode:
         raise ConfigurationError('ASC_API_KEY_P8 could not be parsed as a private key. Its contents are suppressed.')
-    if signing and not re.fullmatch(r'[A-Z0-9]{10}', env['APPLE_TEAM_ID']):
+    if (signing or team) and not re.fullmatch(r'[A-Z0-9]{10}', env['APPLE_TEAM_ID']):
         raise ConfigurationError('APPLE_TEAM_ID must be the 10-character Apple Developer Team ID, not ASC_ISSUER_ID.')
 
 def validate_trusted_dispatch(env):
@@ -60,6 +62,7 @@ def validate_signing_repo(token, initialize=False, request=github_request):
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--signing', action='store_true')
+    parser.add_argument('--team', action='store_true')
     parser.add_argument('--initialize', action='store_true')
     parser.add_argument('--trusted-dispatch', action='store_true')
     parser.add_argument('--check-repo', action='store_true')
@@ -67,7 +70,7 @@ def main(argv=None):
     try:
         if args.trusted_dispatch:
             validate_trusted_dispatch(os.environ)
-        validate_environment(os.environ, args.signing or args.initialize)
+        validate_environment(os.environ, args.signing or args.initialize, args.team)
         if args.check_repo:
             validate_signing_repo(os.environ.get('SIGNING_REPO_PAT', ''), args.initialize)
     except ConfigurationError as error:

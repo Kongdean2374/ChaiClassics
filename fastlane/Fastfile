@@ -4,6 +4,7 @@ require "open3"
 require "fileutils"
 require "plist"
 require_relative "lib/signing_config"
+require_relative "lib/apple_api_diagnostics"
 
 def project_path(*parts)
   File.join(File.expand_path("..", FastlaneCore::FastlaneFolder.path), *parts)
@@ -33,21 +34,15 @@ def trusted_dispatch!
 end
 
 def verify_apple_access!
-  # Read-only permission probes. Only match may create the exact app's assets.
-  certificates = Spaceship::ConnectAPI::Certificate.all(limit: 1)
-  Spaceship::ConnectAPI::Profile.all(limit: 1)
-  ids = Spaceship::ConnectAPI::BundleId.all(filter: { identifier: ChaiSigning::APP_IDENTIFIER })
-  UI.user_error!("[CHAI_SIGNING:BUNDLE_ID] Register cc.chaihome.chaiclassics in the correct Apple Developer team before initializing profiles") if ids.empty?
-  # An ASC issuer UUID is not a Developer Team ID. Check certificate OU when available;
-  # after match, the exact installed profile and signing identity are checked again.
-  certificates.each do |certificate|
-    next if certificate.certificate_content.to_s.empty?
-    cert = OpenSSL::X509::Certificate.new(Base64.decode64(certificate.certificate_content))
-    team = cert.subject.to_a.find { |part| part[0] == "OU" }&.at(1)
-    UI.user_error!("[CHAI_SIGNING:APPLE_TEAM] API key and APPLE_TEAM_ID belong to different teams") if team && team != ENV.fetch("APPLE_TEAM_ID")
-  end
-rescue Spaceship::UnexpectedResponse => error
-  UI.user_error!("[CHAI_SIGNING:APPLE_ACCESS] Apple API key cannot access Certificates, Identifiers & Profiles")
+  client = ChaiAppleDiagnostics::Client.new(
+    token_provider: -> { Spaceship::ConnectAPI.token.text },
+    app_identifier: ChaiSigning::APP_IDENTIFIER
+  )
+  ChaiAppleDiagnostics.verify!(client: client, team_id: ENV.fetch("APPLE_TEAM_ID"))
+rescue ChaiAppleDiagnostics::Failure
+  # The Python wrapper publishes only validated status/resource/category fields.
+  # No broad UnexpectedResponse -> permission-denied conversion remains.
+  UI.user_error!("[CHAI_SIGNING:APPLE_DIAGNOSTIC] Read-only Apple API check failed; see safe diagnostic report")
 end
 
 def profile_files
@@ -123,6 +118,14 @@ end
 
 default_platform(:ios)
 platform :ios do
+  desc "Read-only Apple certificate/profile/Bundle ID diagnostics; never calls match"
+  lane :diagnose_signing do
+    trusted_dispatch!
+    required!("APPLE_TEAM_ID")
+    api_key
+    verify_apple_access!
+  end
+
   desc "Manually initialize encrypted match assets for this app; never revoke certificates"
   lane :initialize_signing do
     trusted_dispatch!
