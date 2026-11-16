@@ -24,3 +24,5 @@
 發布工具額外檢查：[release-tooling 成功紀錄](https://github.com/Kongdean2374/ChaiClassics/actions/runs/43806421013)，Ruby 3.3／Bundler 2.5.23、fastlane 2.228.0，Syntax OK 且兩個 lanes 載入；解析出的 Gemfile.lock 已固定。這不表示簽署或 Apple 上傳已成功。
 
 簽署架構已改為私人 ChaiClassics-Signing/main 的 fastlane match：Initialize Signing 手動建立／加密推送，TestFlight readonly，ASC_API_KEY_P8 為原始文字，不要求手動 p12。新版本結果以 Actions 為準；不得把程式修改與實際 Apple 生成／上傳混為一談。
+
+首次初始化環境已按使用者設定改為 signing-bootstrap；三個 SIGNING_ASC_* Admin Secrets 僅映射至初始化 Job 的 ASC_*。一般 TestFlight 維持 Developer Key，共用 Team ID／PAT／MATCH_PASSWORD 保留。本次明確不執行初始化；真實 Apple 簽署資產狀態未因此改變。

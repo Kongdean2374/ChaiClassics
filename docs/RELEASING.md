@@ -2,7 +2,7 @@
 
 公開原始碼：Kongdean2374/ChaiClassics，預設 main。私密簽署：**Kongdean2374/ChaiClassics-Signing / main**。簽署流程僅 `workflow_dispatch` 且 `refs/heads/main`；一般 push／PR 的 CI 完全不讀 Apple／match Secrets。
 
-## 現在使用的設定
+## 一般 TestFlight／App Store 的 Developer Key 與共用設定
 
 | 設定 | 格式／用途 |
 | --- | --- |
@@ -13,7 +13,19 @@
 | SIGNING_REPO_PAT | 可存取私人 ChaiClassics-Signing 的 PAT；初始化需 Contents read/write，readonly 取回需 Contents read |
 | MATCH_PASSWORD | match 私人倉庫的加密密碼，必須持續保留同一值 |
 
-使用者已回報上述 Secrets 已配置（含 APPLE_TEAM_ID）；程式不讀取／公開其值，執行時才驗證真實有效性。Repo Secrets 可由 `signing`、`testflight`、`production` 環境使用；同名 Environment Secret 有覆蓋優先權，請避免舊值。
+使用者已回報上述 Secrets 已配置（含 APPLE_TEAM_ID）；程式不讀取／公開其值，執行時才驗證真實有效性。共用 Repository Secrets 保留 APPLE_TEAM_ID、SIGNING_REPO_PAT、MATCH_PASSWORD。一般 TestFlight／App Store 仍讀取原本的 Developer ASC_KEY_ID／ASC_ISSUER_ID／ASC_API_KEY_P8；不使用 Admin Key。
+
+### 首次初始化專用 Admin Key
+
+使用者已建立 Environment **signing-bootstrap**，僅 Initialize Signing Job 選用，映射如下：
+
+| signing-bootstrap 的 Admin Secret | 初始化程序讀取的環境變數 |
+| --- | --- |
+| SIGNING_ASC_KEY_ID | ASC_KEY_ID |
+| SIGNING_ASC_ISSUER_ID | ASC_ISSUER_ID |
+| SIGNING_ASC_API_KEY_P8 | ASC_API_KEY_P8（完整原始多行 p8，非 Base64） |
+
+這些名稱只在初始化 YAML 的 env 映射使用；Fastfile 與預檢程式維持統一 ASC_* 變數，不需要更換 Repository 的 Developer Key。Admin Secrets 不傳給 reusable CI，也不傳給一般 TestFlight／App Store。APPLE_TEAM_ID、MATCH_PASSWORD、SIGNING_REPO_PAT 沿用原共用設定。注意 Environment 內若另有同名共用 Secret，GitHub 會優先使用 Environment 的值。
 
 **不需要手動提供 p12、Distribution 證書或 provisioning profile。** 舊版手動匯入的 base64 Secrets 已停用，可以移除；不要把任何 p8、PAT、密碼、明文簽署檔貼到 issue、聊天或公開 repo。
 
@@ -30,7 +42,7 @@ PAT 建議 fine-grained、只授權 ChaiClassics-Signing、Contents read/write�
 
 GitHub Actions → **Initialize Signing (match)** → Run workflow → main。Team ID 已在 Secret 時不用填 input。
 
-1. 先跑完整免簽署 CI，成功後才在 macOS runner 的 `signing` environment 注入 Secrets。
+1. 先跑完整免簽署 CI，成功後才在 macOS runner 的 `signing-bootstrap` environment 將三個 SIGNING_ASC_* Admin Secrets 映射為 ASC_*，並注入原共用 Secrets。
 2. 預檢原始 PEM、Team ID、私人簽署 repo 的 main 與 PAT 存取；不印值或 HTTP 回應。
 3. `initialize_signing` lane 使用 `match(type: appstore, readonly: false, generate_apple_certs: true)`，只指定本 App／Team，在臨時 keychain 建立／安裝 Apple Distribution 與 App Store profile。
 4. match 用 MATCH_PASSWORD 加密後 commit/push 到私人 ChaiClassics-Signing/main。公開 repo 與 artifact 不含簽署資產。
@@ -56,7 +68,7 @@ Readonly 缺資產、過期或無有效私鑰就停止，**不退回建立模式
 
 ## Environment 審核保護
 
-GitHub Settings → Environments 設定 `signing`、`testflight`、`production`，只允許 main；production 及 signing 建議 required reviewers、prevent self-review（方案支援時）。YAML 引用 Environment 不會自動設定 reviewer 保護，管理員必須確認設定。所有 workflow 都是 contents: read；只有 SIGNING_REPO_PAT 用於私人 repo。
+GitHub Settings → Environments 設定 `signing-bootstrap`、`testflight`、`production`，只允許 main；production 及 signing-bootstrap 建議 required reviewers、prevent self-review（方案支援時）。YAML 引用 Environment 不會自動設定 reviewer 保護，管理員必須確認設定。所有 workflow 都是 contents: read；只有 SIGNING_REPO_PAT 用於私人 repo。
 
 ## App Store（不自動送審）
 
@@ -69,3 +81,5 @@ Actions → Prepare App Store：main、已測版本、精確 build number、prov
 ## 工具鏈查核（2026-11-16）
 
 Apple 官方 [SDK minimum requirements](https://developer.apple.com/news/upcoming-requirements/?id=04282026a)：2026-04-28 起需 Xcode 26+／iOS 26 SDK。本次 macOS CI 使用 Xcode 26.3／SDK 26.2。正式上傳前仍要查當前條件，尤其 2027-04 SDK 27 要求。
+
+本次僅修正 bootstrap 環境／金鑰映射，依使用者要求未觸發 Initialize Signing，也未建立／撤銷任何 Apple 憑證。

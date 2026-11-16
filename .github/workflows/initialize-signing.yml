@@ -21,13 +21,13 @@ jobs:
   initialize:
     needs: ci
     if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
-    environment: signing
+    environment: signing-bootstrap
     runs-on: macos-15
     timeout-minutes: 25
     env:
-      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-      ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+      ASC_KEY_ID: ${{ secrets.SIGNING_ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.SIGNING_ASC_ISSUER_ID }}
+      ASC_API_KEY_P8: ${{ secrets.SIGNING_ASC_API_KEY_P8 }}
       APPLE_TEAM_ID: ${{ inputs.apple_team_id || vars.APPLE_TEAM_ID || secrets.APPLE_TEAM_ID }}
       SIGNING_REPO_PAT: ${{ secrets.SIGNING_REPO_PAT }}
       MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
