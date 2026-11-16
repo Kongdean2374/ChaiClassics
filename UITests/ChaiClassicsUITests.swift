@@ -22,6 +22,37 @@ final class ChaiClassicsUITests: XCTestCase {
     private func screenshot(_ app: XCUIApplication, _ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
     }
+    private func scrollFullyIntoView(_ element: XCUIElement, app: XCUIApplication) {
+        let window = app.frame
+        let usable = CGRect(x: window.minX + 10, y: window.minY + 150, width: window.width - 20, height: window.height - 240)
+        for _ in 0..<6 {
+            if element.exists {
+                let frame = element.frame
+                if frame.width > 0 && frame.height > 0 && usable.contains(frame) {
+                    XCTAssertTrue(element.isHittable); return
+                }
+                if frame.height > 0 && frame.minY < usable.minY { app.swipeDown(); continue }
+            }
+            app.swipeUp()
+        }
+        XCTFail("Control did not become fully visible: " + element.identifier)
+    }
+    private func visibleMinesCell(_ app: XCUIApplication, viewport: XCUIElement, columns: Int, rows: Int) -> XCUIElement {
+        // Read transformed geometry; asking XCTest to hit-test offscreen UIKit
+        // elements can itself throw before a visible cell has been reached.
+        let origin = app.buttons["mines.cell.0"].frame
+        guard origin.width > 0 && origin.height > 0 && origin.minX.isFinite && origin.minY.isFinite else {
+            XCTFail("Missing transformed board geometry"); return app.buttons["mines.cell.0"]
+        }
+        let center = CGPoint(x: viewport.frame.midX, y: viewport.frame.midY)
+        let column = max(0, min(columns - 1, Int(floor((center.x - origin.minX) / origin.width))))
+        let row = max(0, min(rows - 1, Int(floor((center.y - origin.minY) / origin.height))))
+        let cell = app.buttons["mines.cell.\(row * columns + column)"]
+        XCTAssertTrue(cell.frame.contains(center))
+        XCTAssertTrue(viewport.frame.insetBy(dx: 2, dy: 2).contains(cell.frame))
+        XCTAssertTrue(cell.isHittable)
+        return cell
+    }
     private func blueInkPixels(in element: XCUIElement, app: XCUIApplication) throws -> Int {
         let shot = app.screenshot().image
         let full = try XCTUnwrap(shot.cgImage)
@@ -178,19 +209,18 @@ final class ChaiClassicsUITests: XCTestCase {
         XCTAssertLessThan(abs(app.buttons["mines.cell.80"].frame.maxY - viewport.frame.maxY), 6)
         screenshot(app,"mines-centered-9x9")
         back(app); app.segmentedControls["mines.size"].buttons["30×16"].tap(); app.buttons["mines.start"].tap(); app.buttons["mines.confirmNew"].tap()
-        let cells = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "mines.cell."))
-        let before = cells.allElementsBoundByIndex.first(where: { $0.isHittable })!.frame.width
+        let before = app.buttons["mines.cell.0"].frame.width
         viewport.pinch(withScale: 1.8, velocity: 1)
-        let zoomed = NSPredicate { _,_ in cells.allElementsBoundByIndex.contains { $0.isHittable && $0.frame.width > before * 1.2 } }
+        let zoomed = NSPredicate { _,_ in app.buttons["mines.cell.0"].frame.width > before * 1.2 }
         expectation(for: zoomed,evaluatedWith: nil); waitForExpectations(timeout: 5)
-        let target = cells.allElementsBoundByIndex.first(where: { $0.isHittable })!
+        let target = visibleMinesCell(app, viewport: viewport, columns: 30, rows: 16)
         let identifier = target.identifier
         target.press(forDuration: 0.8)
         XCTAssertTrue(app.buttons[identifier].label.contains("旗標"))
         app.buttons[identifier].tap(); XCTAssertTrue(app.buttons[identifier].label.contains("旗標"))
-        let beforePan = cells.allElementsBoundByIndex.first(where: { $0.isHittable })!.identifier
+        let beforePan = target.identifier
         viewport.swipeLeft()
-        let afterPan = cells.allElementsBoundByIndex.first(where: { $0.isHittable })!.identifier
+        let afterPan = visibleMinesCell(app, viewport: viewport, columns: 30, rows: 16).identifier
         XCTAssertNotEqual(beforePan, afterPan)
         XCTAssertTrue(viewport.exists)
         screenshot(app,"mines-large-zoomed")
@@ -207,7 +237,17 @@ final class ChaiClassicsUITests: XCTestCase {
         app.segmentedControls["settings.appearance"].buttons["深色"].tap()
         app.segmentedControls["settings.language"].buttons["English"].tap()
         XCTAssertTrue(app.navigationBars["Settings"].exists)
-        app.switches["settings.haptics"].tap(); app.switches["settings.awake"].tap()
+        let haptics = app.switches["settings.haptics"], awake = app.switches["settings.awake"]
+        XCTAssertEqual(haptics.value as? String, "1"); XCTAssertEqual(awake.value as? String, "0")
+        // iOS 26 exposes the whole Form row as the Switch's AX frame. A row-
+        // center tap hits its label, while the native thumb is at the trailing edge.
+        scrollFullyIntoView(haptics, app: app)
+        haptics.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        XCTAssertEqual(haptics.value as? String, "0")
+        scrollFullyIntoView(awake, app: app)
+        awake.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        XCTAssertEqual(awake.value as? String, "1")
+        screenshot(app, "settings-native-switches-changed")
         back(app)
         XCTAssertTrue(app.buttons["game.sudoku"].label.contains("Easy 001"))
         XCTAssertTrue(app.buttons["game.sliding"].label.contains("35 moves"))
@@ -244,12 +284,15 @@ final class ChaiClassicsUITests: XCTestCase {
             if english { app.segmentedControls["settings.language"].buttons["English"].tap() }
             for document in ["privacy","terms","support"] {
                 let entry = app.buttons["legal." + document]
-                if !entry.isHittable { app.swipeUp() }
+                scrollFullyIntoView(entry, app: app)
                 entry.tap()
+                XCTAssertTrue(app.scrollViews["document." + document].waitForExistence(timeout: 5))
                 XCTAssertTrue(app.staticTexts.matching(NSPredicate(format:"label CONTAINS %@",english ? "Document version: 0.1.1" : "文件版本：0.1.1")).firstMatch.exists)
                 if document == "support" {
                     XCTAssertTrue(app.staticTexts[english ? "Official website in preparation" : "官方網站籌備中"].exists)
-                    XCTAssertTrue(app.links["support.github"].exists || app.buttons["support.github"].exists)
+                    let link = app.links["support.github"].exists ? app.links["support.github"] : app.buttons["support.github"]
+                    scrollFullyIntoView(link, app: app)
+                    XCTAssertTrue(link.exists); XCTAssertTrue(link.isHittable)
                 }
                 back(app)
             }
