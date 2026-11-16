@@ -8,6 +8,36 @@ def assert_check(value, name)
   raise "JWT comparison assertion failed: #{name}" unless value
 end
 
+# Test-only fixture encoder: jwt 2.10.3 correctly rejects non-Numeric iat/exp
+# during JWT.encode. Build compact JWS directly so malformed claim types can
+# reach the production validator without weakening it or changing valid JWTs.
+def negative_claim_fixture(payload, key, header)
+  encoded_header = Base64.urlsafe_encode64(JSON.generate(header.merge('alg' => 'ES256')), padding: false)
+  encoded_payload = Base64.urlsafe_encode64(JSON.generate(payload), padding: false)
+  input = encoded_header + '.' + encoded_payload
+  der = OpenSSL::ASN1.decode(key.sign('SHA256', input))
+  components = der.value.map { |integer| integer.value.to_s(16).rjust(64, '0') }
+  assert_check(components.length == 2 && components.all? { |hex| hex.length == 64 }, 'fixture P-256 signature widths')
+  raw_signature = components.map { |hex| [hex].pack('H*') }.join
+  fixture = input + '.' + Base64.urlsafe_encode64(raw_signature, padding: false)
+
+  # Independently reconstruct DER from the fixture bytes and verify its public
+  # signature. A bad-claim test must not pass just because its JWT is malformed
+  # or has a broken signature. Assertions never print claims, keys or tokens.
+  parts = fixture.split('.')
+  signature = Base64.urlsafe_decode64(parts.fetch(2))
+  assert_check(signature.bytesize == 64, 'fixture has a complete ES256 signature')
+  numbers = [signature.byteslice(0, 32), signature.byteslice(32, 32)].map do |bytes|
+    OpenSSL::ASN1::Integer.new(OpenSSL::BN.new(bytes, 2))
+  end
+  reconstructed_der = OpenSSL::ASN1::Sequence.new(numbers).to_der
+  public_key = OpenSSL::PKey.read(key.public_to_pem)
+  assert_check(public_key.verify('SHA256', reconstructed_der, parts.first(2).join('.')), 'negative fixture signature is cryptographically valid')
+  decoded_payload = JSON.parse(Base64.urlsafe_decode64(parts.fetch(1)))
+  assert_check(decoded_payload == payload, 'fixture preserves invalid claim values and types')
+  fixture
+end
+
 now = Time.now.to_i
 key = OpenSSL::PKey::EC.generate('prime256v1')
 key_id = 'A123456789'
@@ -32,14 +62,17 @@ count = 1
   count += 1
 end
 [
-  claims.merge('iat' => (now - 60).to_s),
-  claims.merge('exp' => (now + 500).to_s),
-  claims.merge('exp' => now + 1200), # Fastlane backdates iat, making lifetime 1260.
-  claims.merge('iat' => now - 2000, 'exp' => now + 1),
-  claims.reject { |name,_| name == 'exp' },
-  claims.reject { |name,_| name == 'iss' }
-].each do |payload|
-  assert_check(!audit.call(JWT.encode(payload, key, 'ES256', header)).values.all?, 'types, lifetime and mandatory claims checked')
+  ['iat', claims.merge('iat' => (now - 60).to_s)],
+  ['exp', claims.merge('exp' => (now + 500).to_s)],
+  ['exp', claims.merge('exp' => now + 1200)], # Backdated iat makes lifetime 1260.
+  ['exp', claims.merge('iat' => now - 2000, 'exp' => now + 1)],
+  ['exp', claims.reject { |name,_| name == 'exp' }],
+  ['iss', claims.reject { |name,_| name == 'iss' }]
+].each do |field, payload|
+  fixture = negative_claim_fixture(payload, key, header)
+  result = audit.call(fixture)
+  assert_check(%w[structure alg kid aud signature].all? { |name| result[name] == true }, 'negative fixture reaches claim validation with valid structure and signature')
+  assert_check(result[field] == false && !result.values.all?, 'specific invalid type, lifetime or missing claim is rejected')
   count += 1
 end
 wrong_kid = JWT.encode(claims, key, 'ES256', header.merge('kid' => 'B123456789'))
