@@ -148,4 +148,7 @@ visual_source = File.read(File.join(root, '.github/workflows/visual-smoke.yml'))
 check(!visual_source.include?('secrets.') && !visual_source.include?('run_signing_lane') && !visual_source.include?('fastlane'), 'visual smoke cannot sign or upload an Apple build')
 visual_script = File.read(File.join(root, 'scripts/visual_smoke.sh'))
 check(visual_script.include?('-only-testing:ChaiClassicsUITests/ChaiClassicsVisualSmokeTests') && visual_script.include?('CODE_SIGNING_ALLOWED=NO'), 'visual smoke selects focused Simulator tests without signing')
+check(visual_job.fetch('steps').any? { |step| step['run'] == 'bash scripts/visual_smoke.sh build' } && visual_job.fetch('steps').any? { |step| step['run'] == 'bash scripts/visual_smoke.sh test' }, 'visual build and execution are independently visible')
+check(visual_script.include?('build-for-testing') && visual_script.include?('test-without-building') && visual_script.include?('simctl bootstatus'), 'visual tests reuse one build after explicit Simulator startup')
+check(visual_job['timeout-minutes'] == 30 && visual_script.include?('-default-test-execution-time-allowance 300') && visual_script.include?('-maximum-test-execution-time-allowance 360'), 'measured 207s Intel case has bounded time for assertions and result finalization')
 puts 'PASS: focused visual smoke remains manual, unsigned, credential-free and separate from routine CI and release.'

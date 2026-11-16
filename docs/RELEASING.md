@@ -56,7 +56,7 @@ GitHub Actions → **Initialize Signing (match)** → Run workflow → main。Te
 
 ## 後續 TestFlight
 
-Actions → **TestFlight** → Run workflow → main，版本預填 0.1.1，Apple Team ID 留空即可沿用 Secret。先做 Linux 快速預檢，成功後在 Intel macOS 用 `match readonly: true` 下載並解密既有資產到臨時 keychain，再執行真實 iOS Device Release archive／export IPA、上傳 ASC。不重跑整份遊戲 CI，不等待模擬器 UI；全部 UI 測試仍可在 CI 手動 full_ui 執行。
+Actions → **TestFlight** → Run workflow → main，版本預填 0.1.3，Apple Team ID 留空即可沿用 Secret。先做 Linux 快速預檢，成功後在 Intel macOS 用 `match readonly: true` 下載並解密既有資產到臨時 keychain，再執行真實 iOS Device Release archive／export IPA、上傳 ASC。不重跑整份遊戲 CI，不等待模擬器 UI；全部 UI 測試仍可在 CI 手動 full_ui 執行。
 
 fastlane 固定 2.228.0，Gym 使用 `export_method: app-store`；新的 app-store-connect 字串不通過該版 options 驗證。archive 與 export 分開執行，不重複建置；完整身分名稱取自已驗證憑證，匯出及 archive 仍精確綁定原 SHA-1／DER／profile。UPLOAD_AUTH、BUILD_CONFIG、ARCHIVE、EXPORT_IPA、UPLOAD_TRANSFER 分階段白名單回報，詳見上方診斷文件。
 
