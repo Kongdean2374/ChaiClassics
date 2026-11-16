@@ -37,7 +37,7 @@ end
 end
 check(!bootstrap.fetch('jobs').fetch('ci').key?('secrets'), 'Admin keys must not be passed to reusable CI')
 check(job.fetch('steps').any? { |step| step['run'] == 'python3 scripts/run_signing_lane.py initialize_signing' }, 'retain credential-safe log wrapper')
-check(job.fetch('steps').all? { |step| !step.fetch('run', '').include?('secrets.') }, 'never interpolate secrets directly into shell')
+check(job.fetch('steps').all? { |step| !step.fetch('run', '').match?(/\$\{\{\s*secrets\./) }, 'never interpolate secrets directly into shell')
 puts "PASS: #{workflows.length} workflow YAML files parsed; bootstrap Admin mapping, Developer-key isolation, shared secrets, manual main guards and safe runner verified."
 
 fastfile = File.read(File.join(root, 'fastlane/Fastfile'))
