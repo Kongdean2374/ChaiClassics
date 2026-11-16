@@ -146,7 +146,8 @@ struct PauseCard: View {
             Text(model.t("game.paused")).font(.system(.title3, design: .rounded, weight: .semibold))
             Button(action: action) {
                 Label(model.t("common.resume"), systemImage: "play.fill").padding(.horizontal, 12).padding(.vertical, 6)
-            }.buttonStyle(.borderedProminent).tint(GamePalette.tint(game))
+                    .foregroundStyle(Color(.systemBackground))
+            }.buttonStyle(.borderedProminent).tint(GamePalette.tint(game)).accessibilityIdentifier("game.resume")
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20))
             .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(GamePalette.tint(game).opacity(0.12), lineWidth: 1))

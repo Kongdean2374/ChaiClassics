@@ -76,6 +76,10 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         openSavedSliding(app)
         expectProbe(app, starts: 0, active: false)
         screenshot(app, name: "visual-013-sliding-play-light")
+        app.buttons["sliding.pause"].tap()
+        XCTAssertTrue(app.buttons["game.resume"].waitForExistence(timeout: 5))
+        screenshot(app, name: "visual-013-sliding-pause-light")
+        app.buttons["game.resume"].tap()
         finishSeed(app, capturesWin: true)
         // Count is a Debug-Simulator probe of actual starts. The short-lived,
         // noninteractive effect can end before XCTest finishes waiting for idle.
@@ -138,6 +142,12 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
             XCTAssertTrue(app.buttons[prefix + ".restart"].waitForExistence(timeout: 5))
             XCTAssertTrue(app.buttons["navigation.back"].isHittable)
             screenshot(app, name: "visual-013-" + game + "-play-dark")
+            if game == "sliding" {
+                app.buttons["sliding.pause"].tap()
+                XCTAssertTrue(app.buttons["game.resume"].waitForExistence(timeout: 5))
+                screenshot(app, name: "visual-013-sliding-pause-dark")
+                app.buttons["game.resume"].tap()
+            }
             back(app); back(app)
         }
     }

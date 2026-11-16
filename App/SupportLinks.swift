@@ -23,6 +23,7 @@ struct SupportEmailLink: View {
     var body: some View {
         Link(destination: destination) {
             Label(model.t("support.email"), systemImage: "envelope")
+                .foregroundStyle(fillsWidth ? Color(.systemBackground) : GamePalette.tint(.sudoku))
                 .frame(maxWidth: fillsWidth ? .infinity : nil)
         }.accessibilityIdentifier(identifier)
     }
