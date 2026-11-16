@@ -1,0 +1,33 @@
+name: Visual Smoke
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  visual-smoke:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    runs-on: macos-15-intel
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - run: bash scripts/select_xcode.sh
+      - name: Run focused unsigned visual and celebration tests
+        run: bash scripts/visual_smoke.sh
+      - name: Export synthetic test screenshots
+        if: always()
+        run: |
+          if [ -d build/VisualSmoke.xcresult ]; then
+            xcrun xcresulttool export attachments --path build/VisualSmoke.xcresult --output-path build/visual-screenshots
+          fi
+      - name: Preserve unsigned test results and screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: visual-smoke-results
+          path: |
+            build/VisualSmoke.xcresult
+            build/visual-screenshots
+          if-no-files-found: warn
+          retention-days: 7

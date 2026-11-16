@@ -19,6 +19,14 @@ final class ChaiClassicsUITests: XCTestCase {
         return app
     }
     private func back(_ app: XCUIApplication) { app.buttons["navigation.back"].tap() }
+    private func startMines(_ app: XCUIApplication) {
+        let start = app.buttons["mines.start"]
+        scrollFullyIntoView(start, app: app); start.tap()
+    }
+    private func startSliding(_ app: XCUIApplication) {
+        let start = app.buttons["sliding.start"]
+        scrollFullyIntoView(start, app: app); start.tap()
+    }
     private func externalLink(_ identifier: String, app: XCUIApplication) -> XCUIElement {
         app.descendants(matching: .any).matching(identifier: identifier).firstMatch
     }
@@ -120,7 +128,7 @@ final class ChaiClassicsUITests: XCTestCase {
     }
     func testMinesFirstRevealAndRestoration() {
         let app = launch("mines")
-        app.buttons["game.minesweeper"].tap(); app.buttons["mines.start"].tap()
+        app.buttons["game.minesweeper"].tap(); startMines(app)
         if app.buttons["mines.confirmNew"].waitForExistence(timeout: 1) { app.buttons["mines.confirmNew"].tap() }
         let first = app.buttons["mines.cell.0"]
         XCTAssertTrue(first.waitForExistence(timeout: 5))
@@ -138,7 +146,7 @@ final class ChaiClassicsUITests: XCTestCase {
     }
     func testSlidingCanStartAndRestore() {
         let app = launch("sliding")
-        app.buttons["game.sliding"].tap(); app.buttons["sliding.start"].tap()
+        app.buttons["game.sliding"].tap(); startSliding(app)
         if app.buttons["sliding.confirmNew"].waitForExistence(timeout: 1) { app.buttons["sliding.confirmNew"].tap() }
         XCTAssertTrue(app.buttons["sliding.tile.0"].waitForExistence(timeout: 5))
         let labels = (0..<9).map { app.buttons["sliding.tile.\($0)"].label }
@@ -176,9 +184,10 @@ final class ChaiClassicsUITests: XCTestCase {
         app.segmentedControls["mines.size"].buttons["16×16"].tap()
         XCTAssertTrue(app.staticTexts["mines.estimatedDifficulty"].label.contains("中等"))
         let count = app.steppers["mines.mineCount"]
+        scrollFullyIntoView(count, app: app)
         count.buttons.element(boundBy: 1).tap()
         XCTAssertTrue(count.label.contains("41"))
-        app.buttons["mines.start"].tap()
+        startMines(app)
         XCTAssertTrue(app.buttons["mines.cell.255"].exists)
         XCTAssertEqual(app.segmentedControls.count, 0)
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "16×16")).firstMatch.exists)
@@ -203,7 +212,7 @@ final class ChaiClassicsUITests: XCTestCase {
     }
     func testMinesBoardCenteredAndLargeBoardZoomKeepsHitCoordinates() {
         let app = launch("large")
-        app.buttons["game.minesweeper"].tap(); app.buttons["mines.start"].tap()
+        app.buttons["game.minesweeper"].tap(); startMines(app)
         let viewport = app.scrollViews["mines.zoomBoard"]
         XCTAssertTrue(viewport.waitForExistence(timeout: 5))
         let first = app.buttons["mines.cell.0"], lastColumn = app.buttons["mines.cell.8"]
@@ -211,7 +220,7 @@ final class ChaiClassicsUITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(first.frame.width, 32)
         XCTAssertLessThan(abs(app.buttons["mines.cell.80"].frame.maxY - viewport.frame.maxY), 6)
         screenshot(app,"mines-centered-9x9")
-        back(app); app.segmentedControls["mines.size"].buttons["30×16"].tap(); app.buttons["mines.start"].tap(); app.buttons["mines.confirmNew"].tap()
+        back(app); app.segmentedControls["mines.size"].buttons["30×16"].tap(); startMines(app); app.buttons["mines.confirmNew"].tap()
         let before = app.buttons["mines.cell.0"].frame.width
         viewport.pinch(withScale: 1.8, velocity: 1)
         let zoomed = NSPredicate { _,_ in app.buttons["mines.cell.0"].frame.width > before * 1.2 }
@@ -299,8 +308,11 @@ final class ChaiClassicsUITests: XCTestCase {
                 let entry = app.buttons["legal." + document]
                 scrollFullyIntoView(entry, app: app)
                 entry.tap()
-                XCTAssertTrue(app.scrollViews["document." + document].waitForExistence(timeout: 5))
-                XCTAssertTrue(app.staticTexts.matching(NSPredicate(format:"label CONTAINS %@",english ? "Document version: 0.1.2" : "文件版本：0.1.2")).firstMatch.exists)
+                let page = app.descendants(matching: .any).matching(identifier: "document." + document).firstMatch
+                XCTAssertTrue(page.waitForExistence(timeout: 5))
+                if document != "support" {
+                    XCTAssertTrue(app.staticTexts.matching(NSPredicate(format:"label CONTAINS %@",english ? "Document version: 0.1.2" : "文件版本：0.1.2")).firstMatch.exists)
+                }
                 let online = externalLink("legal.online." + document, app: app)
                 scrollFullyIntoView(online, app: app)
                 XCTAssertTrue(online.exists); XCTAssertTrue(online.isHittable)
@@ -311,6 +323,11 @@ final class ChaiClassicsUITests: XCTestCase {
                     let address = app.staticTexts["support.email.address"]
                     scrollFullyIntoView(address, app: app)
                     XCTAssertEqual(address.label, "a090825159@icloud.com")
+                    let copy = app.buttons["support.email.copy"]
+                    scrollFullyIntoView(copy, app: app)
+                    XCTAssertTrue(copy.exists); XCTAssertTrue(copy.isHittable)
+                    copy.tap()
+                    XCTAssertTrue(copy.label.contains(english ? "copied" : "已複製"))
                 }
                 back(app)
             }

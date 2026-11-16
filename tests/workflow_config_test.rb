@@ -109,7 +109,7 @@ check(flight.dig('jobs','upload','needs') == 'preflight', 'real signed archive/u
 flight.fetch('jobs').each_value do |entry|
   check(entry.fetch('if').include?("github.ref == 'refs/heads/main'") && entry.fetch('if').include?("github.event_name == 'workflow_dispatch'"), 'both release jobs remain trusted main/manual only')
 end
-check((flight['on'] || flight[true]).dig('workflow_dispatch','inputs','version','default') == '0.1.2', 'manual upload defaults to the current app version')
+check((flight['on'] || flight[true]).dig('workflow_dispatch','inputs','version','default') == '0.1.3', 'manual upload defaults to the current app version')
 puts 'PASS: fast credential-free preflight, trusted manual/main upload, current version default and opt-in full UI.'
 check(!extraction_job.key?('environment') && !extraction_job.key?('env'), 'extraction regression receives no signing environment or secrets')
 extraction_runs = extraction_job.fetch('steps').map { |step| step.fetch('run', '') }.join("\n")
@@ -137,3 +137,15 @@ signed_lane = fastfile.split('lane :diagnose_signed_archive do',2).last.split('l
 check(signed_lane.include?('with_match_signing(nil, readonly: true)') && signed_lane.include?('ChaiArchive::Session.new.run!'), 'real signed archive reuses the production archive session')
 check(!signed_lane.match?(/upload_to_testflight|export_options\(|api_key|next_apple_build|skip_codesigning/), 'no export, upload, Apple API or unsigned fallback in diagnostic lane')
 puts 'PASS: independent main/manual real signed archive diagnosis; readonly assets, no API key, export, upload, artifacts or unsigned fallback.'
+
+visual = workflows.fetch('visual-smoke.yml')
+visual_job = visual.fetch('jobs').fetch('visual-smoke')
+check((visual['on'] || visual[true]).keys == ['workflow_dispatch'], 'visual smoke is manual only')
+check(visual_job.fetch('if').include?("github.ref == 'refs/heads/main'") && visual_job.fetch('if').include?("github.event_name == 'workflow_dispatch'"), 'visual smoke only trusted manual main')
+check(visual.fetch('permissions') == {'contents' => 'read'}, 'visual smoke has read-only repository permission')
+check(!visual_job.key?('environment') && !visual_job.key?('env') && !visual_job.key?('secrets'), 'visual smoke receives no release environment or credentials')
+visual_source = File.read(File.join(root, '.github/workflows/visual-smoke.yml'))
+check(!visual_source.include?('secrets.') && !visual_source.include?('run_signing_lane') && !visual_source.include?('fastlane'), 'visual smoke cannot sign or upload an Apple build')
+visual_script = File.read(File.join(root, 'scripts/visual_smoke.sh'))
+check(visual_script.include?('-only-testing:ChaiClassicsUITests/ChaiClassicsVisualSmokeTests') && visual_script.include?('CODE_SIGNING_ALLOWED=NO'), 'visual smoke selects focused Simulator tests without signing')
+puts 'PASS: focused visual smoke remains manual, unsigned, credential-free and separate from routine CI and release.'

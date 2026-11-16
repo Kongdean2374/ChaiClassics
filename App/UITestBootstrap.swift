@@ -5,10 +5,18 @@ import Foundation
 /// This code is compiled out of Release; it cannot reset production saves.
 enum UITestBootstrap {
     struct Configuration { let directory: URL; let defaults: UserDefaults; let suite: String }
+    // Test flags may suppress a celebration, never override the real OS to enable one.
+    static var forceReducedMotion: Bool { testFlag("--ui-reduce-motion") }
+    static var forceLowPower: Bool { testFlag("--ui-low-power") }
+    private static func testFlag(_ name: String) -> Bool {
+        let arguments = ProcessInfo.processInfo.arguments
+        return arguments.contains("--ui-testing") && arguments.contains(name)
+    }
     static func configuration() -> Configuration? {
         let args = ProcessInfo.processInfo.arguments
         guard args.contains("--ui-testing") else { return nil }
-        let allowed = ["base", "sudoku", "mines", "legacy", "large", "settings", "legal", "sliding"]
+        let allowed = ["base", "sudoku", "mines", "legacy", "large", "settings", "legal", "sliding",
+                       "visual-normal", "visual-reduced", "visual-lowpower", "visual-gallery"]
         let index = args.firstIndex(of: "--ui-profile")
         let requested = index.flatMap { args.indices.contains($0 + 1) ? args[$0 + 1] : nil } ?? "base"
         let profile = allowed.contains(requested) ? requested : "base"

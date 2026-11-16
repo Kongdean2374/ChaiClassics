@@ -70,8 +70,8 @@ class AppResourceTests(unittest.TestCase):
             for file in ['Localizable.strings','InfoPlist.strings','Privacy.md','Terms.md','Support.md']:
                 self.assertIn(f'App/Resources/{language}.lproj/{file}',project)
         for file in (ROOT/'App').glob('*.swift'):self.assertIn('App/'+file.name,project)
-        self.assertIn('MARKETING_VERSION = 0.1.2',project)
-        self.assertIn('CHAI_RELEASE_VERSION = 0.1.2',project)
+        self.assertIn('MARKETING_VERSION = 0.1.3',project)
+        self.assertIn('CHAI_RELEASE_VERSION = 0.1.3',project)
         info=plistlib.loads((ROOT/'App/Info.plist').read_bytes())
         self.assertEqual(info['CFBundleLocalizations'],['zh-Hant','en'])
         self.assertEqual(info['CFBundleIdentifier'],'$(PRODUCT_BUNDLE_IDENTIFIER)')
@@ -107,10 +107,10 @@ class AppResourceTests(unittest.TestCase):
     def test_testflight_preserves_manual_header_and_signing_job(self):
         actual=(ROOT/'.github/workflows/testflight.yml').read_bytes()
         header=actual.split(b'jobs:\n',1)[0]
-        self.assertEqual(header.count(b"'Version (e.g. 0.1.2)'"),1)
-        self.assertEqual(header.count(b"        default: '0.1.2'\n"),1)
-        header=header.replace(b"'Version (e.g. 0.1.2)'",b"'Version (e.g. 0.1.0)'")
-        header=header.replace(b"        default: '0.1.2'\n",b"        default: '0.1.0'\n")
+        self.assertEqual(header.count(b"'Version (e.g. 0.1.3)'"),1)
+        self.assertEqual(header.count(b"        default: '0.1.3'\n"),1)
+        header=header.replace(b"'Version (e.g. 0.1.3)'",b"'Version (e.g. 0.1.0)'")
+        header=header.replace(b"        default: '0.1.3'\n",b"        default: '0.1.0'\n")
         self.assertEqual(hashlib.sha256(header).hexdigest(),'40e3211d7c61124667744723a0b2afe6a14c896b95467e2472849253ddc8803e')
         upload=b'  upload:\n'+actual.split(b'  upload:\n',1)[1]
         self.assertEqual(upload.count(b'    needs: preflight\n'),1)

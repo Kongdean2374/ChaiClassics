@@ -1,4 +1,21 @@
-// ChaiClassics 0.1.1
+// ChaiClassics 0.1.3
+"home.games" = "Your games";
+"game.paused" = "Take a moment";
+"settings.about.subtitle" = "Classic games, at your own pace.";
+"support.intro" = "Questions, problems or suggestions? We’re here to help.";
+"support.manual.title" = "Another way to email";
+"support.manual.detail" = "If no mail app is configured, copy or select the address below and use your preferred email service.";
+"support.copyAddress" = "Copy email address";
+"support.addressCopied" = "Email address copied";
+"support.helpWebsite" = "Support website";
+"sudoku.menu.subtitle" = "A quiet moment, one square at a time.";
+"sudoku.levels.subtitle" = "Choose a page and make it your own.";
+"sudoku.completion.detail" = "This page is complete. Your progress is saved.";
+"mines.menu.intro" = "Follow the numbers, one square at a time.";
+"mines.result.won" = "Every safe square, uncovered.";
+"mines.result.lost" = "Take a breath and try another board.";
+"sliding.menu.intro" = "Slide each tile back where it belongs.";
+"sliding.result.won" = "Every tile is back in its place.";
 "home.title" = "Classic Games";
 "home.tagline" = "A little play. Right where you left off.";
 "home.promise" = "Free · Offline · No ads";
@@ -40,11 +57,11 @@
 "settings.language" = "Language";
 "settings.gamePreferences" = "Game preferences";
 "settings.haptics" = "Haptic feedback";
-"settings.haptics.detail" = "A light response for game actions on supported devices.";
+"settings.haptics.detail" = "A light response while playing on supported devices.";
 "settings.awake" = "Keep screen awake while playing";
-"settings.awake.detail" = "Only while a game is active in the foreground. Menus, pause and background restore normal auto-lock.";
-"settings.autosave" = "Autosave is always on";
-"settings.autosave.detail" = "Every effective action is saved locally. Autosave cannot be disabled. Restart always requires confirmation.";
+"settings.awake.detail" = "Prevents auto-lock during active play.";
+"settings.autosave" = "Autosave";
+"settings.autosave.detail" = "Progress is saved automatically on this device.";
 "settings.legal" = "Legal";
 "settings.about" = "About";
 "settings.name" = "Name";
@@ -107,13 +124,13 @@
 "legal.terms" = "Terms of Use";
 "legal.support" = "Support & Contact";
 "legal.unavailable" = "The bundled document could not be read. Keep the app and its saves, and contact support using the official website or email link on this page.";
-"legal.offline" = "This document is included in the app and can be read offline.";
-"legal.online" = "View on the official website";
+"legal.offline" = "Available offline";
+"legal.online" = "View online version";
 "support.website" = "Official website";
-"support.email" = "Report an issue by email";
+"support.email" = "Email support";
 "support.email.subject" = "ChaiClassics | Issue report";
 "support.email.body" = "ChaiClassics version: %@\niOS version: %@\nGame:\nDevice model (optional):\nIssue description:\nSteps to reproduce:\nExpected result:\n\nReview before sending. You may attach screenshots yourself. Do not include passwords, keys or complete save files.";
-"support.email.detail" = "Reporting opens a mail draft for you to review and send. If it does not open, select the address above and use your preferred mail service.";
+"support.email.detail" = "Opens a mail draft for you to review and send.";
 "support.external" = "Websites and email need internet and are handled by your browser and mail service. Game data is not uploaded automatically. Games and bundled documents work offline.";
 "mines.chooseSize" = "1. Choose board size";
 "mines.chooseCount" = "2. Choose mine count";

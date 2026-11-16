@@ -2,40 +2,25 @@
 
 Document version: 0.1.2
 
-## Official website and email
+## Questions and suggestions
 
-Official website: https://classics.chaihome.cc/en/
-Support and reports: https://classics.chaihome.cc/en/support/
-Contact: a090825159@icloud.com
+Tell us the game, what happened, the steps to reproduce it and what you expected. The draft includes your app and iOS versions; you can edit the rest freely. Your device model is optional. Add a screenshot in your mail app if it helps explain the issue.
 
-Use this address for game questions, issues and suggestions. No GitHub or support account is required. We reply by email without a fixed response-time promise. Games and bundled documents work offline; websites and email need internet.
-
-## Reporting an issue
-
-Use the email report button above to open an editable draft with your app and iOS versions. Add the game, issue, steps to reproduce and expected result; device model is optional. Nothing is sent until you send it from your mail app. Attach screenshots yourself if useful; the app does not upload files automatically.
-
-If the mail app does not open, select the address on this page and compose a message using your preferred mail service. Suggested subject: “ChaiClassics | Issue report”. Do not include passwords, keys, device identifiers or complete save files.
-
-## Example report
-
-Game: Sudoku
-Issue: A piece of text is still Chinese after changing to English.
-Steps: Open Settings, choose English, then return to the game.
-Expected: Interface text follows the selected language.
-Actual: Describe what you saw and attach a screenshot yourself if needed.
-
-This only illustrates the report format and is not a confirmed issue. Replace it with your own situation and retain the actual versions prefilled in the draft.
+Review the message before sending it. If no mail app is configured, copy or select the address on this page and use your preferred email service. We reply by email without promising a fixed response time.
 
 ## If a save has a problem
 
-Keep the app installed. Do not remove it or restart a game merely to troubleshoot. Check available device storage. If a save needs attention, the app stops overwriting that game’s records to protect the original. Unaffected games remain available.
+Keep the app and your current progress. Avoid deleting the app or restarting a game immediately. Check available device storage and note any message on screen. If a save needs attention, the original is kept and updates to that game’s save are paused. Unaffected games remain available.
 
-## Common controls and policies
+## Your information
 
-Sudoku: Use pen for numbers, pencil for candidates and erase to clear a cell. There are no hints or error markings.
-Minesweeper: Tap to reveal, hold to flag or unflag, and pan or zoom large boards. Every game has a new random layout.
-Sliding Puzzle: Slide an orthogonally adjacent tile into the blank. Tapping a neighboring tile also works.
+Share only what is needed to understand the issue. Do not send passwords, keys, device identifiers or complete save files. The app does not attach files or send mail automatically; your chosen mail service handles drafts and messages. Games and bundled policies work offline. Websites and email need internet.
 
+## Official information
+
+Support: https://classics.chaihome.cc/en/support/
+Email: a090825159@icloud.com
 Privacy policy: https://classics.chaihome.cc/en/privacy/
 Terms of use: https://classics.chaihome.cc/en/terms/
-Both policies can also be read offline from the app's Settings.
+
+The Privacy Policy and Terms of Use can also be read offline in the app’s Settings.

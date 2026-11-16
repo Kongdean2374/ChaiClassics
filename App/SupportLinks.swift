@@ -4,7 +4,7 @@ import ChaiCore
 
 enum AppInformation {
     static var version: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.2"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.3"
     }
 }
 
@@ -12,6 +12,7 @@ enum AppInformation {
 /// what to add and confirms sending in their mail app.
 struct SupportEmailLink: View {
     let identifier: String
+    var fillsWidth = false
     @EnvironmentObject var model: AppModel
     private var destination: URL {
         OfficialWebsite.emailURL(
@@ -22,6 +23,7 @@ struct SupportEmailLink: View {
     var body: some View {
         Link(destination: destination) {
             Label(model.t("support.email"), systemImage: "envelope")
+                .frame(maxWidth: fillsWidth ? .infinity : nil)
         }.accessibilityIdentifier(identifier)
     }
 }

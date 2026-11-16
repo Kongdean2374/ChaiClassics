@@ -13,12 +13,18 @@ struct SlidingMenuView: View {
     }
     var body: some View {
         Form {
+            Section {
+                GameIntroHeader(game: .sliding, title: model.gameTitle(.sliding), subtitle: model.t("sliding.menu.intro"))
+                    .padding(.vertical, 8)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                    .listRowBackground(Color.clear)
+            }
             if let board = model.sliding {
                 Section(model.t("menu.lastGame")) {
                     Button { play = true } label: {
                         ContinueCard(title: model.t(board.isComplete ? "menu.viewLast" : "menu.continue"),
                                      detail: model.summaryDetail(.sliding(board)) + " · " + model.t("common.seconds", board.elapsedSeconds))
-                    }.accessibilityIdentifier("sliding.continue")
+                    }.buttonStyle(QuietPressStyle()).accessibilityIdentifier("sliding.continue")
                 }
             }
             Section(model.t("menu.newGame")) {
@@ -27,9 +33,17 @@ struct SlidingMenuView: View {
                 Picker(model.t("sliding.difficulty"), selection: $difficulty) {
                     ForEach(SlidingBoard.Difficulty.allCases, id: \.self) { Text(model.t("difficulty." + $0.rawValue)).tag($0) }
                 }
-                Button(model.t("menu.start")) { if model.sliding != nil { confirm = true } else { start() } }.accessibilityIdentifier("sliding.start")
+                Button { if model.sliding != nil { confirm = true } else { start() } } label: {
+                    Label(model.t("menu.start"), systemImage: "play.fill")
+                        .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 15)
+                        .foregroundStyle(.primary)
+                        .background(GamePalette.tint(.sliding).opacity(0.14), in: RoundedRectangle(cornerRadius: 16))
+                        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(GamePalette.tint(.sliding).opacity(0.3), lineWidth: 1).allowsHitTesting(false))
+                }.buttonStyle(QuietPressStyle()).accessibilityIdentifier("sliding.start")
+                    .listRowInsets(EdgeInsets(top: 8, leading: 10, bottom: 8, trailing: 10))
             }
-        }.localizedNavigation().navigationTitle(model.gameTitle(.sliding))
+        }.scrollContentBackground(.hidden).background(GameCanvas()).tint(GamePalette.tint(.sliding))
+            .localizedNavigation().navigationTitle(model.gameTitle(.sliding))
             .navigationDestination(isPresented: $play) { SlidingPlayView() }
             .confirmationDialog(model.t("sliding.replace.confirm"), isPresented: $confirm, titleVisibility: .visible) {
                 Button(model.t("menu.startNew"), role: .destructive) { start() }.accessibilityIdentifier("sliding.confirmNew")
@@ -49,18 +63,12 @@ struct SlidingPlayView: View {
         ScrollView {
             if let board = model.sliding {
                 VStack(spacing: 18) {
-                    HStack {
-                        Text(model.t("sliding.boardTitle", board.size, board.size, model.t("difficulty." + board.difficulty.rawValue)))
-                        Spacer()
-                        if board.isComplete { Text(model.t("status.completed")).fontWeight(.semibold).accessibilityIdentifier("sliding.complete") }
-                    }.font(.subheadline)
-                    HStack {
-                        Text(model.t("sliding.moves", board.moves)).accessibilityIdentifier("sliding.moves")
-                        Spacer()
-                        Text(model.t("common.seconds", board.elapsedSeconds)).accessibilityIdentifier("sliding.timer")
-                    }.font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+                    SlidingPlayHeader(board: board, paused: $paused)
+                    if board.isComplete {
+                        GameResultBanner(game: .sliding, title: model.t("status.completed"), detail: model.t("sliding.result.won"), won: true, identifier: "sliding.complete")
+                    }
                     if paused || scenePhase != .active {
-                        Button(model.t("common.resume")) { paused = false }.frame(height: 300).frame(maxWidth: .infinity)
+                        PauseCard(game: .sliding) { paused = false }.frame(height: 300)
                     } else {
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: board.size), spacing: 6) {
                             ForEach(board.tiles.indices, id: \.self) { i in
@@ -68,25 +76,56 @@ struct SlidingPlayView: View {
                                     if model.editSliding({ $0.move(i) }) { model.feedback() }
                                 }
                             }
-                        }.padding(8).background(Color(.systemGray4), in: RoundedRectangle(cornerRadius: 14))
+                        }.padding(12)
+                            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 24))
+                            .overlay(RoundedRectangle(cornerRadius: 24).fill(GamePalette.tint(.sliding).opacity(0.045)).allowsHitTesting(false))
+                            .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(GamePalette.tint(.sliding).opacity(0.2), lineWidth: 1).allowsHitTesting(false))
+                            .shadow(color: .black.opacity(0.07), radius: 22, y: 9)
                     }
                     Text(model.t("sliding.controls")).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                    Button(model.t(paused ? "common.resume" : "common.pause"), systemImage: paused ? "play" : "pause") { paused.toggle() }
-                        .buttonStyle(.bordered).accessibilityIdentifier("sliding.pause")
                 }.padding(16).frame(maxWidth: 540).frame(maxWidth: .infinity)
             }
-        }.background(Color(.systemGroupedBackground))
+        }.background(GameCanvas()).tint(GamePalette.tint(.sliding))
             .localizedNavigation().navigationTitle(model.gameTitle(.sliding)).navigationBarTitleDisplayMode(.inline)
             .toolbar { Button(model.t("common.restart")) { restart = true }.accessibilityIdentifier("sliding.restart") }
             .confirmationDialog(model.t("sliding.restart.confirm"), isPresented: $restart, titleVisibility: .visible) {
                 Button(model.t("common.restart"), role: .destructive) { model.editSliding { $0.restart() }; paused = false }.accessibilityIdentifier("sliding.confirmRestart")
                 Button(model.t("common.cancel"), role: .cancel) {}
             }
+            .gameCompletionCelebration(completed: model.sliding?.isComplete == true)
             .modifier(GameplayActivity(game: .sliding, active: !paused && !restart && model.sliding?.isComplete == false))
             .onAppear { visible = true }.onDisappear { visible = false }
             .onReceive(timer) { _ in
                 if visible && !paused && !restart && scenePhase == .active && model.sliding?.isComplete == false { model.editSliding { $0.elapsedSeconds += 1 } }
             }
+    }
+}
+
+private struct SlidingPlayHeader: View {
+    let board: SlidingBoard
+    @Binding var paused: Bool
+    @EnvironmentObject var model: AppModel
+    private var tint: Color { GamePalette.tint(.sliding) }
+    var body: some View {
+        VStack(spacing: 15) {
+            HStack(spacing: 11) {
+                GameArtwork(game: .sliding, size: 42)
+                Text(model.t("sliding.boardTitle", board.size, board.size, model.t("difficulty." + board.difficulty.rawValue)))
+                    .font(.system(.headline, design: .rounded)).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                Button { paused.toggle() } label: {
+                    Image(systemName: paused ? "play.fill" : "pause.fill")
+                        .font(.subheadline.weight(.semibold)).frame(width: 44, height: 44)
+                        .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
+                }.buttonStyle(QuietPressStyle()).accessibilityLabel(model.t(paused ? "common.resume" : "common.pause"))
+                    .accessibilityIdentifier("sliding.pause")
+            }
+            HStack {
+                GameMetric(symbol: "square.grid.2x2", value: model.t("sliding.moves", board.moves), tint: tint, identifier: "sliding.moves")
+                Spacer(minLength: 8)
+                GameMetric(symbol: "timer", value: model.t("common.seconds", board.elapsedSeconds), tint: tint, identifier: "sliding.timer")
+            }
+        }
     }
 }
 
@@ -108,10 +147,8 @@ private struct SlidingTile: View {
     var body: some View {
         GeometryReader { geometry in
             Button(action: move) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 9).fill(board.tiles[index] == 0 ? Color.clear : Color(.secondarySystemGroupedBackground))
-                    if board.tiles[index] != 0 { Text("\(board.tiles[index])").font(.system(.title, design: .serif)).foregroundStyle(.primary) }
-                }.frame(maxWidth: .infinity, maxHeight: .infinity).contentShape(Rectangle())
+                SlidingTileFace(value: board.tiles[index], side: geometry.size.width)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity).contentShape(Rectangle())
                     .offset(offset(step: geometry.size.width + 6))
             }.buttonStyle(.plain).disabled(!board.canMove(index))
                 .highPriorityGesture(DragGesture(minimumDistance: 10, coordinateSpace: .local)
@@ -123,5 +160,31 @@ private struct SlidingTile: View {
                 .accessibilityHint(model.t("sliding.tile.hint"))
                 .accessibilityIdentifier("sliding.tile.\(index)")
         }.aspectRatio(1, contentMode: .fit).zIndex(translation == .zero ? 0 : 1)
+    }
+}
+
+private struct SlidingTileFace: View {
+    let value: Int
+    let side: CGFloat
+    @Environment(\.colorScheme) private var colorScheme
+    private var tint: Color { GamePalette.tint(.sliding) }
+    private var corner: CGFloat { min(18, max(10, side * 0.16)) }
+    var body: some View {
+        ZStack {
+            if value == 0 {
+                RoundedRectangle(cornerRadius: corner).fill(tint.opacity(colorScheme == .dark ? 0.045 : 0.055))
+                RoundedRectangle(cornerRadius: corner).strokeBorder(tint.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [3, 4]))
+            } else {
+                RoundedRectangle(cornerRadius: corner).fill(Color(.secondarySystemGroupedBackground))
+                RoundedRectangle(cornerRadius: corner)
+                    .fill(LinearGradient(colors: [tint.opacity(0.045), tint.opacity(0.16)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                RoundedRectangle(cornerRadius: corner).strokeBorder(tint.opacity(colorScheme == .dark ? 0.32 : 0.22), lineWidth: 1)
+                RoundedRectangle(cornerRadius: max(8, corner - 2))
+                    .strokeBorder(Color.white.opacity(colorScheme == .dark ? 0.06 : 0.75), lineWidth: 1).padding(2)
+                Text("\(value)")
+                    .font(.system(size: min(42, max(24, side * 0.36)), weight: .semibold, design: .rounded))
+                    .monospacedDigit().foregroundStyle(.primary)
+            }
+        }
     }
 }

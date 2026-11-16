@@ -6,44 +6,16 @@ struct SettingsView: View {
     @Environment(\.colorScheme) private var colorScheme
     var body: some View {
         Form {
-            Section(model.t("settings.general")) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(model.t("settings.appearance")).font(.subheadline)
-                    Picker(model.t("settings.appearance"), selection: Binding(get: { model.preferences.appearance }, set: { value in model.updatePreferences { $0.appearance = value } })) {
-                        ForEach(AppAppearance.allCases, id: \.self) { value in Text(model.t("theme." + value.rawValue)).tag(value) }
-                    }.pickerStyle(.segmented).labelsHidden().accessibilityIdentifier("settings.appearance")
-                    Text(model.t("theme.effective", model.t(colorScheme == .dark ? "theme.dark" : "theme.light")))
-                        .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("settings.resolvedAppearance")
-                }
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(model.t("settings.language")).font(.subheadline)
-                    Picker(model.t("settings.language"), selection: Binding(get: { model.preferences.language }, set: { value in model.updatePreferences { $0.language = value } })) {
-                        Text("繁體中文").tag(AppLanguage.traditionalChinese)
-                        Text("English").tag(AppLanguage.english)
-                    }.pickerStyle(.segmented).labelsHidden().accessibilityIdentifier("settings.language")
-                }
-            }
-            Section {
-                Toggle(isOn: Binding(get: { model.preferences.haptics }, set: { value in model.updatePreferences { $0.haptics = value }; if value { model.feedback() } })) {
-                    preferenceLabel("settings.haptics", detail: "settings.haptics.detail")
-                }.accessibilityIdentifier("settings.haptics")
-                Toggle(isOn: Binding(get: { model.preferences.keepScreenAwake }, set: { value in model.updatePreferences { $0.keepScreenAwake = value } })) {
-                    preferenceLabel("settings.awake", detail: "settings.awake.detail")
-                }.accessibilityIdentifier("settings.awake")
-                Label(model.t("settings.autosave"), systemImage: "checkmark.shield")
-            } header: {
-                Text(model.t("settings.gamePreferences"))
-            } footer: {
-                Text(model.t("settings.autosave.detail"))
-            }
+            generalSection
+            gameSection
             Section(model.t("settings.support")) {
+                SupportEmailLink(identifier: "settings.email")
                 NavigationLink { LegalView(document: .support) } label: {
                     Label(model.t("legal.support"), systemImage: "questionmark.circle")
                 }.accessibilityIdentifier("legal.support")
                 Link(destination: OfficialWebsite.url(for: .home, language: model.preferences.language)) {
                     Label(model.t("support.website"), systemImage: "globe")
                 }.accessibilityIdentifier("settings.website")
-                SupportEmailLink(identifier: "settings.email")
             }
             Section(model.t("settings.legal")) {
                 ForEach([LegalDocument.privacy, .terms]) { document in
@@ -52,17 +24,65 @@ struct SettingsView: View {
                 }
             }
             Section {
-                LabeledContent(model.t("settings.name"), value: "ChaiClassics")
+                HStack(spacing: 14) {
+                    Image(systemName: "square.grid.3x3.fill")
+                        .font(.system(size: 26, weight: .medium))
+                        .foregroundStyle(.tint)
+                        .frame(width: 56, height: 56)
+                        .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 15))
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("ChaiClassics").font(.system(.title3, design: .rounded, weight: .semibold))
+                        Text(model.t("settings.about.subtitle")).font(.subheadline).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }.padding(.vertical, 8)
                 LabeledContent(model.t("settings.version"), value: AppInformation.version)
+                    .monospacedDigit().accessibilityIdentifier("settings.version")
             } header: {
                 Text(model.t("settings.about"))
             } footer: {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(model.t("settings.freeOffline"))
-                    Text(model.t("settings.storage"))
-                }
+                Text(model.t("settings.freeOffline"))
             }
         }.localizedNavigation().navigationTitle(model.t("settings.title"))
+    }
+    private var generalSection: some View {
+        Section(model.t("settings.general")) {
+            VStack(alignment: .leading, spacing: 12) {
+                Label(model.t("settings.appearance"), systemImage: "circle.lefthalf.filled").font(.subheadline)
+                Picker(model.t("settings.appearance"), selection: Binding(get: { model.preferences.appearance }, set: { value in model.updatePreferences { $0.appearance = value } })) {
+                    ForEach(AppAppearance.allCases, id: \.self) { value in Text(model.t("theme." + value.rawValue)).tag(value) }
+                }.pickerStyle(.segmented).labelsHidden().accessibilityIdentifier("settings.appearance")
+                Text(model.t("theme.effective", model.t(colorScheme == .dark ? "theme.dark" : "theme.light")))
+                    .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("settings.resolvedAppearance")
+            }.padding(.vertical, 4)
+            VStack(alignment: .leading, spacing: 12) {
+                Label(model.t("settings.language"), systemImage: "globe").font(.subheadline)
+                Picker(model.t("settings.language"), selection: Binding(get: { model.preferences.language }, set: { value in model.updatePreferences { $0.language = value } })) {
+                    Text("繁體中文").tag(AppLanguage.traditionalChinese)
+                    Text("English").tag(AppLanguage.english)
+                }.pickerStyle(.segmented).labelsHidden().accessibilityIdentifier("settings.language")
+            }.padding(.vertical, 4)
+        }
+    }
+    private var gameSection: some View {
+        Section {
+            Toggle(isOn: Binding(get: { model.preferences.haptics }, set: { value in model.updatePreferences { $0.haptics = value }; if value { model.feedback() } })) {
+                preferenceLabel("settings.haptics", detail: "settings.haptics.detail")
+            }.accessibilityIdentifier("settings.haptics")
+            Toggle(isOn: Binding(get: { model.preferences.keepScreenAwake }, set: { value in model.updatePreferences { $0.keepScreenAwake = value } })) {
+                preferenceLabel("settings.awake", detail: "settings.awake.detail")
+            }.accessibilityIdentifier("settings.awake")
+            HStack {
+                Label(model.t("settings.autosave"), systemImage: "checkmark.shield")
+                Spacer()
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green).accessibilityHidden(true)
+            }
+        } header: {
+            Text(model.t("settings.gamePreferences"))
+        } footer: {
+            Text(model.t("settings.autosave.detail"))
+        }
     }
     private func preferenceLabel(_ title: String, detail: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
