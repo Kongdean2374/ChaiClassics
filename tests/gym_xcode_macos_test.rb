@@ -8,13 +8,18 @@ begin
   ReleaseFixture.check(ok.success? && version.match?(/\AXcode 26\./))
   stage = 'GYM_OPTIONS'
   params = ChaiRelease.export_options(ReleaseFixture.options)
-  Gym.config = ReleaseFixture.silence { ChaiRelease.validate_options!(params) }
-  stage = 'EXPORT_PLIST'
+  ReleaseFixture.silence { Gym.config = ChaiRelease.validate_options!(params) }
+  stage = 'EXPORT_PLIST_GENERATOR'
   xml = ReleaseFixture.silence { Gym::PackageCommandGeneratorXcode7.config_content }
+  stage = 'EXPORT_PLIST_PARSE'
   plist = Plist.parse_xml(xml)
+  stage = 'EXPORT_METHOD_BINDING'
   ReleaseFixture.check(plist['method'] == 'app-store' && plist['destination'] == 'export')
+  stage = 'EXPORT_CERT_BINDING'
   ReleaseFixture.check(plist['signingCertificate'] == params[:export_options][:signingCertificate])
+  stage = 'EXPORT_PROFILE_BINDING'
   ReleaseFixture.check(plist['provisioningProfiles'] == params[:export_options][:provisioningProfiles])
+  stage = 'EXPORT_MANUAL_BINDING'
   ReleaseFixture.check(plist['signingStyle'] == 'manual' && plist['manageAppVersionAndBuildNumber'] == false)
   puts 'PASS: real locked Gym generates the production export plist with exact certificate/profile binding.'
 
