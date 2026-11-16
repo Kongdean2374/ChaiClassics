@@ -31,13 +31,20 @@ final class ChaiClassicsUITests: XCTestCase {
         let image = try XCTUnwrap(full.cropping(to: region))
         let width = image.width, height = image.height
         var pixels = [UInt8](repeating: 0, count: width * height * 4)
-        let count = try pixels.withUnsafeMutableBytes { data -> Int in
-            let context = try XCTUnwrap(CGContext(data: data.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue))
+        return pixels.withUnsafeMutableBytes { (data: UnsafeMutableRawBufferPointer) -> Int in
+            let bitmapInfo: UInt32 = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
+            guard let context = CGContext(data: data.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: bitmapInfo) else {
+                XCTFail("Unable to inspect screenshot colors"); return 0
+            }
             context.draw(image, in: CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height)))
             let bytes = data.bindMemory(to: UInt8.self)
-            return stride(from: 0, to: bytes.count, by: 4).filter { i in Int(bytes[i + 2]) > 140 && Int(bytes[i]) < 130 && Int(bytes[i + 2]) > Int(bytes[i]) + 50 }.count
+            var count = 0
+            for i in stride(from: 0, to: bytes.count, by: 4) {
+                let red = Int(bytes[i]), blue = Int(bytes[i + 2])
+                if blue > 140 && red < 130 && blue > red + 50 { count += 1 }
+            }
+            return count
         }
-        return count
     }
     func testSudokuNavigationAndRestoration() throws {
         let app = launch("sudoku")
