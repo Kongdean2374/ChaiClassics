@@ -14,25 +14,10 @@ struct HomeView: View {
                     }.padding(.top, 8)
                     LazyVGrid(columns: columns, spacing: 14) {
                         ForEach(GameRegistry.games) { game in
-                            let summary = model.summary(game.id)
                             NavigationLink(value: game.id) {
-                                VStack(spacing: 11) {
-                                    Image(systemName: game.symbol).font(.system(size: 28, weight: .medium))
-                                        .foregroundStyle(.tint).frame(width: 54, height: 54)
-                                        .background(Color.accentColor.opacity(0.09), in: RoundedRectangle(cornerRadius: 16))
-                                    Text(model.gameTitle(game.id)).font(.system(.subheadline, design: .rounded, weight: .semibold))
-                                        .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.85).frame(minHeight: 36)
-                                    SessionBadge(state: summary.state, title: model.t(model.blocked.contains(game.id) ? "storage.attention" : "status." + summary.state.rawValue))
-                                    Text(model.blocked.contains(game.id) ? model.t("storage.preserved") : model.summaryDetail(summary))
-                                        .font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                                        .lineLimit(4).fixedSize(horizontal: false, vertical: true).frame(minHeight: 50, alignment: .top)
-                                }.padding(.horizontal, 5).padding(.vertical, 16)
-                                    .frame(maxWidth: .infinity, minHeight: 214, alignment: .top)
-                                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20))
-                                    .overlay(RoundedRectangle(cornerRadius: 20).stroke(.primary.opacity(0.06), lineWidth: 1))
-                                    .shadow(color: .black.opacity(0.035), radius: 8, y: 3)
+                                GameCard(game: game)
                             }.buttonStyle(.plain).disabled(model.blocked.contains(game.id))
-                                .accessibilityLabel(model.gameTitle(game.id) + ", " + model.t(model.blocked.contains(game.id) ? "storage.attention" : "status." + summary.state.rawValue) + ", " + model.summaryDetail(summary))
+                                .accessibilityLabel(cardLabel(game.id))
                                 .accessibilityIdentifier("game.\(game.id.rawValue)")
                         }
                     }.accessibilityIdentifier("home.threeColumns")
@@ -49,5 +34,34 @@ struct HomeView: View {
                         .accessibilityLabel(model.t("settings.title")).accessibilityIdentifier("settings.open")
                 }
         }
+    }
+    private func cardLabel(_ id: GameID) -> String {
+        let summary = model.summary(id)
+        let status = model.t(model.blocked.contains(id) ? "storage.attention" : "status." + summary.state.rawValue)
+        return [model.gameTitle(id), status, model.summaryDetail(summary)].joined(separator: ", ")
+    }
+}
+
+private struct GameCard: View {
+    let game: GameDescriptor
+    @EnvironmentObject var model: AppModel
+    private var summary: GameSummary { model.summary(game.id) }
+    private var status: String { model.t(model.blocked.contains(game.id) ? "storage.attention" : "status." + summary.state.rawValue) }
+    private var detail: String { model.blocked.contains(game.id) ? model.t("storage.preserved") : model.summaryDetail(summary) }
+    var body: some View {
+        VStack(spacing: 11) {
+            Image(systemName: game.symbol).font(.system(size: 28, weight: .medium))
+                .foregroundStyle(.tint).frame(width: 54, height: 54)
+                .background(Color.accentColor.opacity(0.09), in: RoundedRectangle(cornerRadius: 16))
+            Text(model.gameTitle(game.id)).font(.system(.subheadline, design: .rounded, weight: .semibold))
+                .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.85).frame(minHeight: 36)
+            SessionBadge(state: summary.state, title: status)
+            Text(detail).font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                .lineLimit(4).fixedSize(horizontal: false, vertical: true).frame(minHeight: 50, alignment: .top)
+        }.padding(.horizontal, 5).padding(.vertical, 16)
+            .frame(maxWidth: .infinity, minHeight: 214, alignment: .top)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20))
+            .overlay(RoundedRectangle(cornerRadius: 20).stroke(.primary.opacity(0.06), lineWidth: 1))
+            .shadow(color: .black.opacity(0.035), radius: 8, y: 3)
     }
 }

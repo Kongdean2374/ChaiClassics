@@ -3,7 +3,6 @@ import json
 import pathlib
 import plistlib
 import re
-import subprocess
 import unittest
 import xml.etree.ElementTree as ET
 ROOT=pathlib.Path(__file__).resolve().parents[1]
@@ -59,14 +58,24 @@ class AppResourceTests(unittest.TestCase):
         for prohibited in ['import AdSupport','import AppTrackingTransparency','import CloudKit','import StoreKit','URLSession.shared','WKWebView']:
             self.assertNotIn(prohibited,code)
     def test_v010_rules_saves_and_puzzles_are_unchanged(self):
-        baseline='13961946e203115783ffa68924195240062c0e23'
-        paths=['Core/Sudoku.swift','Core/Minesweeper.swift','Core/SlidingPuzzle.swift','Core/SaveStore.swift','Core/Resources/sudoku-v1.json','docs/sudoku-manifest-v1.json']
-        for path in paths:
-            previous=subprocess.check_output(['git','show',baseline+':'+path],cwd=ROOT)
-            self.assertEqual(hashlib.sha256(previous).digest(),hashlib.sha256((ROOT/path).read_bytes()).digest(),path)
-        # Signing code/workflows are deliberately outside this App redesign.
-        for path in ['fastlane/Fastfile','fastlane/lib/signing_config.rb','fastlane/lib/release_pipeline.rb','.github/workflows/testflight.yml','.github/workflows/initialize-signing.yml']:
-            self.assertEqual(subprocess.check_output(['git','show',baseline+':'+path],cwd=ROOT),(ROOT/path).read_bytes(),path)
+        # Frozen SHA-256 values from released commit 13961946e203115783ffa68924195240062c0e23.
+        # This also runs in release-tooling's shallow checkout, without fetching Git history.
+        # Signing code/workflows remain outside this App redesign.
+        released={
+            'Core/Sudoku.swift': '25c829a99f7e70d5e4a11f1f92329727371bc3d9aa7837a88ee088675e5fc4cb',
+            'Core/Minesweeper.swift': '9be7abf2be3c5762fc837148f73cd23049ddefbce5eef5cb490673163a40437d',
+            'Core/SlidingPuzzle.swift': 'e0c61ffdb8d9053e99417fa9b00c0d15fd87a9b07ba94b2cb64d63983958c6b5',
+            'Core/SaveStore.swift': 'f1644676af3589d4e3bbdafb19b5e95f7154222ec3cda6ced750bf8c548def28',
+            'Core/Resources/sudoku-v1.json': '585b1423a7d7e283e074954d21c34171101bf02d26138cf6fc6ba319f64269db',
+            'docs/sudoku-manifest-v1.json': '944fb7a709c0420e43c5420b9421da416c0d659d20899489ef8924a48b0065b9',
+            'fastlane/Fastfile': 'e1a3d994921f19861b0f2f068b7a1dd392ae5cd1901b4d6fcac9970f28a0bc1a',
+            'fastlane/lib/signing_config.rb': '21435e215b7464f4e2ef9a2951a09f12dfebb6fce97beaf061b0e9afde2c40b8',
+            'fastlane/lib/release_pipeline.rb': '48657a233ac4227691ac62e2f693aa04e4a196792c5903b404eb456a9950d2a6',
+            '.github/workflows/testflight.yml': '410a678adae10d0f9b2149c60adb865d3c564d9e2c7f99d26f617763cb2d93a8',
+            '.github/workflows/initialize-signing.yml': 'c3a4ab2713229f4111d94156db9382e4027c48ae006a4b1b58298fe75a0fb93b',
+        }
+        for path, expected in released.items():
+            self.assertEqual(hashlib.sha256((ROOT/path).read_bytes()).hexdigest(),expected,path)
     def test_test_sandbox_never_resets_production_storage(self):
         source=(ROOT/'App/UITestBootstrap.swift').read_text()
         self.assertTrue(source.startswith('#if DEBUG && targetEnvironment(simulator)'))
