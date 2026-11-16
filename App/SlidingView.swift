@@ -43,7 +43,7 @@ struct SlidingMenuView: View {
                     .listRowInsets(EdgeInsets(top: 8, leading: 10, bottom: 8, trailing: 10))
             }
         }.scrollContentBackground(.hidden).background(GameCanvas()).tint(GamePalette.tint(.sliding))
-            .localizedNavigation().navigationTitle(model.gameTitle(.sliding))
+            .localizedNavigation().navigationTitle(model.gameTitle(.sliding)).navigationBarTitleDisplayMode(.inline)
             .navigationDestination(isPresented: $play) { SlidingPlayView() }
             .confirmationDialog(model.t("sliding.replace.confirm"), isPresented: $confirm, titleVisibility: .visible) {
                 Button(model.t("menu.startNew"), role: .destructive) { start() }.accessibilityIdentifier("sliding.confirmNew")
@@ -118,6 +118,7 @@ private struct SlidingPlayHeader: View {
                         .font(.subheadline.weight(.semibold)).frame(width: 44, height: 44)
                         .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
                 }.buttonStyle(QuietPressStyle()).accessibilityLabel(model.t(paused ? "common.resume" : "common.pause"))
+                    .disabled(board.isComplete).opacity(board.isComplete ? 0.45 : 1)
                     .accessibilityIdentifier("sliding.pause")
             }
             HStack {

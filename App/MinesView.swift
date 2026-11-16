@@ -62,7 +62,7 @@ struct MinesMenuView: View {
                 Text(model.t("mines.randomExplanation")).font(.footnote).foregroundStyle(.secondary)
             }
         }.scrollContentBackground(.hidden).background(GameCanvas()).tint(GamePalette.tint(.minesweeper))
-            .localizedNavigation().navigationTitle(model.gameTitle(.minesweeper))
+            .localizedNavigation().navigationTitle(model.gameTitle(.minesweeper)).navigationBarTitleDisplayMode(.inline)
             .onChange(of: layout) { _, value in
                 let presets: [MineConfiguration] = [.easy, .medium, .hard]
                 if presets.indices.contains(value) {
@@ -151,6 +151,7 @@ private struct MinesPlaySurface: View {
                         .font(.subheadline.weight(.semibold)).frame(width: 44, height: 44)
                         .background(tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
                 }.buttonStyle(QuietPressStyle()).accessibilityLabel(model.t(paused ? "common.resume" : "common.pause"))
+                    .disabled(board.isFinished).opacity(board.isFinished ? 0.45 : 1)
                     .accessibilityIdentifier("mines.pause")
             }.fixedSize(horizontal: false, vertical: true).layoutPriority(1)
             HStack {

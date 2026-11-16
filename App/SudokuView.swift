@@ -213,7 +213,8 @@ struct SudokuPlayView: View {
                 Button { paused.toggle() } label: {
                     Label(model.t(paused ? "common.resume" : "common.pause"), systemImage: paused ? "play.fill" : "pause.fill")
                         .font(.subheadline.weight(.medium)).frame(maxWidth: .infinity, minHeight: 44)
-                }.buttonStyle(QuietPressStyle()).foregroundStyle(tint).accessibilityIdentifier("sudoku.pause")
+                }.buttonStyle(QuietPressStyle()).foregroundStyle(tint).disabled(complete).opacity(complete ? 0.45 : 1)
+                    .accessibilityIdentifier("sudoku.pause")
             }.padding(16).frame(maxWidth: 560).frame(maxWidth: .infinity)
         }.background { GameCanvas() }.tint(tint)
             .localizedNavigation().navigationTitle(model.gameTitle(.sudoku)).navigationBarTitleDisplayMode(.inline)

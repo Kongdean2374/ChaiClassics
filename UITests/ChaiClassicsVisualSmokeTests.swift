@@ -46,6 +46,7 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         if capturesWin { screenshot(app, name: "visual-013-winning-banner") }
         XCTAssertTrue(app.staticTexts["sliding.complete"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["sliding.moves"].label.contains("36"))
+        XCTAssertFalse(app.buttons["sliding.pause"].isEnabled)
     }
 
     private func screenshot(_ app: XCUIApplication, name: String) {
@@ -133,6 +134,9 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
             let resume = app.buttons[continueID]
             scrollFullyIntoView(resume, app: app); resume.tap()
             XCTAssertTrue(app.buttons[playElement].waitForExistence(timeout: 5))
+            let prefix = game == "minesweeper" ? "mines" : game
+            XCTAssertTrue(app.buttons[prefix + ".restart"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["navigation.back"].isHittable)
             screenshot(app, name: "visual-013-" + game + "-play-dark")
             back(app); back(app)
         }

@@ -8,7 +8,7 @@ struct ChaiClassicsApp: App {
     var body: some Scene {
         WindowGroup {
             HomeView().environmentObject(model)
-                .tint(.indigo)
+                .tint(GamePalette.tint(.sudoku))
                 .environment(\.locale, Locale(identifier: model.preferences.language.rawValue))
                 .preferredColorScheme(model.preferences.appearance == .system ? nil : model.preferences.appearance == .dark ? .dark : .light)
                 .alert(model.t("storage.title"), isPresented: Binding(get: { model.notice != nil }, set: { if !$0 { model.notice = nil } })) {
