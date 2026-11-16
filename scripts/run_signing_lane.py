@@ -69,7 +69,7 @@ def main(argv=None):
         release_path.touch(mode=0o600)
         archive_path = pathlib.Path(private_dir) / 'archive.json'
         archive_path.touch(mode=0o600)
-        workdir = pathlib.Path(private_dir) / 'work'
+        workdir = (pathlib.Path(private_dir) / 'work').resolve()
         workdir.mkdir(mode=0o700)
         (workdir/'tmp').mkdir(mode=0o700)
         env = dict(os.environ, FASTLANE_OPT_OUT_USAGE='1', FASTLANE_SKIP_UPDATE_CHECK='1', FASTLANE_HIDE_CHANGELOG='1', CI='true',

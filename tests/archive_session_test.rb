@@ -58,6 +58,16 @@ Dir.mktmpdir('archive-session-fixture-') do |root|
       true
     end
     check.call(data['completed']==ChaiArchive::STAGES && data['status']=='complete');count+=1
+    Dir.mktmpdir('archive-path-alias-') do |parent|
+      link=File.join(parent,'private-root-alias');File.symlink(root,link)
+      aliased=ReleaseFixture.options(certificate: cert,workdir: link)
+      ChaiArchive::Session.new(path: report_path,workdir: link).run!(options: aliased,assets: assets) { true }
+      check.call(JSON.parse(File.read(report_path))['status']=='complete');count+=1
+      escape=File.join(root,'escape');File.symlink(parent,escape)
+      data=attempt.call(options.merge(buildlog_path:File.join(escape,'logs')),'ARCHIVE_BUILD_FAILED') { raise 'Must not execute' }
+      check.call(data['failure']=='ARCHIVE_SANDBOX_INVALID');count+=1
+      FileUtils.rm_f(escape)
+    end
     File.write(File.join(app,'Info.plist'),app_info.merge('CFBundleSupportedPlatforms'=>['iPhoneSimulator']).to_plist)
     data=attempt.call(options,'ARCHIVE_VERIFY_FAILED') { true }
     check.call(data['verification_code']=='ARCHIVE_APP_INVALID' && !data['completed'].include?('SIGNED_ARCHIVE_VERIFIED'));count+=1

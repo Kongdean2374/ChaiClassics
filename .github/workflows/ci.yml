@@ -52,6 +52,7 @@ jobs:
           bundle config set frozen true
           bundle install --jobs 4
           bundle exec ruby tests/codesign_extraction_macos_test.rb
+          bundle exec ruby tests/archive_session_test.rb
           bundle exec ruby tests/gym_xcode_macos_test.rb
   release-tooling:
     runs-on: ubuntu-24.04

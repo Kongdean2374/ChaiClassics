@@ -52,11 +52,18 @@ module ChaiArchive
     private
     def check_private_paths!(options)
       root = File.realpath(@workdir)
+      lexical_root = File.expand_path(@workdir)
       stat = File.stat(root)
       fail!('ARCHIVE_SANDBOX_INVALID') unless stat.uid == Process.uid && (stat.mode & 0o077).zero?
       %i[archive_path buildlog_path derived_data_path output_directory].each do |key|
         path = File.expand_path(options.fetch(key))
-        fail!('ARCHIVE_SANDBOX_INVALID') unless path.start_with?(root + File::SEPARATOR)
+        fail!('ARCHIVE_SANDBOX_INVALID') unless path.start_with?(lexical_root + File::SEPARATOR)
+        # macOS /var resolves to /private/var. Accept an equivalent root alias,
+        # but reject any existing child symlink that escapes the private tree.
+        ancestor = path
+        ancestor = File.dirname(ancestor) until File.exist?(ancestor) || File.symlink?(ancestor)
+        resolved = File.realpath(ancestor)
+        fail!('ARCHIVE_SANDBOX_INVALID') unless resolved == root || resolved.start_with?(root + File::SEPARATOR)
       end
     rescue ChaiRelease::Failure
       raise

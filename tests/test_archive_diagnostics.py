@@ -104,6 +104,7 @@ class ArchiveDiagnosticTests(unittest.TestCase):
             def fake_run(*args,**kwargs):
                 env=kwargs['env'];root=pathlib.Path(env['CHAI_RELEASE_WORKDIR'])
                 self.assertEqual(root.stat().st_mode&0o077,0);self.assertEqual(kwargs['umask'],0o077)
+                self.assertEqual(root,root.resolve())
                 pathlib.Path(env['CHAI_ARCHIVE_REPORT_PATH']).write_text(json.dumps(self.report(complete)))
                 data=dict(schema=1,readonly=True,stages=assets.STAGES,profile_source='match_env',path_hint='present',failure=None)
                 pathlib.Path(env['CHAI_SIGNING_ASSET_REPORT_PATH']).write_text(json.dumps(data))
