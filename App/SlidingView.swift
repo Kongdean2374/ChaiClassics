@@ -8,21 +8,32 @@ struct SlidingMenuView: View {
     @State private var play = false
     @State private var confirm = false
     private func start() {
-        do { model.saveSliding(try SlidingBoard(size: size, difficulty: difficulty)); play = true }
-        catch { model.error = "無法建立拼圖：\(error.localizedDescription)" }
+        do { if model.saveSliding(try SlidingBoard(size: size, difficulty: difficulty)) { play = true } }
+        catch { model.notice = .puzzleCreation }
     }
     var body: some View {
         Form {
-            if model.sliding != nil { Button("繼續遊戲") { play = true }.accessibilityIdentifier("sliding.continue") }
-            Section("新遊戲") {
-                Picker("盤面", selection: $size) { ForEach(3...5, id: \.self) { Text("\($0)×\($0)").tag($0) } }.pickerStyle(.segmented)
-                Picker("難度", selection: $difficulty) { ForEach(SlidingBoard.Difficulty.allCases, id: \.self) { Text($0.title).tag($0) } }
-                Button("開始遊戲") { if model.sliding != nil { confirm = true } else { start() } }.accessibilityIdentifier("sliding.start")
+            if let board = model.sliding {
+                Section(model.t("menu.lastGame")) {
+                    Button { play = true } label: {
+                        ContinueCard(title: model.t(board.isComplete ? "menu.viewLast" : "menu.continue"),
+                                     detail: model.summaryDetail(.sliding(board)) + " · " + model.t("common.seconds", board.elapsedSeconds))
+                    }.accessibilityIdentifier("sliding.continue")
+                }
             }
-        }.navigationTitle("滑塊拼圖")
+            Section(model.t("menu.newGame")) {
+                Picker(model.t("sliding.size"), selection: $size) { ForEach(3...5, id: \.self) { Text("\($0)×\($0)").tag($0) } }
+                    .pickerStyle(.segmented).accessibilityIdentifier("sliding.size")
+                Picker(model.t("sliding.difficulty"), selection: $difficulty) {
+                    ForEach(SlidingBoard.Difficulty.allCases, id: \.self) { Text(model.t("difficulty." + $0.rawValue)).tag($0) }
+                }
+                Button(model.t("menu.start")) { if model.sliding != nil { confirm = true } else { start() } }.accessibilityIdentifier("sliding.start")
+            }
+        }.localizedNavigation().navigationTitle(model.gameTitle(.sliding))
             .navigationDestination(isPresented: $play) { SlidingPlayView() }
-            .confirmationDialog("新遊戲將取代滑塊拼圖存檔。", isPresented: $confirm, titleVisibility: .visible) {
-                Button("開始新遊戲", role: .destructive) { start() }
+            .confirmationDialog(model.t("sliding.replace.confirm"), isPresented: $confirm, titleVisibility: .visible) {
+                Button(model.t("menu.startNew"), role: .destructive) { start() }.accessibilityIdentifier("sliding.confirmNew")
+                Button(model.t("common.cancel"), role: .cancel) {}
             }
     }
 }
@@ -37,42 +48,50 @@ struct SlidingPlayView: View {
     var body: some View {
         ScrollView {
             if let board = model.sliding {
-                VStack(spacing: 20) {
+                VStack(spacing: 18) {
                     HStack {
-                        Text("\(board.size)×\(board.size) · \(board.difficulty.title)")
-                        Spacer(); Text("\(board.moves) 步 · \(board.elapsedSeconds) 秒").monospacedDigit()
-                    }.font(.subheadline).foregroundStyle(.secondary)
-                    if board.isComplete { Text("完成").font(.title2).accessibilityIdentifier("sliding.complete") }
+                        Text(model.t("sliding.boardTitle", board.size, board.size, model.t("difficulty." + board.difficulty.rawValue)))
+                        Spacer()
+                        if board.isComplete { Text(model.t("status.completed")).fontWeight(.semibold).accessibilityIdentifier("sliding.complete") }
+                    }.font(.subheadline)
+                    HStack {
+                        Text(model.t("sliding.moves", board.moves)).accessibilityIdentifier("sliding.moves")
+                        Spacer()
+                        Text(model.t("common.seconds", board.elapsedSeconds)).accessibilityIdentifier("sliding.timer")
+                    }.font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
                     if paused || scenePhase != .active {
-                        Button("繼續遊戲") { paused = false }.frame(height: 300).frame(maxWidth: .infinity)
+                        Button(model.t("common.resume")) { paused = false }.frame(height: 300).frame(maxWidth: .infinity)
                     } else {
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: board.size), spacing: 6) {
                             ForEach(board.tiles.indices, id: \.self) { i in
-                                Button { model.editSliding { $0.move(i) } } label: {
+                                Button {
+                                    if model.editSliding({ $0.move(i) }) { model.feedback() }
+                                } label: {
                                     ZStack {
-                                        RoundedRectangle(cornerRadius: 7).fill(board.tiles[i] == 0 ? Color.clear : Color(.secondarySystemGroupedBackground))
+                                        RoundedRectangle(cornerRadius: 9).fill(board.tiles[i] == 0 ? Color.clear : Color(.secondarySystemGroupedBackground))
                                         if board.tiles[i] != 0 { Text("\(board.tiles[i])").font(.system(.title, design: .serif)).foregroundStyle(.primary) }
                                     }.aspectRatio(1, contentMode: .fit)
-                                }.buttonStyle(.plain).disabled(board.tiles[i] == 0 || board.isComplete)
-                                    .accessibilityLabel(board.tiles[i] == 0 ? "空格" : "方塊 \(board.tiles[i])")
+                                }.buttonStyle(.plain).disabled(!board.canMove(i))
+                                    .accessibilityLabel(board.tiles[i] == 0 ? model.t("sliding.blank") : model.t("sliding.tile", board.tiles[i]))
                                     .accessibilityIdentifier("sliding.tile.\(i)")
                             }
-                        }.padding(8).background(Color(.systemGray4), in: RoundedRectangle(cornerRadius: 12))
+                        }.padding(8).background(Color(.systemGray4), in: RoundedRectangle(cornerRadius: 14))
                     }
-                    Button(paused ? "繼續" : "暫停", systemImage: paused ? "play" : "pause") { paused.toggle() }.buttonStyle(.bordered)
-                }.padding().frame(maxWidth: 540)
+                    Button(model.t(paused ? "common.resume" : "common.pause"), systemImage: paused ? "play" : "pause") { paused.toggle() }
+                        .buttonStyle(.bordered).accessibilityIdentifier("sliding.pause")
+                }.padding(16).frame(maxWidth: 540).frame(maxWidth: .infinity)
             }
         }.background(Color(.systemGroupedBackground))
-            .navigationTitle("滑塊拼圖").navigationBarTitleDisplayMode(.inline)
-            .toolbar { Button("重新開始") { restart = true } }
-            .confirmationDialog("恢復本局最初盤面並清除步數與計時？", isPresented: $restart, titleVisibility: .visible) {
-                Button("重新開始", role: .destructive) { model.editSliding { $0.restart() } }
+            .localizedNavigation().navigationTitle(model.gameTitle(.sliding)).navigationBarTitleDisplayMode(.inline)
+            .toolbar { Button(model.t("common.restart")) { restart = true }.accessibilityIdentifier("sliding.restart") }
+            .confirmationDialog(model.t("sliding.restart.confirm"), isPresented: $restart, titleVisibility: .visible) {
+                Button(model.t("common.restart"), role: .destructive) { model.editSliding { $0.restart() }; paused = false }.accessibilityIdentifier("sliding.confirmRestart")
+                Button(model.t("common.cancel"), role: .cancel) {}
             }
+            .modifier(GameplayActivity(game: .sliding, active: !paused && !restart && model.sliding?.isComplete == false))
             .onAppear { visible = true }.onDisappear { visible = false }
             .onReceive(timer) { _ in
-                if visible && !paused && scenePhase == .active && model.sliding?.isComplete == false {
-                    model.editSliding { $0.elapsedSeconds += 1 }
-                }
+                if visible && !paused && !restart && scenePhase == .active && model.sliding?.isComplete == false { model.editSliding { $0.elapsedSeconds += 1 } }
             }
     }
 }

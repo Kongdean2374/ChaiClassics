@@ -5,19 +5,31 @@ struct SudokuMenuView: View {
     @EnvironmentObject var model: AppModel
     var body: some View {
         List {
-            if let id = model.sudoku.currentID, let puzzle = model.puzzles.first(where: { $0.id == id }) {
-                Section {
-                    NavigationLink("繼續：\(puzzle.difficulty.title) \(String(format: "%03d", puzzle.number))") {
-                        SudokuPlayView(puzzle: puzzle)
+            if let id = model.sudoku.currentID, let puzzle = model.puzzles.first(where: { $0.id == id }), let board = model.sudoku.boards[id] {
+                Section(model.t("menu.lastGame")) {
+                    NavigationLink { SudokuPlayView(puzzle: puzzle) } label: {
+                        ContinueCard(title: model.t(board.isComplete(puzzle: puzzle) ? "menu.viewLast" : "menu.continue"), detail: model.summaryDetail(model.summary(.sudoku)))
                     }.accessibilityIdentifier("sudoku.continue")
                 }
             }
-            Section("選擇難度") {
+            Section(model.t("menu.newGame")) {
                 ForEach(SudokuDifficulty.allCases, id: \.self) { difficulty in
-                    NavigationLink(difficulty.title) { SudokuLevelsView(difficulty: difficulty) }
+                    let catalog = model.puzzles.filter { $0.difficulty == difficulty }
+                    let completed = catalog.filter { model.sudoku.completed.contains($0.id) }.count
+                    NavigationLink { SudokuLevelsView(difficulty: difficulty) } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(model.t("difficulty." + difficulty.rawValue)).font(.headline)
+                                Text(model.t("sudoku.difficulty.progress", completed, catalog.count)).font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "square.grid.3x3").foregroundStyle(.tint)
+                        }.padding(.vertical, 6)
+                    }.accessibilityIdentifier("sudoku.difficulty." + difficulty.rawValue)
                 }
             }
-        }.navigationTitle("數獨")
+            Section { Text(model.t("sudoku.paper")).font(.footnote).foregroundStyle(.secondary) }
+        }.localizedNavigation().navigationTitle(model.gameTitle(.sudoku))
     }
 }
 
@@ -26,23 +38,25 @@ struct SudokuLevelsView: View {
     @EnvironmentObject var model: AppModel
     var body: some View {
         ScrollView {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 12) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 10) {
                 ForEach(model.puzzles.filter { $0.difficulty == difficulty }) { puzzle in
                     let unlocked = model.sudoku.isUnlocked(puzzle, catalog: model.puzzles)
-                    NavigationLink {
-                        SudokuPlayView(puzzle: puzzle).onAppear { model.open(puzzle) }
-                    } label: {
-                        VStack(spacing: 8) {
+                    let current = model.sudoku.boards[puzzle.id]
+                    let inProgress = current.map { !$0.isComplete(puzzle: puzzle) } ?? false
+                    let finished = model.sudoku.completed.contains(puzzle.id)
+                    NavigationLink { SudokuPlayView(puzzle: puzzle) } label: {
+                        VStack(spacing: 7) {
                             Text(String(format: "%03d", puzzle.number)).font(.headline.monospacedDigit())
-                            Text(model.sudoku.completed.contains(puzzle.id) ? "已完成" : model.sudoku.boards[puzzle.id] != nil ? "進行中" : unlocked ? "未完成" : "未解鎖")
-                                .font(.caption2)
-                        }.frame(maxWidth: .infinity).padding(.vertical, 14)
-                            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 10))
-                    }.buttonStyle(.plain).disabled(!unlocked)
-                        .accessibilityIdentifier(puzzle.id)
+                            Image(systemName: !unlocked ? "lock" : inProgress ? "pencil" : finished ? "checkmark.circle.fill" : "circle")
+                                .font(.caption).foregroundStyle(finished && !inProgress ? Color.green : Color.secondary)
+                            Text(model.t(!unlocked ? "sudoku.locked" : inProgress ? "status.inProgress" : finished ? "status.completed" : "status.notStarted"))
+                                .font(.caption2).lineLimit(2).multilineTextAlignment(.center).minimumScaleFactor(0.8)
+                        }.frame(maxWidth: .infinity, minHeight: 88).padding(.vertical, 8)
+                            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+                    }.buttonStyle(.plain).disabled(!unlocked).accessibilityIdentifier(puzzle.id)
                 }
-            }.padding()
-        }.navigationTitle(difficulty.title)
+            }.padding(16).frame(maxWidth: 620).frame(maxWidth: .infinity)
+        }.background(Color(.systemGroupedBackground)).localizedNavigation().navigationTitle(model.t("difficulty." + difficulty.rawValue))
     }
 }
 
@@ -56,42 +70,49 @@ struct SudokuPlayView: View {
     private var complete: Bool { board.isComplete(puzzle: puzzle) }
     var body: some View {
         ScrollView {
-            VStack(spacing: 18) {
+            VStack(spacing: 16) {
                 HStack {
-                    Text("\(puzzle.difficulty.title) · \(String(format: "%03d", puzzle.number))")
+                    Text(model.t("sudoku.level.title", model.t("difficulty." + puzzle.difficulty.rawValue), puzzle.number))
                     Spacer()
-                    if complete { Text("完成").fontWeight(.semibold).accessibilityIdentifier("sudoku.complete") }
+                    if complete { Text(model.t("status.completed")).fontWeight(.semibold).accessibilityIdentifier("sudoku.complete") }
                 }.font(.subheadline).foregroundStyle(.secondary)
                 if paused || scenePhase != .active {
-                    Button("繼續遊戲") { paused = false }.frame(height: 340).frame(maxWidth: .infinity)
+                    Button(model.t("common.resume")) { paused = false }.frame(height: 320).frame(maxWidth: .infinity)
                 } else {
-                    SudokuGrid(puzzle: puzzle, board: board) { index in model.edit(puzzle) { $0.selected = index } }
+                    SudokuGrid(puzzle: puzzle, board: board) { index in
+                        if model.edit(puzzle, { $0.selected = index }) { model.feedback() }
+                    }
                 }
-                Picker("工具", selection: Binding(get: { board.mode }, set: { mode in model.edit(puzzle) { $0.mode = mode } })) {
-                    Text("答案筆").tag(SudokuBoard.Mode.answer)
-                    Text("鉛筆").tag(SudokuBoard.Mode.pencil)
-                }.pickerStyle(.segmented).disabled(paused || complete)
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 5), count: 9), spacing: 5) {
+                Picker(model.t("sudoku.tools"), selection: Binding(get: { board.mode }, set: { mode in model.edit(puzzle) { $0.mode = mode } })) {
+                    Text(model.t("sudoku.answerPen")).tag(SudokuBoard.Mode.answer)
+                    Text(model.t("sudoku.pencil")).tag(SudokuBoard.Mode.pencil)
+                }.pickerStyle(.segmented).disabled(paused || complete).accessibilityIdentifier("sudoku.tools")
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5), spacing: 8) {
                     ForEach(1...9, id: \.self) { digit in
-                        Button { model.edit(puzzle) { $0.enter(digit, puzzle: puzzle) } } label: {
-                            Text("\(digit)").font(.title3.monospacedDigit()).frame(maxWidth: .infinity).frame(height: 48)
-                        }.buttonStyle(.bordered).accessibilityIdentifier("sudoku.digit.\(digit)")
+                        Button {
+                            if model.edit(puzzle, { $0.enter(digit, puzzle: puzzle) }) { model.feedback() }
+                        } label: { Text("\(digit)").font(.title3.monospacedDigit()).frame(maxWidth: .infinity).frame(height: 44) }
+                            .buttonStyle(.bordered).accessibilityIdentifier("sudoku.digit.\(digit)")
                     }
                 }.disabled(paused || complete)
                 HStack {
-                    Button("擦除", systemImage: "eraser") { model.edit(puzzle) { $0.erase(puzzle: puzzle) } }.disabled(paused || complete)
+                    Button(model.t("sudoku.erase"), systemImage: "eraser") {
+                        if model.edit(puzzle, { $0.erase(puzzle: puzzle) }) { model.feedback() }
+                    }.disabled(paused || complete).accessibilityIdentifier("sudoku.erase")
                     Spacer()
-                    Button(paused ? "繼續" : "暫停", systemImage: paused ? "play" : "pause") { paused.toggle() }
+                    Button(model.t(paused ? "common.resume" : "common.pause"), systemImage: paused ? "play" : "pause") { paused.toggle() }
+                        .accessibilityIdentifier("sudoku.pause")
                 }.buttonStyle(.bordered)
-            }.padding().frame(maxWidth: 560)
-        }
-        .background(Color(.systemBackground))
-        .navigationTitle("數獨").navigationBarTitleDisplayMode(.inline)
-        .toolbar { Button("重新開始") { confirmRestart = true } }
-        .confirmationDialog("清除本題盤面與筆記？已完成紀錄會保留。", isPresented: $confirmRestart, titleVisibility: .visible) {
-            Button("重新開始", role: .destructive) { model.open(puzzle, restart: true) }
-        }
-        .onAppear { model.open(puzzle) }
+            }.padding(16).frame(maxWidth: 560).frame(maxWidth: .infinity)
+        }.background(Color(.systemGroupedBackground))
+            .localizedNavigation().navigationTitle(model.gameTitle(.sudoku)).navigationBarTitleDisplayMode(.inline)
+            .toolbar { Button(model.t("common.restart")) { confirmRestart = true }.accessibilityIdentifier("sudoku.restart") }
+            .confirmationDialog(model.t("sudoku.restart.confirm"), isPresented: $confirmRestart, titleVisibility: .visible) {
+                Button(model.t("common.restart"), role: .destructive) { model.open(puzzle, restart: true); paused = false }.accessibilityIdentifier("sudoku.confirmRestart")
+                Button(model.t("common.cancel"), role: .cancel) {}
+            }
+            .modifier(GameplayActivity(game: .sudoku, active: !paused && !confirmRestart && !complete))
+            .onAppear { model.open(puzzle) }
     }
 }
 
@@ -99,6 +120,13 @@ struct SudokuGrid: View {
     let puzzle: SudokuPuzzle
     let board: SudokuBoard
     let select: (Int) -> Void
+    @EnvironmentObject var model: AppModel
+    private func label(_ i: Int, row: Int, column: Int) -> String {
+        let value = board.cells[i] == 0 ? model.t("sudoku.blank") : String(board.cells[i])
+        let given = puzzle.givens[i] == 0 ? "" : model.t("sudoku.given")
+        let notes = board.notes[i].sorted().map(String.init).joined(separator: ", ")
+        return model.t("sudoku.cell.label", row + 1, column + 1, value, given) + (notes.isEmpty ? "" : ", " + model.t("sudoku.notes", notes))
+    }
     var body: some View {
         GeometryReader { geo in
             let size = geo.size.width / 9
@@ -110,7 +138,7 @@ struct SudokuGrid: View {
                                 let i = row * 9 + col
                                 Button { select(i) } label: {
                                     ZStack {
-                                        Rectangle().fill(board.selected == i ? Color.accentColor.opacity(0.15) : Color.clear)
+                                        Rectangle().fill(board.selected == i ? Color.accentColor.opacity(0.16) : Color(.secondarySystemGroupedBackground))
                                         if board.cells[i] != 0 {
                                             Text("\(board.cells[i])").font(.system(size: size * 0.58, weight: puzzle.givens[i] == 0 ? .regular : .semibold, design: .serif))
                                         } else {
@@ -128,7 +156,8 @@ struct SudokuGrid: View {
                                         }
                                     }.frame(width: size, height: size).contentShape(Rectangle())
                                 }.buttonStyle(.plain).foregroundStyle(.primary)
-                                    .accessibilityLabel("第\(row + 1)列第\(col + 1)格，\(board.cells[i] == 0 ? "空白" : String(board.cells[i]))\(puzzle.givens[i] == 0 ? "" : "，題目數字")")
+                                    .accessibilityLabel(label(i, row: row, column: col))
+                                    .accessibilityValue(board.notes[i].isEmpty ? (board.cells[i] == 0 ? model.t("sudoku.blank") : String(board.cells[i])) : model.t("sudoku.notes", board.notes[i].sorted().map(String.init).joined(separator: ", ")))
                                     .accessibilityIdentifier("sudoku.cell.\(i)")
                             }
                         }

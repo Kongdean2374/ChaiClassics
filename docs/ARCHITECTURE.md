@@ -23,3 +23,11 @@
 未來 schema 比現版新時不讀舊備份、不覆寫。真正升版時用 `load(version:migrate:)` 接收舊 envelope，明確轉換後再 save 新版；測試已包含 1→2、未來版本拒寫與備份復原。本版尚無需要遷移的已發布舊 schema。
 
 數獨以 stable puzzle ID 對應 boards 與 completed 集合，清除本題不清除已完成紀錄。每難度獨立以前一題完成解鎖下一題。更新題庫只能追加，不能靠陣列位置遷移。舊題存檔、候選、當前模式全部保留。踩地雷首次揭開後保存實際雷位；重啟不重新擲骰。
+
+## 0.1.1 App 層
+
+AppPreferences／PreferencesStore 使用獨立 `chaiclassics.preferences.v1` UserDefaults key；GameSummary 只計算真實盤面摘要，不更動已發布 Codable 欄位。遊戲原 namespace、schemaVersion=1 與題庫不變。
+
+AppText 讀 Apple `.lproj/Localizable.strings`，並在根 View 注入 locale／preferredColorScheme；UIKit zoom host 明確同步外觀。ZoomBoard 由 UIScrollView 原生 transform 計算觸控座標，純 BoardViewport helper 算 min scale 與置中量，計時更新不重置 zoom。GameplayActivity 僅在前景、可操作時套用 keep-awake，離開／暫停恢復正常鎖屏。
+
+離線法律文件與 privacy manifest 由專案生成器加入 resources，網站只交接規格。詳細內容見 RELEASE_0.1.1.md 與 WEBSITE_HANDOFF.md。
