@@ -1,0 +1,902 @@
+[
+  {
+    "id": "sudoku.easy.0001",
+    "number": 1,
+    "difficulty": "easy",
+    "sha256": "88ce8a2423835d735f4256d0644f2db17ca1c6bc570e04c6c60eeabb782a0a76"
+  },
+  {
+    "id": "sudoku.easy.0002",
+    "number": 2,
+    "difficulty": "easy",
+    "sha256": "65977da25cbf60e23c3ac0b66e6fad3417d92be911da2119e904f2c3fdb58ac8"
+  },
+  {
+    "id": "sudoku.easy.0003",
+    "number": 3,
+    "difficulty": "easy",
+    "sha256": "83c6a6c175ffe8c31f5bbaf47e0da6f9cf5927b2feffc6d121a2639e566d6999"
+  },
+  {
+    "id": "sudoku.easy.0004",
+    "number": 4,
+    "difficulty": "easy",
+    "sha256": "0ec020a2347d24b0fcbc69de9d38473619ae331d5eb85ce602fae45ab7892647"
+  },
+  {
+    "id": "sudoku.easy.0005",
+    "number": 5,
+    "difficulty": "easy",
+    "sha256": "420507388d91e99482b4b8387ff8fd8f24222227c1199077dcc5d200f244ad32"
+  },
+  {
+    "id": "sudoku.easy.0006",
+    "number": 6,
+    "difficulty": "easy",
+    "sha256": "22540d759a5f270ebcd884b628e504e3ada79c1f946043575ac0f2b3331bdf06"
+  },
+  {
+    "id": "sudoku.easy.0007",
+    "number": 7,
+    "difficulty": "easy",
+    "sha256": "c85b9cb3156fbd3916c4c21ec7333da9dd58b3df864a6623d9a76b1faf1750f0"
+  },
+  {
+    "id": "sudoku.easy.0008",
+    "number": 8,
+    "difficulty": "easy",
+    "sha256": "078150a17ef0f53f41db05619eda6fc3b45f086647ba4d1593889cb98e0af4e3"
+  },
+  {
+    "id": "sudoku.easy.0009",
+    "number": 9,
+    "difficulty": "easy",
+    "sha256": "80715433c4cd8b38c28717bb041594830cbd1a5aaf612a6b4e8416d177493a14"
+  },
+  {
+    "id": "sudoku.easy.0010",
+    "number": 10,
+    "difficulty": "easy",
+    "sha256": "d2a19ce56e9e75410a292efc88fd1cd8123bae6004bfc0779db127f5d5d078f9"
+  },
+  {
+    "id": "sudoku.easy.0011",
+    "number": 11,
+    "difficulty": "easy",
+    "sha256": "b17aa5674450fe6ee69e55b2d37ff48c3ce62d6e04aac66742c252d7cdf75626"
+  },
+  {
+    "id": "sudoku.easy.0012",
+    "number": 12,
+    "difficulty": "easy",
+    "sha256": "5bd09707fc6edbeb4f7a2887f52ce0699f23ec46302ab64bc8f2f1eb6815d79a"
+  },
+  {
+    "id": "sudoku.easy.0013",
+    "number": 13,
+    "difficulty": "easy",
+    "sha256": "fb7d6feb9bad26ec27bfeb312186b9a4b75ee8a8ec6fe5cfacc055e6591b38b8"
+  },
+  {
+    "id": "sudoku.easy.0014",
+    "number": 14,
+    "difficulty": "easy",
+    "sha256": "debb158d9a58bd3dfa1aab4222548a993d512f392475ceb95f071d02f70a651c"
+  },
+  {
+    "id": "sudoku.easy.0015",
+    "number": 15,
+    "difficulty": "easy",
+    "sha256": "2442ee97953269cff23cdb50d6e631ddc18429469e96a43e6e8685f27a59087f"
+  },
+  {
+    "id": "sudoku.easy.0016",
+    "number": 16,
+    "difficulty": "easy",
+    "sha256": "c10041c54c17ac4ffc2cfd5b2dc343f94d31d1e9aeea22bb5c860bce444e1a2d"
+  },
+  {
+    "id": "sudoku.easy.0017",
+    "number": 17,
+    "difficulty": "easy",
+    "sha256": "fcc3bd1e47edc66be8bceee361161737469f6c7d102aa77d91f65d9257a7cc43"
+  },
+  {
+    "id": "sudoku.easy.0018",
+    "number": 18,
+    "difficulty": "easy",
+    "sha256": "ea6114df9f48dba0f9f8cb723eb112f2c4feeee916b4d4140e4ccfa8d69ad4e7"
+  },
+  {
+    "id": "sudoku.easy.0019",
+    "number": 19,
+    "difficulty": "easy",
+    "sha256": "4f815048ca53411ed3b238376473cd3f51986b5b1f4031a367b0990c053962c6"
+  },
+  {
+    "id": "sudoku.easy.0020",
+    "number": 20,
+    "difficulty": "easy",
+    "sha256": "b0f66fb3b1c0ac7ecbf8dab64cbfea9697b0d537e52ce5216949943843962adf"
+  },
+  {
+    "id": "sudoku.easy.0021",
+    "number": 21,
+    "difficulty": "easy",
+    "sha256": "1cf0f25f385a87e57073c759acba4222a07c46da02d4a03b540a75183bc84f7e"
+  },
+  {
+    "id": "sudoku.easy.0022",
+    "number": 22,
+    "difficulty": "easy",
+    "sha256": "bd5d485f2b26943e9c5d8a5cc1c000d1c230f5d3a774b4552a4ce2d09d59458d"
+  },
+  {
+    "id": "sudoku.easy.0023",
+    "number": 23,
+    "difficulty": "easy",
+    "sha256": "187a8e3cc5d01b6dd24f65b23bea4658b48e260db83d314a48e52d17f01fae98"
+  },
+  {
+    "id": "sudoku.easy.0024",
+    "number": 24,
+    "difficulty": "easy",
+    "sha256": "a5725eedaf0454bab2ea5090b8b9972beda6e60c124924f8a248474fc0ed3009"
+  },
+  {
+    "id": "sudoku.easy.0025",
+    "number": 25,
+    "difficulty": "easy",
+    "sha256": "5c9a77acfa1ddedc750cc8cb278a0eff609040da8b04da522781316c439ad535"
+  },
+  {
+    "id": "sudoku.easy.0026",
+    "number": 26,
+    "difficulty": "easy",
+    "sha256": "210879d6e53b13fd17cb4769572710607b5c3e51266472e9937cad36235f4d67"
+  },
+  {
+    "id": "sudoku.easy.0027",
+    "number": 27,
+    "difficulty": "easy",
+    "sha256": "70d521e374228b3ff4aa4f9de9268eeec033b8a6fcaf2b7ad2e12911a374a6f9"
+  },
+  {
+    "id": "sudoku.easy.0028",
+    "number": 28,
+    "difficulty": "easy",
+    "sha256": "81a2583a3ff85c88e41a4b9e149be2bd5bc00c71ae90a00207623a06cfb18a81"
+  },
+  {
+    "id": "sudoku.easy.0029",
+    "number": 29,
+    "difficulty": "easy",
+    "sha256": "29a938c9f161358f7ece72abcee435684f034f2b614c0b5358a037cca76f924c"
+  },
+  {
+    "id": "sudoku.easy.0030",
+    "number": 30,
+    "difficulty": "easy",
+    "sha256": "c6e6b6505b2f3bb793c809d827193d2ae4cf64eea7f2f4bbb722bde89f8962a8"
+  },
+  {
+    "id": "sudoku.easy.0031",
+    "number": 31,
+    "difficulty": "easy",
+    "sha256": "54613e332796606a16fd908d2ca5d7c9fb7dcf2358cf22a260da8ebfe3b0d92a"
+  },
+  {
+    "id": "sudoku.easy.0032",
+    "number": 32,
+    "difficulty": "easy",
+    "sha256": "339160c2568d2792e1eff731234fa7a8b5899f1b0b1160c147c8e6606cf10958"
+  },
+  {
+    "id": "sudoku.easy.0033",
+    "number": 33,
+    "difficulty": "easy",
+    "sha256": "f808ca4b9acd665195bc2c87cf467075e838435d12749f5be25b1bd5cf723d06"
+  },
+  {
+    "id": "sudoku.easy.0034",
+    "number": 34,
+    "difficulty": "easy",
+    "sha256": "3b6ba86c389ecc56cec7b487d23b1b41f7096e541af40126ad8f54c07f4027eb"
+  },
+  {
+    "id": "sudoku.easy.0035",
+    "number": 35,
+    "difficulty": "easy",
+    "sha256": "344e3b5ff38380e7798725b467b806834f4d03b5766d3a6cb811c7fe24d15902"
+  },
+  {
+    "id": "sudoku.easy.0036",
+    "number": 36,
+    "difficulty": "easy",
+    "sha256": "5960176eb785fd84ebdb7384425ac5fa0cdb03545725d444aad6e2c936bc349b"
+  },
+  {
+    "id": "sudoku.easy.0037",
+    "number": 37,
+    "difficulty": "easy",
+    "sha256": "1e115e373420b01f741160b356441d10fe1f0ca77f2c70f02967e3b3ccd961cc"
+  },
+  {
+    "id": "sudoku.easy.0038",
+    "number": 38,
+    "difficulty": "easy",
+    "sha256": "d4c61399e797d537502768c9ef06630e9db688cfe4e558da90d076f9a83f4170"
+  },
+  {
+    "id": "sudoku.easy.0039",
+    "number": 39,
+    "difficulty": "easy",
+    "sha256": "172ed3b4e93f8322c2a7a44b28d3b9f0cfe645b9612f573d31956283b32baef6"
+  },
+  {
+    "id": "sudoku.easy.0040",
+    "number": 40,
+    "difficulty": "easy",
+    "sha256": "bbf0fc665797fa9967ab4e6e0458ba0ec3641d216111c0294e46bfdc1d2d785c"
+  },
+  {
+    "id": "sudoku.easy.0041",
+    "number": 41,
+    "difficulty": "easy",
+    "sha256": "33e249dddd9a7e5aeaa49c29ba444e66a92a9c26b9c2cb03bb2513610d2351c6"
+  },
+  {
+    "id": "sudoku.easy.0042",
+    "number": 42,
+    "difficulty": "easy",
+    "sha256": "89662ae766bd5e38f74c7cbaac1e6dd6841347d4b7d8290bd5e3730c0efdf101"
+  },
+  {
+    "id": "sudoku.easy.0043",
+    "number": 43,
+    "difficulty": "easy",
+    "sha256": "270d10fd0f57dfe27091b18cf61def739c9798549d585784c2d3116e2728dd4d"
+  },
+  {
+    "id": "sudoku.easy.0044",
+    "number": 44,
+    "difficulty": "easy",
+    "sha256": "d391882a196ed3e293ebca755a4732e9d3a7f09eaa0932a45ecdfc92c20bee98"
+  },
+  {
+    "id": "sudoku.easy.0045",
+    "number": 45,
+    "difficulty": "easy",
+    "sha256": "a2d176fd401e0cbbd61df019ddcfdbb73ddc46aeba7cb75e41c3bdca0dcb3b91"
+  },
+  {
+    "id": "sudoku.easy.0046",
+    "number": 46,
+    "difficulty": "easy",
+    "sha256": "0de6ad46ce67b29099f2d132b83945a2c123fcbc9a3432d9e46af723c7009521"
+  },
+  {
+    "id": "sudoku.easy.0047",
+    "number": 47,
+    "difficulty": "easy",
+    "sha256": "94c5fabc928bdda36254051c21c36347bbebad9dcea69b81413362ba6314c171"
+  },
+  {
+    "id": "sudoku.easy.0048",
+    "number": 48,
+    "difficulty": "easy",
+    "sha256": "2c2b2ee25a3a393bb9622094994c01d71e796a422b0c98c91cf8fdc2ffcf9110"
+  },
+  {
+    "id": "sudoku.easy.0049",
+    "number": 49,
+    "difficulty": "easy",
+    "sha256": "433575410f239b44792f1668d2eaf055a3d8f3224495960a1aa3cd3fa11b765e"
+  },
+  {
+    "id": "sudoku.easy.0050",
+    "number": 50,
+    "difficulty": "easy",
+    "sha256": "aa935e0b851c1f849af6633812d9af56df7bfc4e497297fc871360bb7fd58851"
+  },
+  {
+    "id": "sudoku.medium.0001",
+    "number": 1,
+    "difficulty": "medium",
+    "sha256": "b0e948faabb365321160872a4003bb59f73b49b144260fdedb4c6bcb2582d304"
+  },
+  {
+    "id": "sudoku.medium.0002",
+    "number": 2,
+    "difficulty": "medium",
+    "sha256": "074d3a9177f49aa563e7d5c16d007f7655c9412e80bbe7433b4288312944993c"
+  },
+  {
+    "id": "sudoku.medium.0003",
+    "number": 3,
+    "difficulty": "medium",
+    "sha256": "a0145de9ef191edd5d89f743065ea56ecf6c9c308e514bbc23be8457817e6661"
+  },
+  {
+    "id": "sudoku.medium.0004",
+    "number": 4,
+    "difficulty": "medium",
+    "sha256": "664395f0ae709dea3d867a7a341bbf8a4abec1bd129b62cac1bdc833d36d960a"
+  },
+  {
+    "id": "sudoku.medium.0005",
+    "number": 5,
+    "difficulty": "medium",
+    "sha256": "9796bee452aa494962f812ca4048b85d837a85153e7a332485b2ae21e453efa6"
+  },
+  {
+    "id": "sudoku.medium.0006",
+    "number": 6,
+    "difficulty": "medium",
+    "sha256": "a849fe425aea84aada6d4c743d94df305a043387947c3ab17c4de4c47a4c9433"
+  },
+  {
+    "id": "sudoku.medium.0007",
+    "number": 7,
+    "difficulty": "medium",
+    "sha256": "bb465f847608517942673f707d4d63958a2b6335a73d215a4e2ba744319516ab"
+  },
+  {
+    "id": "sudoku.medium.0008",
+    "number": 8,
+    "difficulty": "medium",
+    "sha256": "7330e9e4880d377a2d07eba50f423ebcc30da4cbceac700de8deb91481257630"
+  },
+  {
+    "id": "sudoku.medium.0009",
+    "number": 9,
+    "difficulty": "medium",
+    "sha256": "91a4204407b3379832ef58bdd3b0a2206e618ebbac2b4f9db2bea5537032fcab"
+  },
+  {
+    "id": "sudoku.medium.0010",
+    "number": 10,
+    "difficulty": "medium",
+    "sha256": "a1b83157b3b721346671f2b18a9d948d7d12dd6f7b312c04039aeae46619bc3f"
+  },
+  {
+    "id": "sudoku.medium.0011",
+    "number": 11,
+    "difficulty": "medium",
+    "sha256": "c0c129edc98fa0c02f9b494647ea21a2e799f66475227e7c4614e809b0978fa6"
+  },
+  {
+    "id": "sudoku.medium.0012",
+    "number": 12,
+    "difficulty": "medium",
+    "sha256": "facbaa7bca9d2ad29946684218a8185c138399e9e1580211a7c9059605056a2d"
+  },
+  {
+    "id": "sudoku.medium.0013",
+    "number": 13,
+    "difficulty": "medium",
+    "sha256": "58a1c9843fcc88ff6ea928caa68a1b795dfff2803fed178c7125b589ea074267"
+  },
+  {
+    "id": "sudoku.medium.0014",
+    "number": 14,
+    "difficulty": "medium",
+    "sha256": "683e01d62cdf8c4eb6f5b9c4f6667f2d5e85e90c9bc52edb6ace464581283042"
+  },
+  {
+    "id": "sudoku.medium.0015",
+    "number": 15,
+    "difficulty": "medium",
+    "sha256": "0a330dff4b80c565003598ba027947ffbab047b24442888585180a22616abcf4"
+  },
+  {
+    "id": "sudoku.medium.0016",
+    "number": 16,
+    "difficulty": "medium",
+    "sha256": "f4cf9b8a13520c17fb4c4812bf44fa85c52bb1699f48c2b8632dbefe7af9ef26"
+  },
+  {
+    "id": "sudoku.medium.0017",
+    "number": 17,
+    "difficulty": "medium",
+    "sha256": "0cdc7f2f4e1a0fce23f3ab47709745fa0168800e090d99c685ae6b36db786970"
+  },
+  {
+    "id": "sudoku.medium.0018",
+    "number": 18,
+    "difficulty": "medium",
+    "sha256": "56b8d3f24459bb8f21d28cfaa042c8c24cb217ea61491c30655eee89ca03d01e"
+  },
+  {
+    "id": "sudoku.medium.0019",
+    "number": 19,
+    "difficulty": "medium",
+    "sha256": "36c5b3990ad12574f0e001fc12eab0eb7c84863f286abbd87ffb2c3c1e5ee5a2"
+  },
+  {
+    "id": "sudoku.medium.0020",
+    "number": 20,
+    "difficulty": "medium",
+    "sha256": "8d3f1fce09fb228103251c1b006219202e312bbd0d8df55ed18a73871691a84e"
+  },
+  {
+    "id": "sudoku.medium.0021",
+    "number": 21,
+    "difficulty": "medium",
+    "sha256": "22a81ee4db144d183053010d536eb47b7cf010d57bbaeae6d1268650363baf6b"
+  },
+  {
+    "id": "sudoku.medium.0022",
+    "number": 22,
+    "difficulty": "medium",
+    "sha256": "dbe0508a9fb58fda48d6785d4bda309e3449d34c4471b9f3eddc68bf22fcc689"
+  },
+  {
+    "id": "sudoku.medium.0023",
+    "number": 23,
+    "difficulty": "medium",
+    "sha256": "4047d7144915b153266663d4f70a96e1134d1045a98f1aa1387e596a5b18b886"
+  },
+  {
+    "id": "sudoku.medium.0024",
+    "number": 24,
+    "difficulty": "medium",
+    "sha256": "876da5f6962f611d6893ffb717e5101db60e876d8e02b4d3dfae53724cabce82"
+  },
+  {
+    "id": "sudoku.medium.0025",
+    "number": 25,
+    "difficulty": "medium",
+    "sha256": "1aaaa34fd6dd8bb09a8f96029db5cf9bc97e0a3dcd41f4252e3d0675c6255994"
+  },
+  {
+    "id": "sudoku.medium.0026",
+    "number": 26,
+    "difficulty": "medium",
+    "sha256": "f6c022360030d5b8abfec002e47ac44a24bec0d18e36647c66d070ab20a58ae3"
+  },
+  {
+    "id": "sudoku.medium.0027",
+    "number": 27,
+    "difficulty": "medium",
+    "sha256": "5bb079e06ed2230e8b7d5ce23040a9fa6b617e9d4baef357eae760cd0e212c69"
+  },
+  {
+    "id": "sudoku.medium.0028",
+    "number": 28,
+    "difficulty": "medium",
+    "sha256": "c28b92ecf075e4d3af6e2c9e415b3017da34f61d47700924a100eab1587cc8d2"
+  },
+  {
+    "id": "sudoku.medium.0029",
+    "number": 29,
+    "difficulty": "medium",
+    "sha256": "42912d8da6b21d87a951e7bf069edba609b6e7544f2aab8f64dac8312b9a3613"
+  },
+  {
+    "id": "sudoku.medium.0030",
+    "number": 30,
+    "difficulty": "medium",
+    "sha256": "2dd308d129cc4d1d816bcc98d0201a7cc45d6354d9200236d6280f1e345c3940"
+  },
+  {
+    "id": "sudoku.medium.0031",
+    "number": 31,
+    "difficulty": "medium",
+    "sha256": "bac67efcb761a168a7f69e57446e6268bc49ec55be564b645a54e3af32820433"
+  },
+  {
+    "id": "sudoku.medium.0032",
+    "number": 32,
+    "difficulty": "medium",
+    "sha256": "3bc86d1c8ad721b562d846ba250c5fa4d1771b17a2a9d1b4aa139b783b19cb88"
+  },
+  {
+    "id": "sudoku.medium.0033",
+    "number": 33,
+    "difficulty": "medium",
+    "sha256": "1ed261ff100d245fe667b254b93a4e1010ac7c24888ae57ac421df4150522307"
+  },
+  {
+    "id": "sudoku.medium.0034",
+    "number": 34,
+    "difficulty": "medium",
+    "sha256": "1b1344b04d018f3c6e14a42a6e5da0a56332140560dae2ec02660dd11c30dc55"
+  },
+  {
+    "id": "sudoku.medium.0035",
+    "number": 35,
+    "difficulty": "medium",
+    "sha256": "558e1e48bb085e500aae1951694b4a4e797ff9e2da2b3aff7c699f60bddbbdd3"
+  },
+  {
+    "id": "sudoku.medium.0036",
+    "number": 36,
+    "difficulty": "medium",
+    "sha256": "660cec86f776da5377f4f70faa5e87d25262bb9fff6113bc0b664b0730ce87ac"
+  },
+  {
+    "id": "sudoku.medium.0037",
+    "number": 37,
+    "difficulty": "medium",
+    "sha256": "15370be06f7ce4d161c82ebbaf0921fcbdeec9c54981185fa1ede24aa9ee8359"
+  },
+  {
+    "id": "sudoku.medium.0038",
+    "number": 38,
+    "difficulty": "medium",
+    "sha256": "f630481c9714716ca0f648171e511704262bc62344fa4721ad87173ddaa08190"
+  },
+  {
+    "id": "sudoku.medium.0039",
+    "number": 39,
+    "difficulty": "medium",
+    "sha256": "e833eaf87505831a5ab353946b2625f2bfde238704788d2ddd3f12dad42929c5"
+  },
+  {
+    "id": "sudoku.medium.0040",
+    "number": 40,
+    "difficulty": "medium",
+    "sha256": "a44324018e49a27f35a549fba582a7e523f39812a06519f3dbb74115142d80be"
+  },
+  {
+    "id": "sudoku.medium.0041",
+    "number": 41,
+    "difficulty": "medium",
+    "sha256": "a42bf7118509944bad61a2190d19fc1dc4d21534212aa8ddb8d666d44102cecd"
+  },
+  {
+    "id": "sudoku.medium.0042",
+    "number": 42,
+    "difficulty": "medium",
+    "sha256": "6c681c98e092a9b13fdceb0b82f6510f37d048a2bc175297aa5958dc7f8c8135"
+  },
+  {
+    "id": "sudoku.medium.0043",
+    "number": 43,
+    "difficulty": "medium",
+    "sha256": "4a77101184cd9d546f62136ab1ac1298eaef040322b879a6800e79acd083028b"
+  },
+  {
+    "id": "sudoku.medium.0044",
+    "number": 44,
+    "difficulty": "medium",
+    "sha256": "2c7cc9052ddb350c5b5cb63a3384112a6d2788b5e9cd8b92b782f6f27642fd30"
+  },
+  {
+    "id": "sudoku.medium.0045",
+    "number": 45,
+    "difficulty": "medium",
+    "sha256": "3b7e76e9b087cb08d9fa684e201799d534cb84565afa7188b3c94b8470ced337"
+  },
+  {
+    "id": "sudoku.medium.0046",
+    "number": 46,
+    "difficulty": "medium",
+    "sha256": "cda1f6abd58f3db54b055704ac12f6484d53cc5d48adfebf3bbd52f91b7e0b48"
+  },
+  {
+    "id": "sudoku.medium.0047",
+    "number": 47,
+    "difficulty": "medium",
+    "sha256": "3567b87705f921485c6a99ee368cd28c5d7c1f6345324b075bd31de855156aa9"
+  },
+  {
+    "id": "sudoku.medium.0048",
+    "number": 48,
+    "difficulty": "medium",
+    "sha256": "d1237f795a90992cbd7ec100c034b8b370a2ee467cecf9ac3c88a0f9314239f5"
+  },
+  {
+    "id": "sudoku.medium.0049",
+    "number": 49,
+    "difficulty": "medium",
+    "sha256": "b33a8a4d7e0a6b6bc1fbea0f54b0808561dd4347378dbec6a6a16350603bd461"
+  },
+  {
+    "id": "sudoku.medium.0050",
+    "number": 50,
+    "difficulty": "medium",
+    "sha256": "b013d613d116a919a8e1f078d5604e562a8f0ad08e431e6d6e4589c3617e63da"
+  },
+  {
+    "id": "sudoku.hard.0001",
+    "number": 1,
+    "difficulty": "hard",
+    "sha256": "83b1d508a57e4b8f97a667fa9dbfe4ea48a468609e9756f2c32665ed4376748e"
+  },
+  {
+    "id": "sudoku.hard.0002",
+    "number": 2,
+    "difficulty": "hard",
+    "sha256": "faa7426f8ef7dce2503abd01b89ca2320883bff409b9eaec704e4ef317533444"
+  },
+  {
+    "id": "sudoku.hard.0003",
+    "number": 3,
+    "difficulty": "hard",
+    "sha256": "a58e495441e7eac279c594e0d703bae10084e5942ccef22104dfbb0f982444da"
+  },
+  {
+    "id": "sudoku.hard.0004",
+    "number": 4,
+    "difficulty": "hard",
+    "sha256": "1fc554ec9971289d3d27dc30047189041a96f6458a8996afb60ebaf1b689c74e"
+  },
+  {
+    "id": "sudoku.hard.0005",
+    "number": 5,
+    "difficulty": "hard",
+    "sha256": "7009d5e2d207f81cb96bb0a2efab87224a496b26107d3ec397792bbf4f063ec2"
+  },
+  {
+    "id": "sudoku.hard.0006",
+    "number": 6,
+    "difficulty": "hard",
+    "sha256": "f35c96fc072a32feae4e4481c0c535b4ec408f773c59aecb5e9527e62652de6a"
+  },
+  {
+    "id": "sudoku.hard.0007",
+    "number": 7,
+    "difficulty": "hard",
+    "sha256": "a255fcd184666929857d068cc64df46fa94537d8984cd60458d8cde50738f0d7"
+  },
+  {
+    "id": "sudoku.hard.0008",
+    "number": 8,
+    "difficulty": "hard",
+    "sha256": "b6f5afbedb955683540339737732492ba7d10160e5cdf97942ae72539cf28829"
+  },
+  {
+    "id": "sudoku.hard.0009",
+    "number": 9,
+    "difficulty": "hard",
+    "sha256": "3892d7914ffb3345e8c83e01228914d103d3d0211598833c39314028331b0e37"
+  },
+  {
+    "id": "sudoku.hard.0010",
+    "number": 10,
+    "difficulty": "hard",
+    "sha256": "783559a16f5136fb632f97c2f0337b988255eda0ea9ea27768ae9725dfbe1da2"
+  },
+  {
+    "id": "sudoku.hard.0011",
+    "number": 11,
+    "difficulty": "hard",
+    "sha256": "70fbb0081b0b4bbca33924ddd1147269adc052b09d6000081d3abeff221c14a9"
+  },
+  {
+    "id": "sudoku.hard.0012",
+    "number": 12,
+    "difficulty": "hard",
+    "sha256": "47644c2751d88f1508074669b3558f1be32ed9b60430ea6e0e9ea230d2d2e4c8"
+  },
+  {
+    "id": "sudoku.hard.0013",
+    "number": 13,
+    "difficulty": "hard",
+    "sha256": "91665d8fb3d0ea1cf8090e431dc57bedf88c6c317e6e7e4fd6f36dc3ae27bf59"
+  },
+  {
+    "id": "sudoku.hard.0014",
+    "number": 14,
+    "difficulty": "hard",
+    "sha256": "537807b3c90db90517931f0d543d0a6e6c534b9b3c2c114d7de713a8bfcc5796"
+  },
+  {
+    "id": "sudoku.hard.0015",
+    "number": 15,
+    "difficulty": "hard",
+    "sha256": "1fe140b2c8a68d7bcc5cc28d781668217447c086e40e6bbc0d969be1286b047f"
+  },
+  {
+    "id": "sudoku.hard.0016",
+    "number": 16,
+    "difficulty": "hard",
+    "sha256": "b88cfc6f690bf62f46a196c57109090f5cf365835b10ac8a37c5f0d651a1a319"
+  },
+  {
+    "id": "sudoku.hard.0017",
+    "number": 17,
+    "difficulty": "hard",
+    "sha256": "7ee252081a94509a06cd4fac38b9486ca40ee97a24b2a8b638c92dee2127fc13"
+  },
+  {
+    "id": "sudoku.hard.0018",
+    "number": 18,
+    "difficulty": "hard",
+    "sha256": "e0318b4f18265510ab67095a5872f7445b2d519eda94b4186ca60036e3e46149"
+  },
+  {
+    "id": "sudoku.hard.0019",
+    "number": 19,
+    "difficulty": "hard",
+    "sha256": "cf5b8cf320119196309911e594ab3eebb4900c0b26c3b47eb2640663dc61f53d"
+  },
+  {
+    "id": "sudoku.hard.0020",
+    "number": 20,
+    "difficulty": "hard",
+    "sha256": "cf115e370d845b072c78bd55830c260a5d61e664ee884aedef89d4d11166bc54"
+  },
+  {
+    "id": "sudoku.hard.0021",
+    "number": 21,
+    "difficulty": "hard",
+    "sha256": "577e40adbb9b5c95490f459fbebb2f966e21d8d4f973a7818cb78b833908f599"
+  },
+  {
+    "id": "sudoku.hard.0022",
+    "number": 22,
+    "difficulty": "hard",
+    "sha256": "86da635789ad153a59f834b75f077717d4a941000f9248e7bf95736ea21c4d97"
+  },
+  {
+    "id": "sudoku.hard.0023",
+    "number": 23,
+    "difficulty": "hard",
+    "sha256": "e1468dfdd50c7209270ac9d496df4c054c77dd7efa09f730cda0d1b29973c909"
+  },
+  {
+    "id": "sudoku.hard.0024",
+    "number": 24,
+    "difficulty": "hard",
+    "sha256": "5e8a8162590f3a0eb2092b4c26911c2109edc7326c392687de29e11ed81c48ea"
+  },
+  {
+    "id": "sudoku.hard.0025",
+    "number": 25,
+    "difficulty": "hard",
+    "sha256": "b8ab6726b28efb76f4cd300856ffe0f3766edc12205e951299d3abb85e503daa"
+  },
+  {
+    "id": "sudoku.hard.0026",
+    "number": 26,
+    "difficulty": "hard",
+    "sha256": "7ffb3bbfee2edfda80db06a4fba8e5a23942bea2a428e0bf74c5819a69c2b2a7"
+  },
+  {
+    "id": "sudoku.hard.0027",
+    "number": 27,
+    "difficulty": "hard",
+    "sha256": "f1f9ac4f93d57bf03cb84bc1106e012fb1aea8243b2ce12ece7230578eb90e61"
+  },
+  {
+    "id": "sudoku.hard.0028",
+    "number": 28,
+    "difficulty": "hard",
+    "sha256": "3a3adf5c2e5f2d0fe7ed9a53a69e3886a6703faf65cf0bb8fdcac4d6b8b4319c"
+  },
+  {
+    "id": "sudoku.hard.0029",
+    "number": 29,
+    "difficulty": "hard",
+    "sha256": "091a6b4e06154d8f23a3ca9256d32ef91b471b11e09ebacc4917a6f3a96e321c"
+  },
+  {
+    "id": "sudoku.hard.0030",
+    "number": 30,
+    "difficulty": "hard",
+    "sha256": "a3f02bd1eb10e4fdb064673e4b97032466660218cbd7fd8e5bc311f2f26d9b41"
+  },
+  {
+    "id": "sudoku.hard.0031",
+    "number": 31,
+    "difficulty": "hard",
+    "sha256": "9c5aec1079d4303a07680810aa85cd9f71552a07209ca48782971e78aa427144"
+  },
+  {
+    "id": "sudoku.hard.0032",
+    "number": 32,
+    "difficulty": "hard",
+    "sha256": "8dddab5902877031b927bfffc6d440e793aa7517d195b6da6115480098e9977e"
+  },
+  {
+    "id": "sudoku.hard.0033",
+    "number": 33,
+    "difficulty": "hard",
+    "sha256": "7570fb69724be272ebd28bdb79d2af765c446b1084747d51a3308c5a6bb8f105"
+  },
+  {
+    "id": "sudoku.hard.0034",
+    "number": 34,
+    "difficulty": "hard",
+    "sha256": "7b7936a67b9c75b229b2410d0f1950d6926f1018323de7e95f50b5113cda8f27"
+  },
+  {
+    "id": "sudoku.hard.0035",
+    "number": 35,
+    "difficulty": "hard",
+    "sha256": "127327526b5d04e9972a3f96048c176103cbe9cff7a4da4fac300ecac8d9f26d"
+  },
+  {
+    "id": "sudoku.hard.0036",
+    "number": 36,
+    "difficulty": "hard",
+    "sha256": "04a41890ca8815dcb8d9aba988daf37a39ed3278483ffe851f5bb5fc036f2ebc"
+  },
+  {
+    "id": "sudoku.hard.0037",
+    "number": 37,
+    "difficulty": "hard",
+    "sha256": "e19cd034b84cf60de89fb346d6a97d17f83e89c82d8eae44a6f4176545f308e5"
+  },
+  {
+    "id": "sudoku.hard.0038",
+    "number": 38,
+    "difficulty": "hard",
+    "sha256": "619481d75196c2f3bdb0cb4cc54efaf2b98933f54b85b3874d97cd459914a34d"
+  },
+  {
+    "id": "sudoku.hard.0039",
+    "number": 39,
+    "difficulty": "hard",
+    "sha256": "1101a14d90a66a4742b67581dc3844c9cc06df59a95175250aae8595e08795bf"
+  },
+  {
+    "id": "sudoku.hard.0040",
+    "number": 40,
+    "difficulty": "hard",
+    "sha256": "1fbd00c13ab56dd7d2d8791ec9161a53e3a32b25026b7ed3c9dd9d07a4cb7a93"
+  },
+  {
+    "id": "sudoku.hard.0041",
+    "number": 41,
+    "difficulty": "hard",
+    "sha256": "3fe333a60c227e44721c2d298bda3d4810c891533ef8b645accd8ef07a4b911f"
+  },
+  {
+    "id": "sudoku.hard.0042",
+    "number": 42,
+    "difficulty": "hard",
+    "sha256": "3fe8911caceddaae35dcf300ee0bad6316e5928412cb75e2b04d171e6ca995e5"
+  },
+  {
+    "id": "sudoku.hard.0043",
+    "number": 43,
+    "difficulty": "hard",
+    "sha256": "98a295553cfed1f82da2890e212555136bb5c4362b1806003bd9c725b3e274bb"
+  },
+  {
+    "id": "sudoku.hard.0044",
+    "number": 44,
+    "difficulty": "hard",
+    "sha256": "d4feb0d24ed6d1df628e0b5537cc3c77c8b37a500a16befaf59db6a8f22fc0b9"
+  },
+  {
+    "id": "sudoku.hard.0045",
+    "number": 45,
+    "difficulty": "hard",
+    "sha256": "0271b8cb90648c89babc84038690bba30bb68f6449b69ec1fcbc68ad5d978d80"
+  },
+  {
+    "id": "sudoku.hard.0046",
+    "number": 46,
+    "difficulty": "hard",
+    "sha256": "c17f4287c6e48ac167d7ed9e1f3838588e63882eaf102356ceb8b67186dafd7e"
+  },
+  {
+    "id": "sudoku.hard.0047",
+    "number": 47,
+    "difficulty": "hard",
+    "sha256": "b98945bb101b6273a3d25c58bce2063081bb2fd9d9951b7e78f854cd2e7ef3c8"
+  },
+  {
+    "id": "sudoku.hard.0048",
+    "number": 48,
+    "difficulty": "hard",
+    "sha256": "e235837b70a94d47ea2e56b4708ae8924e86a5d2924344528fc2818d0a929845"
+  },
+  {
+    "id": "sudoku.hard.0049",
+    "number": 49,
+    "difficulty": "hard",
+    "sha256": "97c4db4c50d38c649f02f6fdf311d4592a94de473c7e83b8faf8645fe152370e"
+  },
+  {
+    "id": "sudoku.hard.0050",
+    "number": 50,
+    "difficulty": "hard",
+    "sha256": "4f2a93f71e6e9de8f3323163b617176a4f7517258548376ed56a18ddf2d886dc"
+  }
+]

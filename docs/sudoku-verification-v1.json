@@ -1,0 +1,762 @@
+{
+  "puzzles": 150,
+  "uniqueSolutions": 150,
+  "failures": 0,
+  "difficulties": {
+    "easy": 50,
+    "medium": 50,
+    "hard": 50
+  },
+  "strategies": {
+    "sudoku.easy.0001": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0002": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0003": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0004": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0005": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0006": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0007": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0008": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0009": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0010": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0011": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0012": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0013": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0014": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0015": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0016": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0017": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0018": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0019": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0020": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0021": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0022": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0023": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0024": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0025": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0026": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0027": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0028": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0029": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0030": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0031": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0032": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0033": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0034": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0035": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0036": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0037": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0038": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0039": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0040": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0041": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0042": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0043": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0044": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0045": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0046": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0047": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0048": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0049": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.easy.0050": {
+      "nakedSingles": 45,
+      "hiddenSingles": 0,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0001": {
+      "nakedSingles": 37,
+      "hiddenSingles": 2,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0002": {
+      "nakedSingles": 32,
+      "hiddenSingles": 10,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0003": {
+      "nakedSingles": 46,
+      "hiddenSingles": 4,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0004": {
+      "nakedSingles": 43,
+      "hiddenSingles": 6,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0005": {
+      "nakedSingles": 51,
+      "hiddenSingles": 2,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0006": {
+      "nakedSingles": 36,
+      "hiddenSingles": 18,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0007": {
+      "nakedSingles": 39,
+      "hiddenSingles": 16,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0008": {
+      "nakedSingles": 46,
+      "hiddenSingles": 5,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0009": {
+      "nakedSingles": 45,
+      "hiddenSingles": 1,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0010": {
+      "nakedSingles": 50,
+      "hiddenSingles": 3,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0011": {
+      "nakedSingles": 37,
+      "hiddenSingles": 11,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0012": {
+      "nakedSingles": 41,
+      "hiddenSingles": 11,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0013": {
+      "nakedSingles": 44,
+      "hiddenSingles": 3,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0014": {
+      "nakedSingles": 43,
+      "hiddenSingles": 1,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0015": {
+      "nakedSingles": 48,
+      "hiddenSingles": 2,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0016": {
+      "nakedSingles": 49,
+      "hiddenSingles": 5,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0017": {
+      "nakedSingles": 39,
+      "hiddenSingles": 10,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0018": {
+      "nakedSingles": 45,
+      "hiddenSingles": 7,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0019": {
+      "nakedSingles": 38,
+      "hiddenSingles": 9,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0020": {
+      "nakedSingles": 49,
+      "hiddenSingles": 5,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0021": {
+      "nakedSingles": 41,
+      "hiddenSingles": 5,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0022": {
+      "nakedSingles": 43,
+      "hiddenSingles": 1,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0023": {
+      "nakedSingles": 39,
+      "hiddenSingles": 8,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0024": {
+      "nakedSingles": 46,
+      "hiddenSingles": 5,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0025": {
+      "nakedSingles": 36,
+      "hiddenSingles": 10,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0026": {
+      "nakedSingles": 51,
+      "hiddenSingles": 2,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0027": {
+      "nakedSingles": 50,
+      "hiddenSingles": 1,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0028": {
+      "nakedSingles": 46,
+      "hiddenSingles": 4,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0029": {
+      "nakedSingles": 48,
+      "hiddenSingles": 5,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0030": {
+      "nakedSingles": 39,
+      "hiddenSingles": 10,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0031": {
+      "nakedSingles": 38,
+      "hiddenSingles": 12,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0032": {
+      "nakedSingles": 48,
+      "hiddenSingles": 1,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0033": {
+      "nakedSingles": 41,
+      "hiddenSingles": 10,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0034": {
+      "nakedSingles": 47,
+      "hiddenSingles": 4,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0035": {
+      "nakedSingles": 48,
+      "hiddenSingles": 4,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0036": {
+      "nakedSingles": 47,
+      "hiddenSingles": 3,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0037": {
+      "nakedSingles": 44,
+      "hiddenSingles": 3,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0038": {
+      "nakedSingles": 43,
+      "hiddenSingles": 1,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0039": {
+      "nakedSingles": 38,
+      "hiddenSingles": 12,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0040": {
+      "nakedSingles": 48,
+      "hiddenSingles": 4,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0041": {
+      "nakedSingles": 44,
+      "hiddenSingles": 6,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0042": {
+      "nakedSingles": 37,
+      "hiddenSingles": 12,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0043": {
+      "nakedSingles": 39,
+      "hiddenSingles": 3,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0044": {
+      "nakedSingles": 39,
+      "hiddenSingles": 11,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0045": {
+      "nakedSingles": 47,
+      "hiddenSingles": 1,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0046": {
+      "nakedSingles": 42,
+      "hiddenSingles": 7,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0047": {
+      "nakedSingles": 53,
+      "hiddenSingles": 1,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0048": {
+      "nakedSingles": 41,
+      "hiddenSingles": 10,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0049": {
+      "nakedSingles": 43,
+      "hiddenSingles": 4,
+      "requiresBranching": false
+    },
+    "sudoku.medium.0050": {
+      "nakedSingles": 42,
+      "hiddenSingles": 3,
+      "requiresBranching": false
+    },
+    "sudoku.hard.0001": {
+      "nakedSingles": 17,
+      "hiddenSingles": 3,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0002": {
+      "nakedSingles": 14,
+      "hiddenSingles": 3,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0003": {
+      "nakedSingles": 25,
+      "hiddenSingles": 4,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0004": {
+      "nakedSingles": 29,
+      "hiddenSingles": 3,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0005": {
+      "nakedSingles": 6,
+      "hiddenSingles": 12,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0006": {
+      "nakedSingles": 4,
+      "hiddenSingles": 11,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0007": {
+      "nakedSingles": 15,
+      "hiddenSingles": 1,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0008": {
+      "nakedSingles": 3,
+      "hiddenSingles": 17,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0009": {
+      "nakedSingles": 4,
+      "hiddenSingles": 3,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0010": {
+      "nakedSingles": 15,
+      "hiddenSingles": 4,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0011": {
+      "nakedSingles": 19,
+      "hiddenSingles": 7,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0012": {
+      "nakedSingles": 11,
+      "hiddenSingles": 7,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0013": {
+      "nakedSingles": 3,
+      "hiddenSingles": 6,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0014": {
+      "nakedSingles": 18,
+      "hiddenSingles": 10,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0015": {
+      "nakedSingles": 0,
+      "hiddenSingles": 18,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0016": {
+      "nakedSingles": 8,
+      "hiddenSingles": 12,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0017": {
+      "nakedSingles": 15,
+      "hiddenSingles": 10,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0018": {
+      "nakedSingles": 2,
+      "hiddenSingles": 6,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0019": {
+      "nakedSingles": 10,
+      "hiddenSingles": 11,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0020": {
+      "nakedSingles": 10,
+      "hiddenSingles": 4,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0021": {
+      "nakedSingles": 20,
+      "hiddenSingles": 10,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0022": {
+      "nakedSingles": 4,
+      "hiddenSingles": 9,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0023": {
+      "nakedSingles": 6,
+      "hiddenSingles": 5,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0024": {
+      "nakedSingles": 2,
+      "hiddenSingles": 8,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0025": {
+      "nakedSingles": 5,
+      "hiddenSingles": 6,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0026": {
+      "nakedSingles": 1,
+      "hiddenSingles": 14,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0027": {
+      "nakedSingles": 4,
+      "hiddenSingles": 9,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0028": {
+      "nakedSingles": 11,
+      "hiddenSingles": 9,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0029": {
+      "nakedSingles": 15,
+      "hiddenSingles": 7,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0030": {
+      "nakedSingles": 11,
+      "hiddenSingles": 9,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0031": {
+      "nakedSingles": 13,
+      "hiddenSingles": 2,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0032": {
+      "nakedSingles": 1,
+      "hiddenSingles": 9,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0033": {
+      "nakedSingles": 0,
+      "hiddenSingles": 10,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0034": {
+      "nakedSingles": 1,
+      "hiddenSingles": 7,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0035": {
+      "nakedSingles": 4,
+      "hiddenSingles": 10,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0036": {
+      "nakedSingles": 25,
+      "hiddenSingles": 5,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0037": {
+      "nakedSingles": 0,
+      "hiddenSingles": 22,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0038": {
+      "nakedSingles": 7,
+      "hiddenSingles": 9,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0039": {
+      "nakedSingles": 16,
+      "hiddenSingles": 6,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0040": {
+      "nakedSingles": 5,
+      "hiddenSingles": 19,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0041": {
+      "nakedSingles": 4,
+      "hiddenSingles": 11,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0042": {
+      "nakedSingles": 17,
+      "hiddenSingles": 6,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0043": {
+      "nakedSingles": 13,
+      "hiddenSingles": 13,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0044": {
+      "nakedSingles": 2,
+      "hiddenSingles": 24,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0045": {
+      "nakedSingles": 0,
+      "hiddenSingles": 5,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0046": {
+      "nakedSingles": 14,
+      "hiddenSingles": 10,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0047": {
+      "nakedSingles": 0,
+      "hiddenSingles": 8,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0048": {
+      "nakedSingles": 3,
+      "hiddenSingles": 12,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0049": {
+      "nakedSingles": 11,
+      "hiddenSingles": 11,
+      "requiresBranching": true
+    },
+    "sudoku.hard.0050": {
+      "nakedSingles": 0,
+      "hiddenSingles": 12,
+      "requiresBranching": true
+    }
+  }
+}

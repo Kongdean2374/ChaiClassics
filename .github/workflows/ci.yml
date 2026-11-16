@@ -1,0 +1,28 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Select installed Xcode 26 or newer
+        run: bash scripts/select_xcode.sh
+      - name: Verify puzzles, Swift tests, build and iOS UI tests
+        run: bash scripts/ci.sh
+      - name: Preserve verification report and simulator results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: test-results
+          path: |
+            sudoku-verification.json
+            build/UITests.xcresult
+          if-no-files-found: warn
