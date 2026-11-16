@@ -34,18 +34,18 @@ concurrency:
   cancel-in-progress: false
 jobs:
   ci:
-    if: github.ref == 'refs/heads/main' && inputs.iphone_tested && inputs.metadata_reviewed
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.iphone_tested && inputs.metadata_reviewed
     uses: ./.github/workflows/ci.yml
   prepare:
     needs: ci
-    if: github.ref == 'refs/heads/main' && inputs.iphone_tested && inputs.metadata_reviewed
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.iphone_tested && inputs.metadata_reviewed
     environment: production
     runs-on: macos-15
     timeout-minutes: 25
     env:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-      ASC_API_KEY_P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
+      ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
       RELEASE_VERSION: ${{ inputs.version }}
       TESTED_BUILD_NUMBER: ${{ inputs.build_number }}
       TESTED_COMMIT: ${{ inputs.tested_commit }}
@@ -54,7 +54,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - run: python3 scripts/check_release_secrets.py
+      - run: python3 scripts/check_release_secrets.py --trusted-dispatch
       - uses: ruby/setup-ruby@4a9ddd6f338a97768b8006bf671dfbad383215f4
         with:
           ruby-version: '3.3'
@@ -64,4 +64,4 @@ jobs:
           bundle config set frozen true
           bundle install --jobs 4
       - name: Select tested build and prepare version (manual submission remains required)
-        run: bundle exec fastlane ios prepare_store
+        run: python3 scripts/run_signing_lane.py prepare_store

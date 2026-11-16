@@ -1,0 +1,52 @@
+name: Initialize Signing (match)
+on:
+  workflow_dispatch:
+    inputs:
+      apple_team_id:
+        description: 'Optional 10-character Team ID; otherwise APPLE_TEAM_ID Variable/Secret'
+        required: false
+        type: string
+env:
+  FASTLANE_OPT_OUT_USAGE: '1'
+  FASTLANE_SKIP_UPDATE_CHECK: '1'
+permissions:
+  contents: read
+concurrency:
+  group: apple-release
+  cancel-in-progress: false
+jobs:
+  ci:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/ci.yml
+  initialize:
+    needs: ci
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    environment: signing
+    runs-on: macos-15
+    timeout-minutes: 25
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+      APPLE_TEAM_ID: ${{ inputs.apple_team_id || vars.APPLE_TEAM_ID || secrets.APPLE_TEAM_ID }}
+      SIGNING_REPO_PAT: ${{ secrets.SIGNING_REPO_PAT }}
+      MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify configuration, trusted dispatch and private repository permissions
+        run: python3 scripts/check_release_secrets.py --initialize --trusted-dispatch --check-repo
+      - run: bash scripts/select_xcode.sh
+      - uses: ruby/setup-ruby@4a9ddd6f338a97768b8006bf671dfbad383215f4
+        with:
+          ruby-version: '3.3'
+          bundler: '2.5.23'
+      - name: Install locked signing tooling
+        run: |
+          bundle config set path vendor/bundle
+          bundle config set frozen true
+          bundle install --jobs 4
+      - name: Initialize encrypted Distribution certificate and App Store profile
+        run: python3 scripts/run_signing_lane.py initialize_signing
+      # No signing logs, profiles, certificates, private keys or archives are artifacts.

@@ -50,6 +50,8 @@ jobs:
           bundle config set path vendor/bundle
           bundle config set frozen true
           bundle install --jobs 4
+          python3 -m unittest discover -s tests -v
+          bundle exec ruby tests/signing_config_test.rb
           ruby -c fastlane/Fastfile
           bundle exec fastlane lanes
           cat Gemfile.lock

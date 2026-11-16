@@ -23,3 +23,10 @@ __pycache__/
 fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/
+# match must only store encrypted assets in the dedicated private repository.
+certs/
+profiles/
+*.cer
+*.certSigningRequest
+*.keychain*
+fastlane/logs/

@@ -16,7 +16,7 @@ SwiftUI 原生離線合集，iPhone / iPad，iOS 17+。永久免費，無廣告�
 
 150 題均已用獨立 Exact Cover 驗證唯一解，三類各 50，0 失敗。第一階段 [修正後 CI](https://github.com/Kongdean2374/ChaiClassics/actions/runs/43805302202) 已成功通過 7 項 Swift 測試、Xcode 26.3 App 編譯與數獨模擬器測試。踩地雷、滑塊與發布流程的最新實測請查看 Actions 與 [階段紀錄](docs/STATUS.md)，不要把「已寫好 workflow」當成已通過或已上傳。
 
-目前**沒有真實可下載的 TestFlight build**，Apple 簽署／API 設定未在本工作階段驗證，真機觸控／縮放／效能仍需使用者完成。GitHub Secrets 的值不應貼在聊天或公開 repo。
+目前**沒有真實可下載的 TestFlight build**，Apple／match Secrets 已由使用者配置，但 Apple 端有效性與初始化尚未實跑驗證，真機觸控／縮放／效能仍需使用者完成。GitHub Secrets 的值不應貼在聊天或公開 repo。
 
 ## 開發與 CI
 
@@ -28,7 +28,7 @@ bash scripts/ci.sh              # macOS：以上 + Xcode build + iOS Simulator X
 
 Xcode 26+ 開啟 `ChaiClassics.xcodeproj`，選 `ChaiClassics` scheme 與 iPhone Simulator。不需要第三方 iOS package，也不必在 CI 動態下載專案產生器。新增 SwiftUI 檔案後跑 `python3 scripts/create_project.py` 更新已提交工程。
 
-CI 每次 main push／PR 執行，無 Apple Secrets，任一步失敗會失敗。TestFlight 與 App Store 為手動 main workflow，前者簽署上傳，後者只選入已測 build、準備 release notes，**不自動送審／公開上架**。production environment 審核保護需在 GitHub Settings 設定。
+CI 每次 main push／PR 執行，無 Apple Secrets，任一步失敗會失敗。TestFlight 與 App Store 為手動 main workflow，獨立 Initialize Signing 工作流程透過 match 加密保存資產至私人倉庫；TestFlight 只用 match readonly 簽署上傳。App Store 只選入已測 build、準備 release notes，**不自動送審／公開上架**。production environment 審核保護需在 GitHub Settings 設定。
 
 文件：
 

@@ -1,0 +1,9 @@
+storage_mode('git')
+git_url('https://github.com/Kongdean2374/ChaiClassics-Signing.git')
+git_branch('main')
+type('appstore')
+app_identifier(['cc.chaihome.chaiclassics'])
+generate_apple_certs(true)
+# Safe default for direct match use. Only the dedicated manual initialization lane
+# passes readonly: false. No destructive certificate management is provided.
+readonly(true)
