@@ -6,6 +6,7 @@ import argparse, os, pathlib, subprocess, tempfile
 from check_release_secrets import main as preflight
 from apple_api_report import load_report, format_report, report_failed
 from signing_asset_report import load_asset_report, format_asset_report, asset_complete, MESSAGES as ASSET_MESSAGES
+from release_report import load_release_report, format_release_report, release_complete, MESSAGES as RELEASE_MESSAGES
 
 DIAGNOSTICS = {
     'BUNDLE_ID': 'Register the exact Bundle ID cc.chaihome.chaiclassics in the Apple Developer team first. No alternative ID is selected automatically.',
@@ -19,10 +20,11 @@ DIAGNOSTICS = {
     'MATCH_DECRYPT': 'MATCH_PASSWORD cannot decrypt the private match repository. Keep the original encryption password; do not reset or run destructive operations.',
     'MATCH_GIT': 'match could not clone/push the private signing repository. Check SIGNING_REPO_PAT Contents read/write, repository selection, SSO and branch rules.',
     'SIGNING_FAILED': 'match/signing failed. Possible certificate quota, profile permissions, expired assets or Apple service error. Raw output was suppressed to protect keys; do not revoke unrelated certificates.',
-    'UPLOAD_FAILED': 'Signed build/upload did not complete. Check App Record, version/build number, Apple API role and Apple service status. Raw output suppressed.',
+    'UPLOAD_FAILED': 'Legacy undifferentiated build/upload failure without stage evidence. It does not establish that an upload or archive was attempted. Raw output suppressed.',
 }
 
 DIAGNOSTICS.update(ASSET_MESSAGES)
+DIAGNOSTICS.update(RELEASE_MESSAGES)
 
 def diagnostic(raw, lane):
     text = raw.decode('utf-8', errors='replace')
@@ -62,14 +64,25 @@ def main(argv=None):
         report_path.touch(mode=0o600)
         asset_path = pathlib.Path(private_dir) / 'assets.json'
         asset_path.touch(mode=0o600)
+        release_path = pathlib.Path(private_dir) / 'release.json'
+        release_path.touch(mode=0o600)
         env = dict(os.environ, FASTLANE_OPT_OUT_USAGE='1', FASTLANE_SKIP_UPDATE_CHECK='1', FASTLANE_HIDE_CHANGELOG='1', CI='true',
-                   CHAI_APPLE_DIAGNOSTIC_PATH=str(report_path), CHAI_SIGNING_ASSET_REPORT_PATH=str(asset_path))
+                   CHAI_APPLE_DIAGNOSTIC_PATH=str(report_path), CHAI_SIGNING_ASSET_REPORT_PATH=str(asset_path),
+                   CHAI_RELEASE_REPORT_PATH=str(release_path))
         result = subprocess.run(['bundle', 'exec', 'fastlane', 'ios', args.lane], cwd=root, env=env,
                                 stdout=private_log, stderr=subprocess.STDOUT)
         assets = load_asset_report(asset_path)
         if assets:
             for line in format_asset_report(assets): print(line)
         if assets and assets['failure']: return result.returncode or 1
+        release = load_release_report(release_path)
+        if args.lane == 'beta':
+            if release:
+                for line in format_release_report(release): print(line)
+                if not release_complete(release): return result.returncode or 1
+            if result.returncode == 0 and (not release_complete(release) or not asset_complete(assets)):
+                print('Release failed [BUILD_CONFIG]: Missing/incomplete safe release or signing report. Success was not assumed.')
+                return 1
         if args.lane == 'verify_signing_assets' and result.returncode == 0 and not asset_complete(assets):
             print('Release failed [ASSET_INTERNAL]: Missing/incomplete safe signing asset verification report.')
             return 1

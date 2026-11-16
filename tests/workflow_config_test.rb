@@ -81,3 +81,12 @@ check(!extraction_job.key?('environment') && !extraction_job.key?('env'), 'extra
 extraction_runs = extraction_job.fetch('steps').map { |step| step.fetch('run', '') }.join("\n")
 check(extraction_runs.include?('bundle exec ruby tests/codesign_extraction_macos_test.rb') && !extraction_runs.include?('secrets.') && !extraction_runs.include?('run_signing_lane'), 'real codesign extraction CI runs without match or Apple operations')
 puts 'PASS: credential-free real macOS extraction regression is required by CI.'
+
+check(extraction_runs.include?('bundle exec ruby tests/gym_xcode_macos_test.rb'), 'real Xcode/Gym export configuration regression is required')
+tooling_runs = workflows.fetch('ci.yml').fetch('jobs').fetch('release-tooling').fetch('steps').map { |step| step.fetch('run','') }.join("\n")
+check(tooling_runs.include?('bundle exec ruby tests/release_pipeline_test.rb'), 'locked build_app validator regression is required')
+check(beta_lane.include?("release.run('ARCHIVE')") && beta_lane.include?("release.run('EXPORT_IPA')") && beta_lane.include?("release.run('UPLOAD_TRANSFER')"), 'archive/export/transfer have independent stages')
+check(beta_lane.include?('ChaiRelease.validate_options!') && beta_lane.include?('ChaiRelease.verify_archive!'), 'validate production options and preserve exact archive asset pairing')
+check(!beta_lane.include?('export_method: "app-store-connect"'), 'old unsupported Gym enum removed from beta')
+check((flight['on'] || flight[true]).keys == ['workflow_dispatch'], 'TestFlight remains manually dispatched')
+puts 'PASS: pinned build_app and Xcode regressions, independent release phases, exact archive pairing and manual TestFlight preserved.'

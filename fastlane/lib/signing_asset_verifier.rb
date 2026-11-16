@@ -31,6 +31,17 @@ module ChaiSigningAssets
     end
   end
 
+  def self.extract_signing_certificate!(binary, directory, commands: Commands.new)
+    prefix = File.join(directory, 'certificate')
+    _, ok = commands.run('codesign', '-d', "--extract-certificates=#{prefix}", binary)
+    raise Failure.new('ASSET_CERT_EXTRACT') unless ok
+    begin
+      OpenSSL::X509::Certificate.new(File.binread(prefix + '0'))
+    rescue StandardError
+      raise Failure.new('ASSET_EMBEDDED_CERT_CONTENT')
+    end
+  end
+
   def self.roots(home: Dir.home)
     [File.join(home, 'Library/Developer/Xcode/UserData/Provisioning Profiles'),
      File.join(home, 'Library/MobileDevice/Provisioning Profiles')]
@@ -256,15 +267,9 @@ module ChaiSigningAssets
     end
 
     def extract_signing_certificate!(binary, directory)
-      prefix = File.join(directory, 'certificate')
       # This is a getopt optional argument: a separate prefix becomes another
       # input binary, not the extraction destination. Keep it in the same argv.
-      run!('ASSET_CERT_EXTRACT', 'codesign', '-d', "--extract-certificates=#{prefix}", binary)
-      begin
-        OpenSSL::X509::Certificate.new(File.binread(prefix + '0'))
-      rescue StandardError
-        raise Failure.new('ASSET_EMBEDDED_CERT_CONTENT')
-      end
+      ChaiSigningAssets.extract_signing_certificate!(binary, directory, commands: @commands)
     end
   end
 end

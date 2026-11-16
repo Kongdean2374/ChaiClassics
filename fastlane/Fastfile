@@ -6,6 +6,7 @@ require "plist"
 require_relative "lib/signing_config"
 require_relative "lib/signing_asset_verifier"
 require_relative "lib/apple_api_diagnostics"
+require_relative "lib/release_pipeline"
 
 def project_path(*parts)
   File.join(File.expand_path("..", FastlaneCore::FastlaneFolder.path), *parts)
@@ -89,7 +90,7 @@ def with_match_signing(key = nil, readonly: true)
       result = verifier.check!
       ChaiSigningAssets.prepare_xcode_profile!(result)
       verifier.mark_xcode_ready!
-      yield result.fetch(:profile).fetch("UUID"), result.fetch(:identity), keychain
+      yield result.fetch(:profile).fetch("UUID"), result.fetch(:identity), keychain, result
     ensure
       # Local cleanup only for this app. Other apps (including ChaiPhoto) are not
       # selected/restored/removed; no Apple API or signing-repository writes occur.
@@ -169,19 +170,38 @@ platform :ios do
   desc "Signed archive and manual TestFlight upload; never triggered by push"
   lane :beta do
     trusted_dispatch!
-    version = validated_version
-    key = api_key
-    # Developer upload keys need no Certificates/Profiles portal access in readonly mode.
-    number = next_apple_build(key, version)
-    with_match_signing(key, readonly: true) do |profile_uuid, identity, keychain|
-      build_app(project: project_path("ChaiClassics.xcodeproj"), scheme: "ChaiClassics", configuration: "Release", clean: true,
-        output_directory: project_path("build", "release"), output_name: "ChaiClassics.ipa", export_method: "app-store-connect",
-        codesigning_identity: identity,
-        xcargs: "DEVELOPMENT_TEAM=#{ENV.fetch('APPLE_TEAM_ID')} PROVISIONING_PROFILE_SPECIFIER=#{profile_uuid} MARKETING_VERSION=#{version} CURRENT_PROJECT_VERSION=#{number} OTHER_CODE_SIGN_FLAGS='--keychain #{keychain}'",
-        export_options: { signingStyle: "manual", teamID: ENV.fetch("APPLE_TEAM_ID"), provisioningProfiles: { "cc.chaihome.chaiclassics" => profile_uuid } })
-      notes = "Commit #{ENV.fetch('GITHUB_SHA')} | run #{ENV.fetch('GITHUB_RUN_ID')}, attempt #{ENV.fetch('GITHUB_RUN_ATTEMPT')}"
-      upload_to_testflight(api_key: key, app_identifier: "cc.chaihome.chaiclassics", ipa: project_path("build", "release", "ChaiClassics.ipa"), changelog: notes, skip_waiting_for_build_processing: true)
-      File.write(project_path("build", "release", "provenance.txt"), "version=#{version}\nbuild=#{number}\ncommit=#{ENV.fetch('GITHUB_SHA')}\n")
+    release = ChaiRelease::Report.new
+    version, key, number = release.run('UPLOAD_AUTH') do
+      selected_version = validated_version
+      # Developer key only: ASC app/build reads, no certificate/profile portal API.
+      selected_key = api_key
+      [selected_version, selected_key, next_apple_build(selected_key, selected_version)]
+    end
+    with_match_signing(key, readonly: true) do |profile_uuid, identity, keychain, assets|
+      options = release.run('BUILD_CONFIG') do
+        config = ChaiRelease.build_options(root: project_path, version: version, number: number,
+          team: ENV.fetch('APPLE_TEAM_ID'), profile_uuid: profile_uuid, identity: identity,
+          certificate: assets.fetch(:certificate), keychain: keychain)
+        ChaiRelease.validate_options!(ChaiRelease.archive_options(config))
+        ChaiRelease.validate_options!(ChaiRelease.export_options(config))
+        config
+      end
+      # Keep build_app's match mapping merge pinned to the profile just verified.
+      Fastlane::Actions.lane_context[:MATCH_PROVISIONING_PROFILE_MAPPING] = { ChaiSigning::APP_IDENTIFIER => profile_uuid }
+      release.run('ARCHIVE') do
+        build_app(**ChaiRelease.archive_options(options))
+        ChaiRelease.verify_archive!(path: options.fetch(:archive_path), assets: assets)
+      end
+      ipa = release.run('EXPORT_IPA') do
+        output = build_app(**ChaiRelease.export_options(options))
+        verified = ChaiRelease.verify_ipa!(output, expected: project_path('build', 'release', 'ChaiClassics.ipa'))
+        File.write(project_path("build", "release", "provenance.txt"), "version=#{version}\nbuild=#{number}\ncommit=#{ENV.fetch('GITHUB_SHA')}\n")
+        verified
+      end
+      release.run('UPLOAD_TRANSFER') do
+        notes = "Commit #{ENV.fetch('GITHUB_SHA')} | run #{ENV.fetch('GITHUB_RUN_ID')}, attempt #{ENV.fetch('GITHUB_RUN_ATTEMPT')}"
+        upload_to_testflight(api_key: key, app_identifier: "cc.chaihome.chaiclassics", ipa: ipa, changelog: notes, skip_waiting_for_build_processing: true)
+      end
     end
   end
 

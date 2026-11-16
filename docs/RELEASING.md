@@ -1,4 +1,4 @@
-> 目前狀態：私人簽署 repo 已有資產。所有 match 入口已鎖定 readonly；不要重跑 Initialize Signing。下一步只需手動 **Verify Signing Assets (read only)**，完整步驟與固定錯誤碼見 [SIGNING_ASSET_VERIFICATION.md](SIGNING_ASSET_VERIFICATION.md)。下方首次建立段落為歷史流程，不再提供新建證書行為。
+> 目前狀態：私人簽署 repo 已有資產，手動 readonly Run 43830873332 已完整通過 XCODE_PROFILE_READY。所有 match 入口已鎖定 readonly；不要重跑 Initialize Signing。首次 TestFlight 的 Gym 參數阻斷與新的分階段診斷見 [TESTFLIGHT_DIAGNOSTICS.md](TESTFLIGHT_DIAGNOSTICS.md)。下方首次建立段落為歷史流程，不再提供新建證書行為。
 
 # GitHub → match → TestFlight → App Store
 
@@ -55,6 +55,8 @@ GitHub Actions → **Initialize Signing (match)** → Run workflow → main。Te
 ## 後續 TestFlight
 
 Actions → **TestFlight** → Run workflow → main 與版本（如 0.1.0）。CI 成功後在 macOS 用 `match readonly: true` 下載並解密既有資產到臨時 keychain，再 Release archive／export IPA、上傳 ASC。
+
+fastlane 固定 2.228.0，Gym 使用 `export_method: app-store`；新的 app-store-connect 字串不通過該版 options 驗證。archive 與 export 分開執行，不重複建置；完整身分名稱取自已驗證憑證，匯出及 archive 仍精確綁定原 SHA-1／DER／profile。UPLOAD_AUTH、BUILD_CONFIG、ARCHIVE、EXPORT_IPA、UPLOAD_TRANSFER 分階段白名單回報，詳見上方診斷文件。
 
 一般 TestFlight 的 Developer API Key 只用於 ASC App／build 查詢及上傳，不探測 Certificates／Profiles 管理 API；管理權限探測僅在 Admin 初始化 lane。Readonly 缺資產、過期或無有效私鑰就停止，**不退回建立模式**。先用獨立 readonly 資產驗證檢查結果及同一 MATCH_PASSWORD，不要重新建立證書。TestFlight workflow 不接受手動 p12。
 

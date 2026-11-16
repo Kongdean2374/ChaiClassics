@@ -34,3 +34,7 @@ Run 43810107847 的診斷缺陷已確認：舊 APPLE_ACCESS 丟失 HTTP 與資�
 Run 43818758376 已證實 Apple 預檢 200、私人 repo 既有加密資產寫入成功；舊 MATCH_ASSETS 無法區分三個後置失敗。新版本改為分階段 readonly 後置驗證，增加現代／legacy 路徑 fallback 與真實本機私鑰簽名配對檢查；不重跑初始化／TestFlight。真資產手動驗證尚未執行，見 SIGNING_ASSET_VERIFICATION.md。
 
 更新：使用者手動執行 Run 43826441030，真資產下載／匯入、描述檔、Keychain 配對、私鑰簽名與 strict verify 均成功；最後 ASSET_SIGNED_CERT_PAIR。發現 codesign optional extraction prefix 被錯誤拆開，已修正為單一 `--extract-certificates=...` argv，保留 DER 精確比對，細分 command／內容／不符三種錯誤並增加真實 macOS 系統 binary 的無 Secrets 回歸測試。修正後完整真資產驗收仍待使用者手動 readonly run，不重跑初始化／TestFlight，也不調整 Apple 資產或 ChaiPhoto。
+
+使用者手動 Run 43830873332（a3e66a5）已完整通過 readonly 真資產驗收，含實際私鑰簽名、strict verify、內嵌 DER 配對及 XCODE_PROFILE_READY。
+
+首次 TestFlight Run 43831551303：完整 CI／readonly 簽署通過，後續立即 UPLOAD_FAILED。查明原 export_method=app-store-connect 被鎖定 Gym 2.228.0 的 options verifier 拒絕，新增實際 pinned verifier 的重現／完整參數測試，改相容 app-store，增加完整 CN／原 SHA-1 綁定、archive 精確配對、五階段安全 report 與 macOS Xcode export plist 檢查。本次沒有自動 TestFlight／Apple 操作，正式 IPA export 與上傳仍待使用者手動新 run。見 TESTFLIGHT_DIAGNOSTICS.md。
