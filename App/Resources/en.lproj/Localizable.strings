@@ -107,3 +107,10 @@
 "legal.unavailable" = "The bundled document could not be read. Keep the app and its saves, and report this through TestFlight feedback or GitHub Support.";
 "support.github" = "Open GitHub issue tracker";
 "support.external" = "This optional external link needs internet. Submitting an issue may require a GitHub account. Games and bundled policies need neither.";
+"mines.chooseSize" = "1. Choose board size";
+"mines.chooseCount" = "2. Choose mine count";
+"mines.estimatedDifficulty" = "Estimated difficulty: %@ · %.1f%% mines";
+"mines.difficultyExplanation" = "Estimated by mine density: up to 13% is Easy, up to 18% is Medium, and above 18% is Hard. Larger boards usually take longer; random layouts may require guessing.";
+"mines.randomExplanation" = "A new random board every game, with no levels. The first cell is safe; neighboring cells are also mine-free when the chosen mine count allows.";
+"sliding.controls" = "Slide a neighboring tile into the blank, up, down, left or right. Tapping also moves a tile.";
+"sliding.tile.hint" = "Slide toward the neighboring blank, or tap to move.";

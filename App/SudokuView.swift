@@ -141,6 +141,7 @@ struct SudokuGrid: View {
                                         Rectangle().fill(board.selected == i ? Color.accentColor.opacity(0.16) : Color(.secondarySystemGroupedBackground))
                                         if board.cells[i] != 0 {
                                             Text("\(board.cells[i])").font(.system(size: size * 0.58, weight: puzzle.givens[i] == 0 ? .regular : .semibold, design: .serif))
+                                                .foregroundStyle(puzzle.givens[i] == 0 ? Color.blue : Color.primary)
                                         } else {
                                             VStack(spacing: 0) {
                                                 ForEach(0..<3, id: \.self) { nr in
@@ -148,7 +149,7 @@ struct SudokuGrid: View {
                                                         ForEach(1...3, id: \.self) { nc in
                                                             let d = nr * 3 + nc
                                                             Text(board.notes[i].contains(d) ? "\(d)" : " ")
-                                                                .font(.system(size: size * 0.23)).frame(maxWidth: .infinity, maxHeight: .infinity)
+                                                                .font(.system(size: size * 0.23)).foregroundStyle(Color.blue).frame(maxWidth: .infinity, maxHeight: .infinity)
                                                         }
                                                     }
                                                 }

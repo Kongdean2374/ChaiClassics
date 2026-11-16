@@ -4,13 +4,16 @@ import ChaiCore
 struct MinesMenuView: View {
     @EnvironmentObject var model: AppModel
     @State private var showPlay = false
-    @State private var customWidth = 9
-    @State private var customHeight = 9
-    @State private var customMines = 10
+    @State private var layout = 0
+    @State private var width = 9
+    @State private var height = 9
+    @State private var mineCount = 10
     @State private var pending: MineConfiguration?
-    private func start(_ config: MineConfiguration) {
-        if model.mines != nil { pending = config }
-        else if model.saveMines(MinesweeperBoard(configuration: config)) { showPlay = true }
+    private var configuration: MineConfiguration? { try? MineConfiguration(width: width, height: height, mines: mineCount) }
+    private func start() {
+        guard let configuration else { return }
+        if model.mines != nil { pending = configuration }
+        else if model.saveMines(MinesweeperBoard(configuration: configuration)) { showPlay = true }
     }
     var body: some View {
         Form {
@@ -22,27 +25,37 @@ struct MinesMenuView: View {
                     }.accessibilityIdentifier("mines.continue")
                 }
             }
-            Section(model.t("menu.newGame")) {
-                ForEach([MineConfiguration.easy, .medium, .hard], id: \.difficultyKey) { config in
-                    Button { start(config) } label: {
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(model.t(config.difficultyKey)).font(.headline)
-                            Text(model.t("mines.preset", config.width, config.height, config.mineCount)).font(.caption).foregroundStyle(.secondary)
-                        }.padding(.vertical, 4)
-                    }.accessibilityIdentifier(config == .easy ? "mines.easy" : config == .medium ? "mines.medium" : "mines.hard")
+            Section(model.t("mines.chooseSize")) {
+                Picker(model.t("mines.chooseSize"), selection: $layout) {
+                    Text("9×9").tag(0); Text("16×16").tag(1); Text("30×16").tag(2)
+                    Text(model.t("difficulty.custom")).tag(3)
+                }.pickerStyle(.segmented).accessibilityIdentifier("mines.size")
+                if layout == 3 {
+                    Stepper(model.t("mines.width", width), value: $width, in: 5...40).accessibilityIdentifier("mines.width")
+                    Stepper(model.t("mines.height", height), value: $height, in: 5...40).accessibilityIdentifier("mines.height")
                 }
             }
-            Section(model.t("difficulty.custom")) {
-                Stepper(model.t("mines.width", customWidth), value: $customWidth, in: 5...40)
-                Stepper(model.t("mines.height", customHeight), value: $customHeight, in: 5...40)
-                Stepper(model.t("mines.mineCount", customMines), value: $customMines, in: 1...max(1, customWidth * customHeight - 1))
-                Button(model.t("mines.startCustom")) {
-                    if let config = try? MineConfiguration(width: customWidth, height: customHeight, mines: customMines) { start(config) }
-                }.accessibilityIdentifier("mines.custom")
+            Section(model.t("mines.chooseCount")) {
+                Stepper(model.t("mines.mineCount", mineCount), value: $mineCount, in: 1...max(1, width * height - 1)).accessibilityIdentifier("mines.mineCount")
+                if let configuration {
+                    Text(model.t("mines.estimatedDifficulty", model.t(configuration.difficultyKey), configuration.mineDensity * 100))
+                        .accessibilityIdentifier("mines.estimatedDifficulty")
+                }
+                Text(model.t("mines.difficultyExplanation")).font(.caption).foregroundStyle(.secondary)
+            }
+            Section(model.t("menu.newGame")) {
+                Button(model.t("menu.start")) { start() }.disabled(configuration == nil).accessibilityIdentifier("mines.start")
+                Text(model.t("mines.randomExplanation")).font(.footnote).foregroundStyle(.secondary)
             }
         }.localizedNavigation().navigationTitle(model.gameTitle(.minesweeper))
-            .onChange(of: customWidth) { _, _ in customMines = min(customMines, customWidth * customHeight - 1) }
-            .onChange(of: customHeight) { _, _ in customMines = min(customMines, customWidth * customHeight - 1) }
+            .onChange(of: layout) { _, value in
+                let presets: [MineConfiguration] = [.easy, .medium, .hard]
+                if presets.indices.contains(value) {
+                    let preset = presets[value]; width = preset.width; height = preset.height; mineCount = preset.mineCount
+                }
+            }
+            .onChange(of: width) { _, _ in mineCount = min(mineCount, width * height - 1) }
+            .onChange(of: height) { _, _ in mineCount = min(mineCount, width * height - 1) }
             .navigationDestination(isPresented: $showPlay) { MinesPlayView() }
             .confirmationDialog(model.t("mines.replace.confirm"), isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }), titleVisibility: .visible) {
                 Button(model.t("menu.startNew"), role: .destructive) {

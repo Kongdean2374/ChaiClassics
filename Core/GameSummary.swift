@@ -39,10 +39,11 @@ public struct GameSummary: Equatable, Sendable {
 }
 
 public extension MineConfiguration {
+    var mineDensity: Double { Double(mineCount) / Double(width * height) }
+    /// A density estimate, not a promise of a no-guess layout or a solve time.
     var difficultyKey: String {
-        if self == .easy { return "difficulty.easy" }
-        if self == .medium { return "difficulty.medium" }
-        if self == .hard { return "difficulty.hard" }
-        return "difficulty.custom"
+        if mineDensity <= 0.13 { return "difficulty.easy" }
+        if mineDensity <= 0.18 { return "difficulty.medium" }
+        return "difficulty.hard"
     }
 }

@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 final class ChaiClassicsUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
@@ -21,7 +22,24 @@ final class ChaiClassicsUITests: XCTestCase {
     private func screenshot(_ app: XCUIApplication, _ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
     }
-    func testSudokuNavigationAndRestoration() {
+    private func blueInkPixels(in element: XCUIElement, app: XCUIApplication) throws -> Int {
+        let shot = app.screenshot().image
+        let full = try XCTUnwrap(shot.cgImage)
+        let scale = CGFloat(full.width) / app.frame.width
+        let frame = element.frame.insetBy(dx: 5, dy: 5)
+        let region = CGRect(x: frame.minX * scale, y: frame.minY * scale, width: frame.width * scale, height: frame.height * scale)
+        let image = try XCTUnwrap(full.cropping(to: region))
+        let width = image.width, height = image.height
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let count = try pixels.withUnsafeMutableBytes { data -> Int in
+            let context = try XCTUnwrap(CGContext(data: data.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue))
+            context.draw(image, in: CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height)))
+            let bytes = data.bindMemory(to: UInt8.self)
+            return stride(from: 0, to: bytes.count, by: 4).filter { i in Int(bytes[i + 2]) > 140 && Int(bytes[i]) < 130 && Int(bytes[i + 2]) > Int(bytes[i]) + 50 }.count
+        }
+        return count
+    }
+    func testSudokuNavigationAndRestoration() throws {
         let app = launch("sudoku")
         app.buttons["game.sudoku"].tap()
         app.buttons["sudoku.difficulty.easy"].tap()
@@ -32,8 +50,12 @@ final class ChaiClassicsUITests: XCTestCase {
         app.segmentedControls["sudoku.tools"].buttons["鉛筆"].tap()
         app.buttons["sudoku.digit.2"].tap(); app.buttons["sudoku.digit.7"].tap()
         XCTAssertTrue((cell.value as? String ?? "").contains("2, 7"))
+        XCTAssertGreaterThan(try blueInkPixels(in: cell, app: app), 5)
         app.segmentedControls["sudoku.tools"].buttons["答案筆"].tap(); app.buttons["sudoku.digit.8"].tap()
         XCTAssertEqual(cell.value as? String, "8") // Answer entry clears pencil notes.
+        XCTAssertGreaterThan(try blueInkPixels(in: cell, app: app), 5)
+        XCTAssertEqual(try blueInkPixels(in: app.buttons["sudoku.cell.0"], app: app), 0)
+        screenshot(app,"sudoku-blue-player-ink")
         app.buttons["sudoku.erase"].tap(); XCTAssertEqual(cell.value as? String, "空白")
         app.segmentedControls["sudoku.tools"].buttons["鉛筆"].tap(); app.buttons["sudoku.digit.7"].tap()
         XCTAssertTrue(app.segmentedControls.buttons["鉛筆"].isSelected)
@@ -57,7 +79,7 @@ final class ChaiClassicsUITests: XCTestCase {
     }
     func testMinesFirstRevealAndRestoration() {
         let app = launch("mines")
-        app.buttons["game.minesweeper"].tap(); app.buttons["mines.easy"].tap()
+        app.buttons["game.minesweeper"].tap(); app.buttons["mines.start"].tap()
         if app.buttons["mines.confirmNew"].waitForExistence(timeout: 1) { app.buttons["mines.confirmNew"].tap() }
         let first = app.buttons["mines.cell.0"]
         XCTAssertTrue(first.waitForExistence(timeout: 5))
@@ -87,6 +109,39 @@ final class ChaiClassicsUITests: XCTestCase {
         app.buttons["sliding.pause"].tap(); XCTAssertTrue(app.buttons["繼續"].exists)
         app.buttons["sliding.pause"].tap(); XCTAssertTrue(app.buttons["sliding.tile.0"].exists)
     }
+    func testSlidingSwipesInAllFourDirectionsAndRestoresExactlyOneMove() {
+        let app = launch("sliding", legacy: true)
+        app.buttons["game.sliding"].tap(); app.buttons["sliding.continue"].tap()
+        let original = (0..<9).map { app.buttons["sliding.tile.\($0)"].label }
+        let moves = app.staticTexts["sliding.moves"]
+        XCTAssertTrue(moves.label.contains("35"))
+        app.buttons["sliding.tile.4"].swipeDown(); XCTAssertTrue(moves.label.contains("36"))
+        XCTAssertEqual(app.buttons["sliding.tile.7"].label, "方塊 5")
+        app.buttons["sliding.tile.7"].swipeUp(); XCTAssertTrue(moves.label.contains("37"))
+        app.buttons["sliding.tile.6"].swipeRight(); XCTAssertTrue(moves.label.contains("38"))
+        app.buttons["sliding.tile.7"].swipeLeft(); XCTAssertTrue(moves.label.contains("39"))
+        XCTAssertEqual(original, (0..<9).map { app.buttons["sliding.tile.\($0)"].label })
+        app.buttons["sliding.tile.4"].swipeUp() // Away from the blank must not become a tap.
+        XCTAssertTrue(moves.label.contains("39"))
+        app.terminate(); app.launch()
+        app.buttons["game.sliding"].tap(); app.buttons["sliding.continue"].tap()
+        XCTAssertTrue(app.staticTexts["sliding.moves"].label.contains("39"))
+        XCTAssertEqual(original, (0..<9).map { app.buttons["sliding.tile.\($0)"].label })
+    }
+    func testMinesSizeCountDifficultyEstimateAndRandomStart() {
+        let app = launch("mines")
+        app.buttons["game.minesweeper"].tap()
+        XCTAssertTrue(app.staticTexts["mines.estimatedDifficulty"].label.contains("簡單"))
+        app.segmentedControls["mines.size"].buttons["16×16"].tap()
+        XCTAssertTrue(app.staticTexts["mines.estimatedDifficulty"].label.contains("中等"))
+        let count = app.steppers["mines.mineCount"]
+        count.buttons.element(boundBy: 1).tap()
+        XCTAssertTrue(count.label.contains("41"))
+        app.buttons["mines.start"].tap()
+        XCTAssertTrue(app.buttons["mines.cell.255"].exists)
+        XCTAssertEqual(app.segmentedControls.count, 0)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "16×16")).firstMatch.exists)
+    }
     func testLegacyFlagModeStillRevealsOnSingleTap() {
         let app = launch("legacy",legacy: true)
         XCTAssertTrue(app.buttons["game.sliding"].label.contains("35"))
@@ -107,7 +162,7 @@ final class ChaiClassicsUITests: XCTestCase {
     }
     func testMinesBoardCenteredAndLargeBoardZoomKeepsHitCoordinates() {
         let app = launch("large")
-        app.buttons["game.minesweeper"].tap(); app.buttons["mines.easy"].tap()
+        app.buttons["game.minesweeper"].tap(); app.buttons["mines.start"].tap()
         let viewport = app.scrollViews["mines.zoomBoard"]
         XCTAssertTrue(viewport.waitForExistence(timeout: 5))
         let first = app.buttons["mines.cell.0"], lastColumn = app.buttons["mines.cell.8"]
@@ -115,7 +170,7 @@ final class ChaiClassicsUITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(first.frame.width, 32)
         XCTAssertLessThan(abs(app.buttons["mines.cell.80"].frame.maxY - viewport.frame.maxY), 6)
         screenshot(app,"mines-centered-9x9")
-        back(app); app.buttons["mines.hard"].tap(); app.buttons["mines.confirmNew"].tap()
+        back(app); app.segmentedControls["mines.size"].buttons["30×16"].tap(); app.buttons["mines.start"].tap(); app.buttons["mines.confirmNew"].tap()
         let cells = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "mines.cell."))
         let before = cells.allElementsBoundByIndex.first(where: { $0.isHittable })!.frame.width
         viewport.pinch(withScale: 1.8, velocity: 1)

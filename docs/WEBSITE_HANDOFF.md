@@ -29,8 +29,8 @@
 - 標題：經典小遊戲，隨時接著玩。
 - 簡介：Chai Classics 收錄數獨、踩地雷與滑塊拼圖。免費、無廣告，離線也能遊玩；每次操作自動儲存。
 - 數獨：三種難度各 50 題；紙本式答案筆、鉛筆與擦除，不提供提示、答案揭露或錯誤標記。
-- 踩地雷：單點揭開、長按插旗；支援簡單、中等、困難與自訂盤面，大型棋盤可平移縮放。
-- 滑塊拼圖：3×3、4×4、5×5，三種難度；保留盤面、步數與計時。
+- 踩地雷：單點揭開、長按插旗；先選棋盤大小與雷數，以密度顯示參考難度，每局隨機而非關卡。大型棋盤可平移縮放，經典隨機局可能需要推測。
+- 滑塊拼圖：3×3、4×4、5×5，三種打亂程度；可將相鄰方塊上下左右滑向空格，也支援點擊，保留盤面、步數與計時。
 - 下載區：在使用者提供有效 App Store／公開 TestFlight 連結前，顯示「下載資訊待公布」，不要放假下載按鈕。
 
 English:
@@ -38,15 +38,15 @@ English:
 - Heading: Classic games. Right where you left off.
 - Intro: Chai Classics includes Sudoku, Minesweeper and Sliding Puzzle. Free, with no ads, and playable offline. Every move is saved automatically.
 - Sudoku: 50 puzzles in each of three difficulties. Paper-style pen, pencil and eraser, with no hints, answer reveal or error marking.
-- Minesweeper: Tap to reveal and hold to flag. Presets and custom boards, with pan and zoom for larger boards.
-- Sliding Puzzle: 3×3, 4×4 and 5×5 boards in three difficulties. Tiles, moves and time are saved.
+- Minesweeper: Tap to reveal and hold to flag. Choose board size and mine count, with a density-based difficulty estimate and a new random layout each game. Pan and zoom larger boards. Classic random layouts may require guessing.
+- Sliding Puzzle: 3×3, 4×4 and 5×5 boards in three difficulties. Slide a neighboring tile into the blank in any direction, or tap it. Tiles, moves and time are saved.
 - Download area: Display “Download information to be announced” until an actual App Store or public TestFlight URL is supplied and verified.
 
 ## 0.1.1 更新紀錄文案
 
-繁中：改善踩地雷的單點／長按操作、棋盤置中與縮放；首頁依真實存檔顯示狀態；改善續玩與關卡選單；新增系統／淺色／深色、繁中／英文、觸覺回饋與遊玩時螢幕喚醒偏好；新增離線隱私政策、使用條款及支援。保留 0.1.0 遊戲進度及既有 150 題。
+繁中：改善踩地雷的單點／長按操作、棋盤置中與縮放；首頁依真實存檔顯示狀態；改善續玩與關卡選單、數獨藍色玩家字跡與滑塊四方向滑動；新增系統／淺色／深色、繁中／英文、觸覺回饋與遊玩時螢幕喚醒偏好；新增離線隱私政策、使用條款及支援。保留 0.1.0 遊戲進度及既有 150 題。
 
-English: Improved Minesweeper tap/hold controls, board centering and zoom; real save-based home statuses; clearer continuation and level menus; system/light/dark appearance, Chinese/English, haptic and screen-awake preferences; and bundled offline privacy, terms and support pages. Existing 0.1.0 progress and all 150 released Sudoku puzzles are retained.
+English: Improved Minesweeper tap/hold controls, board centering and zoom; real save-based home statuses; clearer continuation and level menus, blue player ink in Sudoku and four-direction tile swipes; system/light/dark appearance, Chinese/English, haptic and screen-awake preferences; and bundled offline privacy, terms and support pages. Existing 0.1.0 progress and all 150 released Sudoku puzzles are retained.
 
 不得宣稱零 Bug、已完成真機驗收或已通過 App Store 審核。是否公開發布 0.1.1，需使用者確認。
 

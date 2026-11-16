@@ -107,3 +107,10 @@
 "legal.unavailable" = "內建文件無法讀取。請保留 App 與存檔，透過 TestFlight 回饋或 GitHub 支援回報。";
 "support.github" = "開啟 GitHub 問題回報";
 "support.external" = "這是選用的外部連結，需要網路；提交問題可能需要 GitHub 帳號。遊戲與本機政策不需要連網或帳號。";
+"mines.chooseSize" = "1. 選擇棋盤大小";
+"mines.chooseCount" = "2. 選擇地雷數量";
+"mines.estimatedDifficulty" = "參考難度：%@ · 地雷密度 %.1f%%";
+"mines.difficultyExplanation" = "依地雷密度估計：13% 以下為簡單、18% 以下為中等，其餘為困難。棋盤較大通常更費時；隨機盤面仍可能需要推測。";
+"mines.randomExplanation" = "每局隨機產生，不設關卡。首點保證安全；地雷數量允許時，首點周圍也不放地雷。";
+"sliding.controls" = "將相鄰方塊向空格滑動，上下左右都可操作；也可點一下移動。";
+"sliding.tile.hint" = "向相鄰空格滑動，或點一下移動。";

@@ -17,7 +17,7 @@ class AppResourceTests(unittest.TestCase):
     def test_bilingual_keys_format_arguments_and_all_ui_references(self):
         zh=self.strings('zh-Hant');en=self.strings('en')
         self.assertEqual(set(zh),set(en));self.assertGreater(len(zh),90)
-        format_pattern=r'%(?:\d+\$)?0?\d*[d@]'
+        format_pattern=r'%(?:\d+\$)?[-+0# ]*\d*(?:\.\d+)?[df@]'
         for key in zh:
             self.assertTrue(zh[key]);self.assertTrue(en[key])
             self.assertEqual(re.findall(format_pattern,zh[key]),re.findall(format_pattern,en[key]),key)
@@ -88,5 +88,27 @@ class AppResourceTests(unittest.TestCase):
         self.assertIn('XCTAssertFalse(app.buttons["提示"].exists)',ui)
         self.assertIn('.reveal(i)',(ROOT/'App/MinesView.swift').read_text())
         self.assertNotIn('$0.tap(i)',(ROOT/'App/MinesView.swift').read_text())
+
+    def test_easy_puzzles_independently_solve_using_only_single_candidates(self):
+        # Separate implementation from the generator's grading code; no guessing,
+        # hidden-single scan, or access to a stored solution is permitted here.
+        puzzles=json.loads((ROOT/'Core/Resources/sudoku-v1.json').read_text())
+        easy=[p for p in puzzles if p['difficulty']=='easy']
+        self.assertEqual(len(easy),50)
+        for puzzle in easy:
+            grid=puzzle['givens'][:]
+            while 0 in grid:
+                forced=[]
+                for i,value in enumerate(grid):
+                    if value:continue
+                    row,column=divmod(i,9)
+                    occupied=set(grid[row*9:row*9+9]) | set(grid[column::9])
+                    occupied.update(grid[r*9+c] for r in range(row//3*3,row//3*3+3) for c in range(column//3*3,column//3*3+3))
+                    candidates=set(range(1,10))-occupied
+                    self.assertTrue(candidates,puzzle['id'])
+                    if len(candidates)==1:forced.append((i,next(iter(candidates))))
+                self.assertTrue(forced,puzzle['id']+' requires a strategy beyond a single candidate')
+                i,digit=forced[0];grid[i]=digit
+            for row in range(9):self.assertEqual(set(grid[row*9:row*9+9]),set(range(1,10)))
 
 if __name__=='__main__':unittest.main()

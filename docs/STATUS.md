@@ -40,3 +40,9 @@ Run 43818758376 已證實 Apple 預檢 200、私人 repo 既有加密資產寫�
 首次 TestFlight Run 43831551303：完整 CI／readonly 簽署通過，後續立即 UPLOAD_FAILED。查明原 export_method=app-store-connect 被鎖定 Gym 2.228.0 的 options verifier 拒絕，新增實際 pinned verifier 的重現／完整參數測試，改相容 app-store，增加完整 CN／原 SHA-1 綁定、archive 精確配對、五階段安全 report 與 macOS Xcode export plist 檢查。本次沒有自動 TestFlight／Apple 操作，正式 IPA export 與上傳仍待使用者手動新 run。見 TESTFLIGHT_DIAGNOSTICS.md。
 
 Run 43853135322（8fe6b19）：UPLOAD_AUTH、BUILD_CONFIG、readonly／真實簽署 probe 成功，ARCHIVE／COMMAND_FAILED。程式可將失敗限定在 build_app 內部，不能由已刪除的舊 raw log 判斷 compiler／signing／Gym 後處理原因。已修正全域 app profile／identity 會套到其他 targets 的設定缺陷，加入私密日誌白名單解析、build_app／後置驗證分離及獨立手動 Diagnose Signed Archive。一般 CI 與設定測試不代表正式簽署 archive 已成功；仍待使用者手動取得 SIGNED_ARCHIVE_VERIFIED 後才重試 TestFlight。見 SIGNED_ARCHIVE_DIAGNOSTICS.md。
+
+## 0.1.0 已上傳與 0.1.1 改版
+
+以上條目保留當時觀察，後續結果已更新：TestFlight Run [43871465080](https://github.com/Kongdean2374/ChaiClassics/actions/runs/43871465080)，commit 1396194，結論 success。簽署資產與實際 archive 的先前阻礙已排除，不需要重新初始化憑證。
+
+App 0.1.1 實作範圍、舊存檔保護、數獨分級複查、地雷隨機密度估計、真正滑塊手勢與真機驗收項目，見 [RELEASE_0.1.1.md](RELEASE_0.1.1.md)；網站只交接規格，見 [WEBSITE_HANDOFF.md](WEBSITE_HANDOFF.md)。本次沒有執行 TestFlight、Apple 操作或修改私有簽署倉庫。是否可手動上傳以最新 main 完整 CI 結果為準。

@@ -64,19 +64,13 @@ struct SlidingPlayView: View {
                     } else {
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: board.size), spacing: 6) {
                             ForEach(board.tiles.indices, id: \.self) { i in
-                                Button {
+                                SlidingTile(index: i, board: board) {
                                     if model.editSliding({ $0.move(i) }) { model.feedback() }
-                                } label: {
-                                    ZStack {
-                                        RoundedRectangle(cornerRadius: 9).fill(board.tiles[i] == 0 ? Color.clear : Color(.secondarySystemGroupedBackground))
-                                        if board.tiles[i] != 0 { Text("\(board.tiles[i])").font(.system(.title, design: .serif)).foregroundStyle(.primary) }
-                                    }.aspectRatio(1, contentMode: .fit)
-                                }.buttonStyle(.plain).disabled(!board.canMove(i))
-                                    .accessibilityLabel(board.tiles[i] == 0 ? model.t("sliding.blank") : model.t("sliding.tile", board.tiles[i]))
-                                    .accessibilityIdentifier("sliding.tile.\(i)")
+                                }
                             }
                         }.padding(8).background(Color(.systemGray4), in: RoundedRectangle(cornerRadius: 14))
                     }
+                    Text(model.t("sliding.controls")).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
                     Button(model.t(paused ? "common.resume" : "common.pause"), systemImage: paused ? "play" : "pause") { paused.toggle() }
                         .buttonStyle(.bordered).accessibilityIdentifier("sliding.pause")
                 }.padding(16).frame(maxWidth: 540).frame(maxWidth: .infinity)
@@ -93,5 +87,41 @@ struct SlidingPlayView: View {
             .onReceive(timer) { _ in
                 if visible && !paused && !restart && scenePhase == .active && model.sliding?.isComplete == false { model.editSliding { $0.elapsedSeconds += 1 } }
             }
+    }
+}
+
+private struct SlidingTile: View {
+    let index: Int
+    let board: SlidingBoard
+    let move: () -> Void
+    @EnvironmentObject var model: AppModel
+    @GestureState private var translation = CGSize.zero
+    private func offset(step: CGFloat) -> CGSize {
+        guard let direction = SlidingInput.direction(tile: index, board: board) else { return .zero }
+        switch direction {
+        case .left: return CGSize(width: max(-step, min(0, translation.width)), height: 0)
+        case .right: return CGSize(width: min(step, max(0, translation.width)), height: 0)
+        case .up: return CGSize(width: 0, height: max(-step, min(0, translation.height)))
+        case .down: return CGSize(width: 0, height: min(step, max(0, translation.height)))
+        }
+    }
+    var body: some View {
+        GeometryReader { geometry in
+            Button(action: move) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 9).fill(board.tiles[index] == 0 ? Color.clear : Color(.secondarySystemGroupedBackground))
+                    if board.tiles[index] != 0 { Text("\(board.tiles[index])").font(.system(.title, design: .serif)).foregroundStyle(.primary) }
+                }.frame(maxWidth: .infinity, maxHeight: .infinity).contentShape(Rectangle())
+                    .offset(offset(step: geometry.size.width + 6))
+            }.buttonStyle(.plain).disabled(!board.canMove(index))
+                .highPriorityGesture(DragGesture(minimumDistance: 10, coordinateSpace: .local)
+                    .updating($translation) { value, state, _ in state = value.translation }
+                    .onEnded { value in
+                        if SlidingInput.accepts(tile: index, board: board, horizontal: Double(value.translation.width), vertical: Double(value.translation.height), minimumDistance: Double(max(18, geometry.size.width * 0.2))) { move() }
+                    })
+                .accessibilityLabel(board.tiles[index] == 0 ? model.t("sliding.blank") : model.t("sliding.tile", board.tiles[index]))
+                .accessibilityHint(model.t("sliding.tile.hint"))
+                .accessibilityIdentifier("sliding.tile.\(index)")
+        }.aspectRatio(1, contentMode: .fit).zIndex(translation == .zero ? 0 : 1)
     }
 }
