@@ -19,3 +19,5 @@ macOS 工作使用臨時 keychain，結束恢復原 keychain 清單與本 App �
 App 執行期沒有網路、帳號、analytics、廣告或推播；開發部署工具的 API 存取不進 App。隱私問卷仍需依實際二進位填寫。進度只在本機，卸載可能移除。
 
 Apple API 診斷不依賴任意例外文字判定權限。獨立唯讀流程只允許三個固定 GET、HTTPS 固定 host、不跟隨 redirect／pagination、不重試；它不接收 match credentials。安全 IPC 僅准固定資源、數字 HTTP、固定分類及明確 allowlist code，禁止 request／response／headers／exception 原文。未知／格式／網路／5xx 不宣稱權限不足。report 與原始子程序 log 都在結束時刪除、不上傳 artifact。
+
+Apps／Certificates 比較使用同一不可變 JWT，無刷新／重試。新增 IPC schema 2 僅准布林 JWT 檢查、兩個固定資源的 HTTP／白名單 code 與固定結論，不准 header／payload／實際 kid／iss／時間戳／token／私鑰。兩個結果各自收集後再失敗；401 不自動等同 403。手動唯讀 workflow 保持 Admin bootstrap 環境，沒有 match credentials。

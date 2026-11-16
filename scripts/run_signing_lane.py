@@ -4,7 +4,7 @@ Only fixed diagnostic codes go to the public Actions log. Private log is deleted
 """
 import argparse, os, pathlib, subprocess, tempfile
 from check_release_secrets import main as preflight
-from apple_api_report import load_report, format_report
+from apple_api_report import load_report, format_report, report_failed
 
 DIAGNOSTICS = {
     'BUNDLE_ID': 'Register the exact Bundle ID cc.chaihome.chaiclassics in the Apple Developer team first. No alternative ID is selected automatically.',
@@ -66,8 +66,8 @@ def main(argv=None):
         if result.returncode == 0 and args.lane in ('initialize_signing', 'diagnose_signing') and not report:
             print('Release failed [APPLE_DIAGNOSTIC]: Missing or invalid safe report; no permission conclusion can be made.')
             return 1
-        if result.returncode or (report and report['failure']):
-            if not report or not report['failure']:
+        if result.returncode or (report and report_failed(report)):
+            if not report or not report_failed(report):
                 private_log.seek(0)
                 code = diagnostic(private_log.read(), args.lane)
                 print('Release failed [' + code + ']: ' + DIAGNOSTICS[code])

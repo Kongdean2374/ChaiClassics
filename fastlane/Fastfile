@@ -123,7 +123,13 @@ platform :ios do
     trusted_dispatch!
     required!("APPLE_TEAM_ID")
     api_key
-    verify_apple_access!
+    # Access .text exactly once: both endpoints receive this same JWT snapshot.
+    token = Spaceship::ConnectAPI.token.text
+    passed = ChaiAppleDiagnostics.compare_authentication!(
+      token: token, key_id: ENV.fetch("ASC_KEY_ID"), issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+      verification_key: OpenSSL::PKey.read(ENV.fetch("ASC_API_KEY_P8"))
+    )
+    UI.user_error!("[CHAI_SIGNING:APPLE_DIAGNOSTIC] Read-only JWT/API comparison did not pass") unless passed
   end
 
   desc "Manually initialize encrypted match assets for this app; never revoke certificates"

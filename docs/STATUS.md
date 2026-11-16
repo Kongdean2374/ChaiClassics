@@ -28,3 +28,5 @@
 首次初始化環境已按使用者設定改為 signing-bootstrap；三個 SIGNING_ASC_* Admin Secrets 僅映射至初始化 Job 的 ASC_*。一般 TestFlight 維持 Developer Key，共用 Team ID／PAT／MATCH_PASSWORD 保留。本次明確不執行初始化；真實 Apple 簽署資產狀態未因此改變。
 
 Run 43810107847 的診斷缺陷已確認：舊 APPLE_ACCESS 丟失 HTTP 與資源，不足以證明權限問題。已加入分資源／HTTP 的安全診斷與獨立手動唯讀 workflow；實際 Apple 根因仍無法由已刪除的舊私密 log 還原。本次不重跑 Initialize Signing、不執行 Apple 請求、不修改任何憑證。詳見 APPLE_SIGNING_DIAGNOSTICS.md。
+
+唯讀診斷進一步改為同一 Admin JWT 的 Apps／Certificates 對照，新增僅布林的 JWT 欄位／簽章檢查，區分共同 401 與單一資源失敗。這些自動測試使用臨時假資料／模擬 HTTP；此次沒有執行 Apple workflow，實際 401 根因須由使用者手動診斷取得新結果。

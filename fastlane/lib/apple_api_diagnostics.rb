@@ -3,11 +3,12 @@ require 'uri'
 require 'json'
 require 'base64'
 require 'openssl'
+require_relative 'apple_jwt_diagnostics'
 
 # Deliberately independent of Spaceship's HTTP error formatter, which can discard
 # status and put arbitrary Apple response text into UnexpectedResponse.message.
 module ChaiAppleDiagnostics
-  RESOURCES = %w[certificates profiles bundleIds authentication].freeze
+  RESOURCES = %w[apps certificates profiles bundleIds authentication].freeze
   CATEGORIES = %w[AUTHENTICATION FORBIDDEN AGREEMENTS NOT_FOUND RATE_LIMIT SERVER INVALID_REQUEST REDIRECT PROTOCOL NETWORK TLS CLIENT_COMPATIBILITY TEAM_MISMATCH BUNDLE_ID_MISSING CERTIFICATE_DATA UNKNOWN].freeze
   APPLE_CODES = %w[FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED PARAMETER_ERROR.INVALID PARAMETER_ERROR.UNKNOWN NOT_FOUND NOT_AUTHORIZED RATE_LIMIT_EXCEEDED].freeze
 
@@ -33,10 +34,10 @@ module ChaiAppleDiagnostics
       @transport = transport || method(:request)
     end
 
-    # Three fixed GET routes, one page each. Never follow pagination/redirect links,
+    # Fixed GET routes, one page each. Never follow pagination/redirect links,
     # mutate resources, refresh/reissue keys, or retry Apple errors automatically.
     def read(resource)
-      raise Failure.new(resource: 'authentication', category: 'CLIENT_COMPATIBILITY') unless %w[certificates profiles bundleIds].include?(resource)
+      raise Failure.new(resource: 'authentication', category: 'CLIENT_COMPATIBILITY') unless %w[apps certificates profiles bundleIds].include?(resource)
       params = { 'limit' => '1' }
       params['filter[identifier]'] = @app_identifier if resource == 'bundleIds'
       uri = URI::HTTPS.build(host: HOST, path: "/v1/#{resource}", query: URI.encode_www_form(params))
@@ -96,6 +97,47 @@ module ChaiAppleDiagnostics
     # Only our fixed schema/enums are supplied. Never serialize response/request,
     # exception.message, headers, certificate data, JWTs, keys or identifiers.
     File.open(path, File::WRONLY | File::CREAT | File::TRUNC, 0o600) { |file| file.write(JSON.generate(result)) }
+  end
+
+  COMPARISON_CONCLUSIONS = %w[JWT_LOCAL_INVALID JWT_AUTHENTICATION_REJECTED CERTIFICATES_AUTHENTICATION_REJECTED CERTIFICATES_ACCESS_DENIED CERTIFICATES_API_FAILED APPS_AUTHENTICATION_REJECTED APPS_ACCESS_DENIED APPS_API_FAILED AUTHENTICATED_BOTH INCONCLUSIVE].freeze
+
+  def self.comparison_conclusion(jwt, results)
+    return 'JWT_LOCAL_INVALID' unless jwt.values.all?
+    apps, certificates = results
+    return 'JWT_AUTHENTICATION_REJECTED' if apps['status'] == 401 && certificates['status'] == 401
+    apps_ok = apps['status'] == 200 && apps['category'] == 'OK'
+    certs_ok = certificates['status'] == 200 && certificates['category'] == 'OK'
+    return 'AUTHENTICATED_BOTH' if apps_ok && certs_ok
+    if apps_ok
+      return 'CERTIFICATES_AUTHENTICATION_REJECTED' if certificates['status'] == 401
+      return 'CERTIFICATES_ACCESS_DENIED' if certificates['status'] == 403
+      return 'CERTIFICATES_API_FAILED'
+    end
+    if certs_ok
+      return 'APPS_AUTHENTICATION_REJECTED' if apps['status'] == 401
+      return 'APPS_ACCESS_DENIED' if apps['status'] == 403
+      return 'APPS_API_FAILED'
+    end
+    'INCONCLUSIVE'
+  end
+
+  def self.compare_authentication!(token:, key_id:, issuer_id:, verification_key:, transport: nil, now: Time.now.to_i, reporter: method(:report))
+    # One immutable JWT snapshot serves both calls; there is no refresh or retry.
+    snapshot = token.is_a?(String) ? token.dup.freeze : ''.freeze
+    jwt = ChaiAppleJWT.check(token: snapshot, key_id: key_id, issuer_id: issuer_id, verification_key: verification_key, now: now)
+    client = Client.new(token_provider: -> { snapshot }, app_identifier: ChaiSigning::APP_IDENTIFIER, transport: transport)
+    results = %w[apps certificates].map do |resource|
+      begin
+        client.read(resource)
+        { 'resource' => resource, 'status' => 200, 'category' => 'OK', 'apple_code' => nil }
+      rescue Failure => error
+        # Keep the requested route even if token/transport validation failed locally.
+        error.to_h.merge('resource' => resource)
+      end
+    end
+    conclusion = comparison_conclusion(jwt, results)
+    reporter.call({ 'schema' => 2, 'jwt' => jwt, 'results' => results, 'conclusion' => conclusion })
+    conclusion == 'AUTHENTICATED_BOTH'
   end
 
   def self.verify!(client:, team_id:, reporter: method(:report))

@@ -35,6 +35,6 @@ jobs:
           bundle config set path vendor/bundle
           bundle config set frozen true
           bundle install --jobs 4
-      - name: Read-only API diagnosis (no match or certificate changes)
+      - name: Check JWT and compare apps/certificates with the same token (read only)
         run: python3 scripts/run_signing_lane.py diagnose_signing
       # No API responses, credentials or private logs are uploaded as artifacts.

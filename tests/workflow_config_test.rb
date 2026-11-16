@@ -56,5 +56,10 @@ check(diagnostic_job['if'].include?("github.ref == 'refs/heads/main'"), 'read-on
 check(!diagnostic_job.fetch('env').key?('MATCH_PASSWORD') && !diagnostic_job.fetch('env').key?('SIGNING_REPO_PAT'), 'read-only diagnosis receives no match credentials')
 check(diagnostic_job.fetch('steps').any? { |step| step['run'] == 'python3 scripts/run_signing_lane.py diagnose_signing' }, 'read-only diagnostic uses safe wrapper')
 diagnostic_lane = fastfile.split('lane :diagnose_signing do', 2).last.split('lane :initialize_signing do', 2).first
-check(diagnostic_lane.include?('verify_apple_access!') && !diagnostic_lane.include?('with_match_signing') && !diagnostic_lane.match?(/\bmatch\(/), 'diagnostic lane never invokes match')
+check(diagnostic_lane.include?('compare_authentication!') && !diagnostic_lane.include?('with_match_signing') && !diagnostic_lane.match?(/\bmatch\(/), 'diagnostic lane compares authentication and never invokes match')
+check(diagnostic_lane.scan('Spaceship::ConnectAPI.token.text').length == 1, 'diagnostic takes one JWT snapshot')
+check(diagnostic_lane.include?('key_id: ENV.fetch("ASC_KEY_ID")') && diagnostic_lane.include?('issuer_id: ENV.fetch("ASC_ISSUER_ID")'), 'JWT audit matches configured Admin team key')
 puts 'PASS: independent manual read-only diagnosis; no signing assets or match credentials.'
+
+expected.each { |name, value| check(diagnostic_job.fetch('env')[name] == value, "diagnostic keeps the same Admin #{name}") }
+puts 'PASS: apps/certificates comparison uses the existing Admin Team key mapping.'

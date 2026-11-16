@@ -89,3 +89,5 @@ Apple 官方 [SDK minimum requirements](https://developer.apple.com/news/upcomin
 Run 43810107847 的舊 APPLE_ACCESS 不能證明 403，現已移除「所有 UnexpectedResponse = 權限不足」的分類。初始化保留管理 API／Team／Bundle ID 檢查，但改為三個固定 HTTPS GET 各讀一頁；HTTP 狀態在任何格式化前分類，公開 log 只有資源、HTTP、固定類別與少數 allowlisted Apple code。TestFlight 的 Developer readonly 路徑不受影響。
 
 新增獨立的手動 **Diagnose Apple Signing (read only)**，使用 signing-bootstrap Admin Key，但沒有 match PAT／密碼、不呼叫 match、不變更 Apple 資產。此次不會自動執行它或初始化。完整取證限制、錯誤碼與 Apple 後台設定判斷見 [APPLE_SIGNING_DIAGNOSTICS.md](APPLE_SIGNING_DIAGNOSTICS.md)。
+
+唯讀診斷現會固定同一份 Admin JWT，分別呼叫 Apps 與 Certificates，即使第一個失敗仍收集第二個 HTTP／白名單 code。只輸出 JWT alg／kid／iss／aud／iat／exp 與簽章檢查 PASS／FAIL，不印實際識別碼。完整對照規則見 APPLE_SIGNING_DIAGNOSTICS.md；不修改 Secrets、不自動觸發。初始化預檢仍保留原本三資源與 Team 安全檢查。
