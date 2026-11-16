@@ -21,7 +21,8 @@ final class SudokuTests: XCTestCase {
         var best: Int?; var options = [Int]()
         for i in grid.indices where grid[i] == 0 {
             let peers = SudokuRules.units.filter { $0.contains(i) }.flatMap { $0 }
-            let choices = (1...9).filter { !Set(peers.map { grid[$0] }).contains($0) }
+            let occupied = Set(peers.map { grid[$0] })
+            let choices = (1...9).filter { !occupied.contains($0) }
             if choices.isEmpty { return [] }
             if best == nil || choices.count < options.count { best = i; options = choices }
         }

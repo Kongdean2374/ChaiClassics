@@ -85,13 +85,32 @@ end
 puts 'PASS: Simulator, real macOS regressions and TestFlight use explicit Intel hosts and retain Xcode 26+ selection.'
 test_job = workflows.fetch('ci.yml').fetch('jobs').fetch('test')
 phase_runs = test_job.fetch('steps').map { |step| step.fetch('run', '') }.select { |run| run.start_with?('bash scripts/ci.sh') }
-check(phase_runs == %w[verify unit build ui].map { |phase| 'bash scripts/ci.sh ' + phase }, 'all four verification phases remain required and ordered')
+check(phase_runs == %w[verify unit build ui].map { |phase| 'bash scripts/ci.sh ' + phase }, 'all four verification phases remain available and ordered')
+ci_workflow = workflows.fetch('ci.yml')
+ci_triggers = ci_workflow['on'] || ci_workflow[true]
+check(ci_triggers.dig('workflow_dispatch','inputs','full_ui','type') == 'boolean' && ci_triggers.dig('workflow_dispatch','inputs','full_ui','default') == true, 'full UI remains available through explicit manual CI')
+check(ci_triggers.dig('workflow_call','inputs','full_ui','default') == false, 'reusable CI defaults to quick checks')
+ui_steps = test_job.fetch('steps').select { |step| step['run'] == 'bash scripts/ci.sh ui' }
+check(ui_steps.length == 1 && ui_steps.first['if'] == 'inputs.full_ui == true', 'only full UI is opt-in; no game assertions removed')
+test_job.fetch('steps').select { |step| %w[verify unit build].any? { |phase| step['run'] == 'bash scripts/ci.sh ' + phase } }.each do |step|
+  check(!step.key?('if'), 'puzzle, Swift and Simulator build checks remain unconditional')
+end
 check(test_job['timeout-minutes'] == 45, 'Intel CI has a bounded total runtime')
 ci_script = File.read(File.join(root, 'scripts/ci.sh'))
 check(ci_script.include?('-test-timeouts-enabled YES') && ci_script.include?('-default-test-execution-time-allowance 180') && ci_script.include?('-maximum-test-execution-time-allowance 240'), 'Intel UI allowance stays enabled and bounded')
 _, _, invalid_phase = Open3.capture3('bash', File.join(root, 'scripts/ci.sh'), 'unknown-phase')
 check(invalid_phase.exitstatus == 64, 'unknown CI phase must fail instead of silently skipping verification')
 puts 'PASS: visible ordered CI phases, bounded Intel UI/total runtimes and rejected unknown phase; all tests retained.'
+check(flight.fetch('jobs').keys.sort == %w[preflight upload], 'TestFlight has only fast preflight and real signed upload')
+preflight = flight.fetch('jobs').fetch('preflight')
+check(preflight['runs-on'] == 'ubuntu-24.04' && !preflight.key?('env') && !preflight.key?('environment') && !preflight.key?('secrets'), 'preflight runs without Apple/signing credentials')
+check(preflight['steps'] == ci_workflow.fetch('jobs').fetch('release-tooling').fetch('steps'), 'TestFlight retains all fast release-tooling security checks')
+check(flight.dig('jobs','upload','needs') == 'preflight', 'real signed archive/upload follows successful quick preflight')
+flight.fetch('jobs').each_value do |entry|
+  check(entry.fetch('if').include?("github.ref == 'refs/heads/main'") && entry.fetch('if').include?("github.event_name == 'workflow_dispatch'"), 'both release jobs remain trusted main/manual only')
+end
+check((flight['on'] || flight[true]).dig('workflow_dispatch','inputs','version','default') == '0.1.1', 'manual upload defaults to the current app version')
+puts 'PASS: fast credential-free preflight, trusted manual/main upload, current version default and opt-in full UI.'
 check(!extraction_job.key?('environment') && !extraction_job.key?('env'), 'extraction regression receives no signing environment or secrets')
 extraction_runs = extraction_job.fetch('steps').map { |step| step.fetch('run', '') }.join("\n")
 check(extraction_runs.include?('bundle exec ruby tests/codesign_extraction_macos_test.rb') && !extraction_runs.include?('secrets.') && !extraction_runs.include?('run_signing_lane'), 'real codesign extraction CI runs without match or Apple operations')

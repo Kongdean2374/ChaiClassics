@@ -28,7 +28,7 @@ bash scripts/ci.sh              # macOS：以上 + Xcode build + iOS Simulator X
 
 Xcode 26+ 開啟 `ChaiClassics.xcodeproj`，選 `ChaiClassics` scheme 與 iPhone Simulator。不需要第三方 iOS package，也不必在 CI 動態下載專案產生器。新增 SwiftUI 檔案後跑 `python3 scripts/create_project.py` 更新已提交工程。
 
-CI 每次 main push／PR 執行，無 Apple Secrets，任一步失敗會失敗。TestFlight 與 App Store 為手動 main workflow，獨立 Initialize Signing 工作流程透過 match 加密保存資產至私人倉庫；TestFlight 只用 match readonly 簽署上傳。App Store 只選入已測 build、準備 release notes，**不自動送審／公開上架**。production environment 審核保護需在 GitHub Settings 設定。
+CI 每次 main push／PR 執行題庫、Swift、Simulator 編譯與工具檢查，無 Apple Secrets，任一步失敗會失敗。完整 UI 以 CI → Run workflow → full_ui=true 手動執行；TestFlight 只先做快速無憑證工具預檢，再直接正式簽署編譯／上傳，不重跑整輪模擬器 UI。TestFlight 與 App Store 為手動 main workflow，獨立 Initialize Signing 工作流程透過 match 加密保存資產至私人倉庫；TestFlight 只用 match readonly 簽署上傳。App Store 只選入已測 build、準備 release notes，**不自動送審／公開上架**。production environment 審核保護需在 GitHub Settings 設定。
 
 文件：
 

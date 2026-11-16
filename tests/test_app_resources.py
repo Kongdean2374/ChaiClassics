@@ -60,8 +60,8 @@ class AppResourceTests(unittest.TestCase):
     def test_v010_rules_saves_and_puzzles_are_unchanged(self):
         # Frozen SHA-256 values from released commit 13961946e203115783ffa68924195240062c0e23.
         # This also runs in release-tooling's shallow checkout, without fetching Git history.
-        # Signing behavior remains frozen. The later runner-capacity fix may
-        # change only TestFlight's single hosted CPU label, normalized below.
+        # App rules/storage and signing implementation remain frozen.
+        # TestFlight scheduling is checked separately from its signing job.
         released={
             'Core/Sudoku.swift': '25c829a99f7e70d5e4a11f1f92329727371bc3d9aa7837a88ee088675e5fc4cb',
             'Core/Minesweeper.swift': '9be7abf2be3c5762fc837148f73cd23049ddefbce5eef5cb490673163a40437d',
@@ -72,16 +72,26 @@ class AppResourceTests(unittest.TestCase):
             'fastlane/Fastfile': 'e1a3d994921f19861b0f2f068b7a1dd392ae5cd1901b4d6fcac9970f28a0bc1a',
             'fastlane/lib/signing_config.rb': '21435e215b7464f4e2ef9a2951a09f12dfebb6fce97beaf061b0e9afde2c40b8',
             'fastlane/lib/release_pipeline.rb': '48657a233ac4227691ac62e2f693aa04e4a196792c5903b404eb456a9950d2a6',
-            '.github/workflows/testflight.yml': '410a678adae10d0f9b2149c60adb865d3c564d9e2c7f99d26f617763cb2d93a8',
             '.github/workflows/initialize-signing.yml': 'c3a4ab2713229f4111d94156db9382e4027c48ae006a4b1b58298fe75a0fb93b',
         }
         for path, expected in released.items():
             actual=(ROOT/path).read_bytes()
-            if path=='.github/workflows/testflight.yml':
-                intel=b'    runs-on: macos-15-intel\n'
-                self.assertEqual(actual.count(intel),1,'exactly one explicit Intel upload runner')
-                actual=actual.replace(intel,b'    runs-on: macos-15\n')
             self.assertEqual(hashlib.sha256(actual).hexdigest(),expected,path)
+    def test_testflight_preserves_manual_header_and_signing_job(self):
+        actual=(ROOT/'.github/workflows/testflight.yml').read_bytes()
+        header=actual.split(b'jobs:\n',1)[0]
+        self.assertEqual(header.count(b"'Version (e.g. 0.1.1)'"),1)
+        self.assertEqual(header.count(b"        default: '0.1.1'\n"),1)
+        header=header.replace(b"'Version (e.g. 0.1.1)'",b"'Version (e.g. 0.1.0)'")
+        header=header.replace(b"        default: '0.1.1'\n",b"        default: '0.1.0'\n")
+        self.assertEqual(hashlib.sha256(header).hexdigest(),'40e3211d7c61124667744723a0b2afe6a14c896b95467e2472849253ddc8803e')
+        upload=b'  upload:\n'+actual.split(b'  upload:\n',1)[1]
+        self.assertEqual(upload.count(b'    needs: preflight\n'),1)
+        self.assertEqual(upload.count(b'    runs-on: macos-15-intel\n'),1)
+        upload=upload.replace(b'    needs: preflight\n',b'    needs: ci\n')
+        upload=upload.replace(b'    runs-on: macos-15-intel\n',b'    runs-on: macos-15\n')
+        # Every other signing/upload byte is unchanged from released 1396194.
+        self.assertEqual(hashlib.sha256(upload).hexdigest(),'7f1aeb872b190e583642c74ad3bf08b706aac54c941b25df01ccea4e8b92636e')
     def test_test_sandbox_never_resets_production_storage(self):
         source=(ROOT/'App/UITestBootstrap.swift').read_text()
         self.assertTrue(source.startswith('#if DEBUG && targetEnvironment(simulator)'))

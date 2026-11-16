@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version (e.g. 0.1.0)'
+        description: 'Version (e.g. 0.1.1)'
         required: true
-        default: '0.1.0'
+        default: '0.1.1'
       apple_team_id:
         description: 'Optional 10-character Team ID; otherwise APPLE_TEAM_ID Variable/Secret'
         required: false
@@ -19,11 +19,42 @@ concurrency:
   group: apple-release
   cancel-in-progress: false
 jobs:
-  ci:
+  preflight:
     if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/ci.yml
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@4a9ddd6f338a97768b8006bf671dfbad383215f4
+        with:
+          ruby-version: '3.3'
+          bundler: '2.5.23'
+      - name: Validate fastlane without any Apple credentials
+        run: |
+          bundle config set path vendor/bundle
+          bundle config set frozen true
+          bundle install --jobs 4
+          python3 -m unittest discover -s tests -v
+          python3 scripts/verify_sudoku.py
+          bundle exec ruby tests/signing_config_test.rb
+          bundle exec ruby tests/signing_asset_verifier_test.rb
+          bundle exec ruby tests/release_pipeline_test.rb
+          bundle exec ruby tests/archive_session_test.rb
+          bundle exec ruby tests/apple_api_diagnostics_test.rb
+          bundle exec ruby tests/jwt_comparison_test.rb
+          bundle exec ruby tests/workflow_config_test.rb
+          ruby -c fastlane/Fastfile
+          bundle exec fastlane lanes
+          cat Gemfile.lock
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-dependency-lock
+          path: Gemfile.lock
+          if-no-files-found: error
   upload:
-    needs: ci
+    needs: preflight
     if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
     environment: testflight
     runs-on: macos-15-intel

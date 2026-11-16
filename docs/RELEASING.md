@@ -1,6 +1,6 @@
 > 目前狀態：私人簽署 repo 已有資產，手動 readonly Run 43830873332 已完整通過 XCODE_PROFILE_READY。所有 match 入口已鎖定 readonly；不要重跑 Initialize Signing。首次 TestFlight 的 Gym 參數阻斷與新的分階段診斷見 [TESTFLIGHT_DIAGNOSTICS.md](TESTFLIGHT_DIAGNOSTICS.md)。下方首次建立段落為歷史流程，不再提供新建證書行為。
 
-> 最新 ARCHIVE／COMMAND_FAILED 尚未取得原始根因。請先手動執行 **Diagnose Signed Archive**，完整步驟與成功判準見 [SIGNED_ARCHIVE_DIAGNOSTICS.md](SIGNED_ARCHIVE_DIAGNOSTICS.md)。一般 CI 通過不表示正式簽署封存成功；診斷未完整通過前不要重跑 TestFlight。
+> 更新：0.1.0 TestFlight Run 43871465080 已成功，舊 ARCHIVE 阻斷已排除。0.1.1 優先實機驗收：TestFlight 使用快速無憑證預檢後直接正式簽署編譯／上傳；完整 UI 改為 CI 手動 full_ui，不再每次擋住發布。實際簽署封存與上傳仍以當次 TestFlight 結果為準。
 
 # GitHub → match → TestFlight → App Store
 
@@ -56,7 +56,7 @@ GitHub Actions → **Initialize Signing (match)** → Run workflow → main。Te
 
 ## 後續 TestFlight
 
-Actions → **TestFlight** → Run workflow → main 與版本（如 0.1.0）。CI 成功後在 macOS 用 `match readonly: true` 下載並解密既有資產到臨時 keychain，再 Release archive／export IPA、上傳 ASC。
+Actions → **TestFlight** → Run workflow → main，版本預填 0.1.1，Apple Team ID 留空即可沿用 Secret。先做 Linux 快速預檢，成功後在 Intel macOS 用 `match readonly: true` 下載並解密既有資產到臨時 keychain，再執行真實 iOS Device Release archive／export IPA、上傳 ASC。不重跑整份遊戲 CI，不等待模擬器 UI；全部 UI 測試仍可在 CI 手動 full_ui 執行。
 
 fastlane 固定 2.228.0，Gym 使用 `export_method: app-store`；新的 app-store-connect 字串不通過該版 options 驗證。archive 與 export 分開執行，不重複建置；完整身分名稱取自已驗證憑證，匯出及 archive 仍精確綁定原 SHA-1／DER／profile。UPLOAD_AUTH、BUILD_CONFIG、ARCHIVE、EXPORT_IPA、UPLOAD_TRANSFER 分階段白名單回報，詳見上方診斷文件。
 
