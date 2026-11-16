@@ -4,6 +4,7 @@ require "open3"
 require "fileutils"
 require "plist"
 require_relative "lib/signing_config"
+require_relative "lib/signing_asset_verifier"
 require_relative "lib/apple_api_diagnostics"
 
 def project_path(*parts)
@@ -46,54 +47,67 @@ rescue ChaiAppleDiagnostics::Failure
 end
 
 def profile_files
-  [File.expand_path("~/Library/MobileDevice/Provisioning Profiles"),
-   File.expand_path("~/Library/Developer/Xcode/UserData/Provisioning Profiles")].flat_map { |path| Dir.glob(File.join(path, "*.mobileprovision")) }
+  ChaiSigningAssets.roots.flat_map { |path| Dir.glob(File.join(path, "*.mobileprovision")) }
 end
 
 def parsed_profile(path)
   Plist.parse_xml(command!("security", "cms", "-D", "-i", path))
 end
 
-def with_match_signing(key, readonly: true)
+def asset_command!(code, *argv)
+  output, ok = ChaiSigningAssets::Commands.new.run(*argv)
+  raise ChaiSigningAssets::Failure.new(code) unless ok
+  output
+end
+
+def with_match_signing(key = nil, readonly: true)
   trusted_dispatch!
+  raise ChaiSigningAssets::Failure.new("ASSET_READONLY_REQUIRED") unless readonly == true
   required!("APPLE_TEAM_ID", "SIGNING_REPO_PAT", "MATCH_PASSWORD")
   Dir.mktmpdir("chai-match-") do |dir|
     keychain = File.join(dir, "signing.keychain-db")
     password = SecureRandom.hex(32)
-    original = command!("security", "list-keychains", "-d", "user").scan(/"([^"]+)"/).flatten
-    previous_profiles = profile_files.to_h { |path| [path, File.binread(path)] }
+    original = []
+    previous_profiles = {}
+    search_list_changed = false
     begin
-      command!("security", "create-keychain", "-p", password, keychain)
-      command!("security", "set-keychain-settings", "-lut", "21600", keychain)
-      command!("security", "unlock-keychain", "-p", password, keychain)
-      command!("security", "list-keychains", "-d", "user", "-s", keychain, *original)
-      match(**ChaiSigning.match_options(ENV, api_key: key, keychain: keychain, password: password, readonly: readonly))
-      prefix = "sigh_#{ChaiSigning::APP_IDENTIFIER}_appstore"
-      profile_path = ENV["#{prefix}_profile-path"]
-      UI.user_error!("[CHAI_SIGNING:MATCH_ASSETS] match did not install an App Store profile") unless profile_path && File.file?(profile_path)
-      data = parsed_profile(profile_path)
-      UI.user_error!("[CHAI_SIGNING:APPLE_TEAM] Profile app/team mismatch") unless
-        data.dig("Entitlements", "application-identifier") == "#{ENV.fetch('APPLE_TEAM_ID')}.#{ChaiSigning::APP_IDENTIFIER}" && data.fetch("TeamIdentifier").include?(ENV.fetch("APPLE_TEAM_ID"))
-      UI.user_error!("[CHAI_SIGNING:MATCH_ASSETS] Profile expired or not App Store distribution") if
-        data["ProvisionedDevices"] || data["ProvisionsAllDevices"] || data.dig("Entitlements", "get-task-allow") || data.fetch("ExpirationDate") <= Time.now
-      identity = command!("security", "find-identity", "-v", "-p", "codesigning", keychain)[/\b([A-F0-9]{40})\b/, 1]
-      UI.user_error!("[CHAI_SIGNING:MATCH_ASSETS] No valid distribution identity in match keychain") unless identity
-      yield data.fetch("UUID"), identity, keychain
+      original = asset_command!("ASSET_KEYCHAIN_SETUP", "security", "list-keychains", "-d", "user").scan(/"([^"]+)"/).flatten
+      previous_profiles = profile_files.to_h { |path| [path, File.binread(path)] }
+      asset_command!("ASSET_KEYCHAIN_SETUP", "security", "create-keychain", "-p", password, keychain)
+      asset_command!("ASSET_KEYCHAIN_SETUP", "security", "set-keychain-settings", "-lut", "21600", keychain)
+      asset_command!("ASSET_KEYCHAIN_SETUP", "security", "unlock-keychain", "-p", password, keychain)
+      asset_command!("ASSET_KEYCHAIN_SETUP", "security", "list-keychains", "-d", "user", "-s", keychain, *original)
+      search_list_changed = true
+      begin
+        match(**ChaiSigning.match_options(ENV, api_key: key, keychain: keychain, password: password, readonly: true))
+      rescue StandardError
+        raise ChaiSigningAssets::Failure.new("ASSET_MATCH_READ")
+      end
+      mapping = Fastlane::Actions.lane_context[:MATCH_PROVISIONING_PROFILE_MAPPING] || {}
+      hints = ChaiSigningAssets.hints(env: ENV, mapping: mapping)
+      verifier = ChaiSigningAssets::Verifier.new(team_id: ENV.fetch("APPLE_TEAM_ID"), keychain: keychain, hints: hints)
+      result = verifier.check!
+      ChaiSigningAssets.prepare_xcode_profile!(result)
+      verifier.mark_xcode_ready!
+      yield result.fetch(:profile).fetch("UUID"), result.fetch(:identity), keychain
     ensure
-      # Local cleanup only, scoped to this app. Never revoke any Apple certificate.
+      # Local cleanup only for this app. Other apps (including ChaiPhoto) are not
+      # selected/restored/removed; no Apple API or signing-repository writes occur.
       profile_files.each do |path|
         begin
           data = parsed_profile(path)
           next unless data.dig("Entitlements", "application-identifier").to_s.end_with?(".#{ChaiSigning::APP_IDENTIFIER}")
           previous_profiles.key?(path) ? File.binwrite(path, previous_profiles[path]) : FileUtils.rm_f(path)
         rescue StandardError
-          # Leave unrecognized profiles alone; the macOS runner is ephemeral.
+          # Leave unrecognized profiles alone on the ephemeral runner.
         end
       end
-      Open3.capture3("security", "list-keychains", "-d", "user", "-s", *original)
+      Open3.capture3("security", "list-keychains", "-d", "user", "-s", *original) if search_list_changed
       Open3.capture3("security", "delete-keychain", keychain)
     end
   end
+rescue ChaiSigningAssets::Failure => error
+  UI.user_error!("[CHAI_SIGNING:#{error.code}] Local readonly signing asset verification failed; values suppressed")
 end
 
 def validated_version
@@ -132,14 +146,23 @@ platform :ios do
     UI.user_error!("[CHAI_SIGNING:APPLE_DIAGNOSTIC] Read-only JWT/API comparison did not pass") unless passed
   end
 
-  desc "Manually initialize encrypted match assets for this app; never revoke certificates"
+  desc "Reuse existing encrypted signing assets; initialization is locked to readonly"
   lane :initialize_signing do
     trusted_dispatch!
     required!("APPLE_TEAM_ID", "SIGNING_REPO_PAT", "MATCH_PASSWORD")
     key = api_key
     verify_apple_access!
-    with_match_signing(key, readonly: false) do |_profile_uuid, _identity, _keychain|
-      UI.success("Initialized encrypted appstore signing assets in private ChaiClassics-Signing/main")
+    with_match_signing(key, readonly: true) do |_profile_uuid, _identity, _keychain|
+      UI.success("Existing appstore signing assets verified in readonly mode")
+    end
+  end
+
+  desc "Verify existing encrypted signing assets and real private-key signing; no Apple API or upload"
+  lane :verify_signing_assets do
+    trusted_dispatch!
+    required!("APPLE_TEAM_ID", "SIGNING_REPO_PAT", "MATCH_PASSWORD")
+    with_match_signing(nil, readonly: true) do |_profile_uuid, _identity, _keychain|
+      UI.success("Readonly signing asset pairing and local signature verified")
     end
   end
 

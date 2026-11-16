@@ -4,6 +4,6 @@ git_branch('main')
 type('appstore')
 app_identifier(['cc.chaihome.chaiclassics'])
 generate_apple_certs(true)
-# Safe default for direct match use. Only the dedicated manual initialization lane
-# passes readonly: false. No destructive certificate management is provided.
+# Existing assets have been bootstrapped. All lanes are now locked to reuse;
+# missing/expired assets fail closed without creating or revoking certificates.
 readonly(true)

@@ -29,6 +29,13 @@ def validate_environment(env, signing=False, team=False):
     if (signing or team) and not re.fullmatch(r'[A-Z0-9]{10}', env['APPLE_TEAM_ID']):
         raise ConfigurationError('APPLE_TEAM_ID must be the 10-character Apple Developer Team ID, not ASC_ISSUER_ID.')
 
+def validate_asset_environment(env):
+    missing = [name for name in ('APPLE_TEAM_ID', 'SIGNING_REPO_PAT', 'MATCH_PASSWORD') if not env.get(name, '').strip()]
+    if missing: raise ConfigurationError('Missing readonly asset configuration: ' + ', '.join(missing))
+    if not re.fullmatch(r'[A-Z0-9]{10}', env['APPLE_TEAM_ID']):
+        raise ConfigurationError('APPLE_TEAM_ID must be the 10-character Apple Developer Team ID.')
+
+
 def validate_trusted_dispatch(env):
     if env.get('GITHUB_EVENT_NAME') != 'workflow_dispatch' or env.get('GITHUB_REF') != 'refs/heads/main':
         raise ConfigurationError('Signing is allowed only by manual workflow_dispatch on trusted main.')
@@ -63,6 +70,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--signing', action='store_true')
     parser.add_argument('--team', action='store_true')
+    parser.add_argument('--assets', action='store_true')
     parser.add_argument('--initialize', action='store_true')
     parser.add_argument('--trusted-dispatch', action='store_true')
     parser.add_argument('--check-repo', action='store_true')
@@ -70,7 +78,8 @@ def main(argv=None):
     try:
         if args.trusted_dispatch:
             validate_trusted_dispatch(os.environ)
-        validate_environment(os.environ, args.signing or args.initialize, args.team)
+        if args.assets: validate_asset_environment(os.environ)
+        else: validate_environment(os.environ, args.signing or args.initialize, args.team)
         if args.check_repo:
             validate_signing_repo(os.environ.get('SIGNING_REPO_PAT', ''), args.initialize)
     except ConfigurationError as error:

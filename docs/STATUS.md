@@ -30,3 +30,5 @@
 Run 43810107847 的診斷缺陷已確認：舊 APPLE_ACCESS 丟失 HTTP 與資源，不足以證明權限問題。已加入分資源／HTTP 的安全診斷與獨立手動唯讀 workflow；實際 Apple 根因仍無法由已刪除的舊私密 log 還原。本次不重跑 Initialize Signing、不執行 Apple 請求、不修改任何憑證。詳見 APPLE_SIGNING_DIAGNOSTICS.md。
 
 唯讀診斷進一步改為同一 Admin JWT 的 Apps／Certificates 對照，新增僅布林的 JWT 欄位／簽章檢查，區分共同 401 與單一資源失敗。這些自動測試使用臨時假資料／模擬 HTTP；此次沒有執行 Apple workflow，實際 401 根因須由使用者手動診斷取得新結果。
+
+Run 43818758376 已證實 Apple 預檢 200、私人 repo 既有加密資產寫入成功；舊 MATCH_ASSETS 無法區分三個後置失敗。新版本改為分階段 readonly 後置驗證，增加現代／legacy 路徑 fallback 與真實本機私鑰簽名配對檢查；不重跑初始化／TestFlight。真資產手動驗證尚未執行，見 SIGNING_ASSET_VERIFICATION.md。

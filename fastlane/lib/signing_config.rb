@@ -17,6 +17,7 @@ module ChaiSigning
   end
 
   def self.match_options(env, api_key:, keychain:, password:, readonly: true)
+    raise ArgumentError, 'ASSET_READONLY_REQUIRED' unless readonly == true
     {
       type: 'appstore', platform: 'ios', app_identifier: [APP_IDENTIFIER],
       api_key: api_key, team_id: env.fetch('APPLE_TEAM_ID'),

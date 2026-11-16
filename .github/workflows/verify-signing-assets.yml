@@ -1,0 +1,40 @@
+name: Verify Signing Assets (read only)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  FASTLANE_OPT_OUT_USAGE: '1'
+  FASTLANE_SKIP_UPDATE_CHECK: '1'
+concurrency:
+  group: apple-release
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    environment: signing-bootstrap
+    runs-on: macos-15
+    timeout-minutes: 20
+    env:
+      APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID || secrets.APPLE_TEAM_ID }}
+      SIGNING_REPO_PAT: ${{ secrets.SIGNING_REPO_PAT }}
+      MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Validate readonly private-repository access (no ASC key)
+        run: python3 scripts/check_release_secrets.py --assets --check-repo --trusted-dispatch
+      - run: bash scripts/select_xcode.sh
+      - uses: ruby/setup-ruby@4a9ddd6f338a97768b8006bf671dfbad383215f4
+        with:
+          ruby-version: '3.3'
+          bundler: '2.5.23'
+      - name: Install locked tooling
+        run: |
+          bundle config set path vendor/bundle
+          bundle config set frozen true
+          bundle install --jobs 4
+      - name: Read existing match assets and verify real local signature
+        run: python3 scripts/run_signing_lane.py verify_signing_assets
+      # No archive/upload, no Apple API credentials, no signing assets/log artifacts.

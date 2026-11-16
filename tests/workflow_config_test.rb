@@ -63,3 +63,14 @@ puts 'PASS: independent manual read-only diagnosis; no signing assets or match c
 
 expected.each { |name, value| check(diagnostic_job.fetch('env')[name] == value, "diagnostic keeps the same Admin #{name}") }
 puts 'PASS: apps/certificates comparison uses the existing Admin Team key mapping.'
+
+assets = workflows.fetch('verify-signing-assets.yml')
+asset_job = assets.fetch('jobs').fetch('verify')
+check((assets['on'] || assets[true]).keys == ['workflow_dispatch'], 'asset verification is manual only')
+check(asset_job['if'].include?("github.ref == 'refs/heads/main'") && asset_job['if'].include?("github.event_name == 'workflow_dispatch'"), 'asset verification main/manual only')
+check(asset_job.fetch('env').keys.sort == %w[APPLE_TEAM_ID MATCH_PASSWORD SIGNING_REPO_PAT].sort, 'no ASC key supplied to readonly asset validation')
+check(asset_job.fetch('steps').any? { |step| step['run'] == 'python3 scripts/run_signing_lane.py verify_signing_assets' }, 'safe readonly validation wrapper')
+asset_lane = fastfile.split('lane :verify_signing_assets do', 2).last.split('lane :beta do', 2).first
+check(asset_lane.include?('with_match_signing(nil, readonly: true)') && !asset_lane.include?('api_key') && !asset_lane.include?('upload_to_testflight'), 'no portal or upload in asset validation lane')
+check(!fastfile.include?('readonly: false'), 'all post-bootstrap lanes are readonly')
+puts 'PASS: existing-asset-only manual verification; no ASC key, certificate creation or upload.'

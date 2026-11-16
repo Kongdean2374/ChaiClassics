@@ -5,6 +5,7 @@ Only fixed diagnostic codes go to the public Actions log. Private log is deleted
 import argparse, os, pathlib, subprocess, tempfile
 from check_release_secrets import main as preflight
 from apple_api_report import load_report, format_report, report_failed
+from signing_asset_report import load_asset_report, format_asset_report, asset_complete, MESSAGES as ASSET_MESSAGES
 
 DIAGNOSTICS = {
     'BUNDLE_ID': 'Register the exact Bundle ID cc.chaihome.chaiclassics in the Apple Developer team first. No alternative ID is selected automatically.',
@@ -14,12 +15,14 @@ DIAGNOSTICS = {
     'APPLE_UNCLASSIFIED': 'Unclassified Apple/SDK error without preserved HTTP/resource evidence. Check a manual read-only diagnostic; do not assume a role problem.',
     'APPLE_TEAM': 'Apple Developer Team ID does not match the selected API key/profile/certificate team. No certificates were revoked.',
     'APPLE_KEY': 'ASC_API_KEY_P8 is not a valid App Store Connect EC P-256 private key.',
-    'MATCH_ASSETS': 'Readonly signing assets are missing, expired or unusable. Run the separate manual Initialize Signing workflow; readonly never creates or replaces them.',
+    'MATCH_ASSETS': 'Legacy undifferentiated local asset failure. Use Verify Signing Assets (read only); do not rerun Initialize Signing or replace existing certificates.',
     'MATCH_DECRYPT': 'MATCH_PASSWORD cannot decrypt the private match repository. Keep the original encryption password; do not reset or run destructive operations.',
     'MATCH_GIT': 'match could not clone/push the private signing repository. Check SIGNING_REPO_PAT Contents read/write, repository selection, SSO and branch rules.',
     'SIGNING_FAILED': 'match/signing failed. Possible certificate quota, profile permissions, expired assets or Apple service error. Raw output was suppressed to protect keys; do not revoke unrelated certificates.',
     'UPLOAD_FAILED': 'Signed build/upload did not complete. Check App Record, version/build number, Apple API role and Apple service status. Raw output suppressed.',
 }
+
+DIAGNOSTICS.update(ASSET_MESSAGES)
 
 def diagnostic(raw, lane):
     text = raw.decode('utf-8', errors='replace')
@@ -43,11 +46,12 @@ def diagnostic(raw, lane):
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument('lane', choices=['initialize_signing', 'beta', 'prepare_store', 'diagnose_signing'])
+    parser.add_argument('lane', choices=['initialize_signing', 'beta', 'prepare_store', 'diagnose_signing', 'verify_signing_assets'])
     args = parser.parse_args(argv)
     flags = ['--trusted-dispatch']
     if args.lane in ('initialize_signing', 'beta'): flags += ['--signing', '--check-repo']
     if args.lane == 'diagnose_signing': flags += ['--team']
+    if args.lane == 'verify_signing_assets': flags += ['--assets', '--check-repo']
     if args.lane == 'initialize_signing': flags += ['--initialize']
     if preflight(flags): return 1
     root = pathlib.Path(__file__).resolve().parents[1]
@@ -56,10 +60,19 @@ def main(argv=None):
     with tempfile.TemporaryDirectory(prefix='chai-apple-diagnostic-') as private_dir, tempfile.TemporaryFile(mode='w+b') as private_log:
         report_path = pathlib.Path(private_dir) / 'report.json'
         report_path.touch(mode=0o600)
+        asset_path = pathlib.Path(private_dir) / 'assets.json'
+        asset_path.touch(mode=0o600)
         env = dict(os.environ, FASTLANE_OPT_OUT_USAGE='1', FASTLANE_SKIP_UPDATE_CHECK='1', FASTLANE_HIDE_CHANGELOG='1', CI='true',
-                   CHAI_APPLE_DIAGNOSTIC_PATH=str(report_path))
+                   CHAI_APPLE_DIAGNOSTIC_PATH=str(report_path), CHAI_SIGNING_ASSET_REPORT_PATH=str(asset_path))
         result = subprocess.run(['bundle', 'exec', 'fastlane', 'ios', args.lane], cwd=root, env=env,
                                 stdout=private_log, stderr=subprocess.STDOUT)
+        assets = load_asset_report(asset_path)
+        if assets:
+            for line in format_asset_report(assets): print(line)
+        if assets and assets['failure']: return result.returncode or 1
+        if args.lane == 'verify_signing_assets' and result.returncode == 0 and not asset_complete(assets):
+            print('Release failed [ASSET_INTERNAL]: Missing/incomplete safe signing asset verification report.')
+            return 1
         report = load_report(report_path)
         if report:
             for line in format_report(report): print(line)

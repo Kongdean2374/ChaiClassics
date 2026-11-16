@@ -39,3 +39,5 @@ CI 每次 main push／PR 執行，無 Apple Secrets，任一步失敗會失敗�
 - [公開倉庫安全](docs/SECURITY.md)
 
 下一階段依附件規格：使用者確認 TestFlight 穩定後，逐款加入五子棋、Klondike 與記憶翻牌，再準備 1.0。其餘經典遊戲保留模組擴充方式，不先做空殼。
+
+簽署資產已在私人 repo 建立。現有簽署入口全部鎖定 readonly，請勿重新初始化。可手動執行 **Verify Signing Assets (read only)** 驗證既有資產／私鑰配對，不會新建證書或上傳；詳見 [唯讀簽署資產驗證](docs/SIGNING_ASSET_VERIFICATION.md)。

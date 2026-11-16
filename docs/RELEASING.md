@@ -1,3 +1,5 @@
+> 目前狀態：私人簽署 repo 已有資產。所有 match 入口已鎖定 readonly；不要重跑 Initialize Signing。下一步只需手動 **Verify Signing Assets (read only)**，完整步驟與固定錯誤碼見 [SIGNING_ASSET_VERIFICATION.md](SIGNING_ASSET_VERIFICATION.md)。下方首次建立段落為歷史流程，不再提供新建證書行為。
+
 # GitHub → match → TestFlight → App Store
 
 公開原始碼：Kongdean2374/ChaiClassics，預設 main。私密簽署：**Kongdean2374/ChaiClassics-Signing / main**。簽署流程僅 `workflow_dispatch` 且 `refs/heads/main`；一般 push／PR 的 CI 完全不讀 Apple／match Secrets。
@@ -44,7 +46,7 @@ GitHub Actions → **Initialize Signing (match)** → Run workflow → main。Te
 
 1. 先跑完整免簽署 CI，成功後才在 macOS runner 的 `signing-bootstrap` environment 將三個 SIGNING_ASC_* Admin Secrets 映射為 ASC_*，並注入原共用 Secrets。
 2. 預檢原始 PEM、Team ID、私人簽署 repo 的 main 與 PAT 存取；不印值或 HTTP 回應。
-3. `initialize_signing` lane 使用 `match(type: appstore, readonly: false, generate_apple_certs: true)`，只指定本 App／Team，在臨時 keychain 建立／安裝 Apple Distribution 與 App Store profile。
+3. 首次建立時使用過 `match(type: appstore, readonly: false, generate_apple_certs: true)`（目前入口已鎖定 readonly:true），只指定本 App／Team，在臨時 keychain 建立／安裝 Apple Distribution 與 App Store profile。
 4. match 用 MATCH_PASSWORD 加密後 commit/push 到私人 ChaiClassics-Signing/main。公開 repo 與 artifact 不含簽署資產。
 5. 核對 profile 的 app ID、Team、到期時間、App Store 用途與有效私鑰，最後清除本 App 的本機 profile、臨時 keychain；match 也清除解密暫存 clone。
 
@@ -54,7 +56,7 @@ GitHub Actions → **Initialize Signing (match)** → Run workflow → main。Te
 
 Actions → **TestFlight** → Run workflow → main 與版本（如 0.1.0）。CI 成功後在 macOS 用 `match readonly: true` 下載並解密既有資產到臨時 keychain，再 Release archive／export IPA、上傳 ASC。
 
-一般 TestFlight 的 Developer API Key 只用於 ASC App／build 查詢及上傳，不探測 Certificates／Profiles 管理 API；管理權限探測僅在 Admin 初始化 lane。Readonly 缺資產、過期或無有效私鑰就停止，**不退回建立模式**。先檢查初始化結果及同一 MATCH_PASSWORD，再依明確需要手動執行初始化。TestFlight workflow 不接受手動 p12。
+一般 TestFlight 的 Developer API Key 只用於 ASC App／build 查詢及上傳，不探測 Certificates／Profiles 管理 API；管理權限探測僅在 Admin 初始化 lane。Readonly 缺資產、過期或無有效私鑰就停止，**不退回建立模式**。先用獨立 readonly 資產驗證檢查結果及同一 MATCH_PASSWORD，不要重新建立證書。TestFlight workflow 不接受手動 p12。
 
 版本三段數字手動輸入。Build number 固定 `GITHUB_RUN_NUMBER.0.GITHUB_RUN_ATTEMPT`（上限 9999.0.99）；ASC 同版本若已用或倒退則拒絕，應新建 TestFlight dispatch，不重跑早於現有 build 的 run。初始化、TestFlight、App Store 共用 concurrency，防止同 repo 同時修改／使用簽署資產。
 

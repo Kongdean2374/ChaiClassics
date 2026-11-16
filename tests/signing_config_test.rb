@@ -29,7 +29,12 @@ check(options[:app_identifier] == [ChaiSigning::APP_IDENTIFIER], 'single exact B
 check(options[:git_branch] == 'main' && options[:git_url] == ChaiSigning::GIT_URL, 'dedicated signing repository main')
 check(!options[:force] && options[:generate_apple_certs], 'no force; Apple Distribution supported')
 check(Base64.strict_decode64(options[:git_basic_authorization]) == 'x-access-token:fixture-not-real', 'in-memory PAT authorization')
-initialization = ChaiSigning.match_options(env, api_key: {}, keychain: '/tmp/fixture', password: 'fixture', readonly: false)
-check(initialization[:readonly] == false, 'explicit initialization only')
-puts 'PASS: match scope, safe readonly and explicit initialization'
+rejected = false
+begin
+  ChaiSigning.match_options(env, api_key: {}, keychain: '/tmp/fixture', password: 'fixture', readonly: false)
+rescue ArgumentError => error
+  rejected = error.message == 'ASSET_READONLY_REQUIRED'
+end
+check(rejected, 'existing-assets phase must reject write/create mode')
+puts 'PASS: match scope, safe readonly and rejected write/create mode'
 puts '2 signing configuration cases passed; no Apple credentials used.'
