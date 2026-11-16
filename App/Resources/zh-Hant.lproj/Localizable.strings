@@ -30,6 +30,8 @@
 "difficulty.normal" = "普通";
 "difficulty.custom" = "自訂";
 "settings.title" = "設定";
+"settings.general" = "一般";
+"settings.support" = "支援";
 "settings.appearance" = "外觀";
 "theme.system" = "系統";
 "theme.light" = "淺色";
@@ -43,7 +45,7 @@
 "settings.awake.detail" = "僅在遊戲畫面前景且未暫停時生效；返回選單或切到背景就恢復系統設定。";
 "settings.autosave" = "自動儲存固定開啟";
 "settings.autosave.detail" = "每次有效操作都先寫入本機存檔；無法關閉。重新開始一律需要確認。";
-"settings.legal" = "法律與支援";
+"settings.legal" = "法律";
 "settings.about" = "關於";
 "settings.name" = "名稱";
 "settings.version" = "版本";
@@ -104,9 +106,15 @@
 "legal.privacy" = "隱私政策";
 "legal.terms" = "使用條款";
 "legal.support" = "支援與聯絡";
-"legal.unavailable" = "內建文件無法讀取。請保留 App 與存檔，透過 TestFlight 回饋或 GitHub 支援回報。";
-"support.github" = "開啟 GitHub 問題回報";
-"support.external" = "這是選用的外部連結，需要網路；提交問題可能需要 GitHub 帳號。遊戲與本機政策不需要連網或帳號。";
+"legal.unavailable" = "內建文件無法讀取。請保留 App 與存檔，使用本頁的官方網站或電子郵件入口聯絡支援。";
+"legal.offline" = "以下文件內建於 App，可離線閱讀。";
+"legal.online" = "在官方網站查看";
+"support.website" = "官方網站";
+"support.email" = "以電子郵件回報問題";
+"support.email.subject" = "ChaiClassics｜問題回報";
+"support.email.body" = "ChaiClassics 版本：%@\niOS 版本：%@\n遊戲：\n裝置型號（選填）：\n問題描述：\n重現步驟：\n預期結果：\n\n請在寄出前檢查內容；截圖可自行附加，請勿提供密碼、金鑰或完整存檔。";
+"support.email.detail" = "按下回報會開啟郵件草稿，由你確認後寄送。若無法開啟，請長按選取上方信箱，使用自己的郵件服務寄信。";
+"support.external" = "網站與寄信需要網路，由瀏覽器與郵件服務處理；不會自動上傳遊戲資料。遊戲與內建文件可離線使用。";
 "mines.chooseSize" = "1. 選擇棋盤大小";
 "mines.chooseCount" = "2. 選擇地雷數量";
 "mines.estimatedDifficulty" = "參考難度：%@ · 地雷密度 %.1f%%";

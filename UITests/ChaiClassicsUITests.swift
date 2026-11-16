@@ -19,6 +19,9 @@ final class ChaiClassicsUITests: XCTestCase {
         return app
     }
     private func back(_ app: XCUIApplication) { app.buttons["navigation.back"].tap() }
+    private func externalLink(_ identifier: String, app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+    }
     private func screenshot(_ app: XCUIApplication, _ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
     }
@@ -281,22 +284,36 @@ final class ChaiClassicsUITests: XCTestCase {
         let app = launch("legal")
         app.buttons["settings.open"].tap()
         for english in [false,true] {
-            if english { app.segmentedControls["settings.language"].buttons["English"].tap() }
+            if english {
+                scrollFullyIntoView(app.segmentedControls["settings.language"], app: app)
+                app.segmentedControls["settings.language"].buttons["English"].tap()
+            }
+            // Verify optional external destinations are accessible without
+            // opening a browser or mail app during an offline policy test.
+            for identifier in ["settings.website", "settings.email"] {
+                let link = externalLink(identifier, app: app)
+                scrollFullyIntoView(link, app: app)
+                XCTAssertTrue(link.exists); XCTAssertTrue(link.isHittable)
+            }
             for document in ["privacy","terms","support"] {
                 let entry = app.buttons["legal." + document]
                 scrollFullyIntoView(entry, app: app)
                 entry.tap()
                 XCTAssertTrue(app.scrollViews["document." + document].waitForExistence(timeout: 5))
-                XCTAssertTrue(app.staticTexts.matching(NSPredicate(format:"label CONTAINS %@",english ? "Document version: 0.1.1" : "文件版本：0.1.1")).firstMatch.exists)
+                XCTAssertTrue(app.staticTexts.matching(NSPredicate(format:"label CONTAINS %@",english ? "Document version: 0.1.2" : "文件版本：0.1.2")).firstMatch.exists)
+                let online = externalLink("legal.online." + document, app: app)
+                scrollFullyIntoView(online, app: app)
+                XCTAssertTrue(online.exists); XCTAssertTrue(online.isHittable)
                 if document == "support" {
-                    XCTAssertTrue(app.staticTexts[english ? "Official website in preparation" : "官方網站籌備中"].exists)
-                    let link = app.links["support.github"].exists ? app.links["support.github"] : app.buttons["support.github"]
-                    scrollFullyIntoView(link, app: app)
-                    XCTAssertTrue(link.exists); XCTAssertTrue(link.isHittable)
+                    let email = externalLink("support.email", app: app)
+                    scrollFullyIntoView(email, app: app)
+                    XCTAssertTrue(email.exists); XCTAssertTrue(email.isHittable)
+                    let address = app.staticTexts["support.email.address"]
+                    scrollFullyIntoView(address, app: app)
+                    XCTAssertEqual(address.label, "a090825159@icloud.com")
                 }
                 back(app)
             }
-            if !english { app.swipeDown() }
         }
     }
 }

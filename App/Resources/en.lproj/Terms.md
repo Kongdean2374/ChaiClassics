@@ -1,6 +1,6 @@
 # Terms of Use
 
-Document version: 0.1.1
+Document version: 0.1.2
 
 ## Use of the app
 
@@ -22,4 +22,10 @@ To the extent permitted by applicable law, the app is provided as available, wit
 
 ## Updates and support
 
-Features, terms and compatibility may change with app updates. Current support options are listed under Support & Contact. The official website is in preparation; this does not imply an existing public website or email service.
+Features, terms and compatibility may change with app updates. Bundled documents work offline; online terms and support are available below.
+
+Official terms: https://classics.chaihome.cc/en/terms/
+Official support: https://classics.chaihome.cc/en/support/
+Contact: a090825159@icloud.com
+
+Send questions and suggestions to this address. The app only opens an editable draft; it does not send mail, upload attachments or create a support account automatically. Review your message and attachments in your mail app before sending. Replies are by email, without a fixed response-time promise. Do not supply passwords, keys or unnecessary private information. See the Privacy Policy for data handling.

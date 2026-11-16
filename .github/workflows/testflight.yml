@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version (e.g. 0.1.1)'
+        description: 'Version (e.g. 0.1.2)'
         required: true
-        default: '0.1.1'
+        default: '0.1.2'
       apple_team_id:
         description: 'Optional 10-character Team ID; otherwise APPLE_TEAM_ID Variable/Secret'
         required: false

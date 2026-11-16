@@ -109,7 +109,7 @@ check(flight.dig('jobs','upload','needs') == 'preflight', 'real signed archive/u
 flight.fetch('jobs').each_value do |entry|
   check(entry.fetch('if').include?("github.ref == 'refs/heads/main'") && entry.fetch('if').include?("github.event_name == 'workflow_dispatch'"), 'both release jobs remain trusted main/manual only')
 end
-check((flight['on'] || flight[true]).dig('workflow_dispatch','inputs','version','default') == '0.1.1', 'manual upload defaults to the current app version')
+check((flight['on'] || flight[true]).dig('workflow_dispatch','inputs','version','default') == '0.1.2', 'manual upload defaults to the current app version')
 puts 'PASS: fast credential-free preflight, trusted manual/main upload, current version default and opt-in full UI.'
 check(!extraction_job.key?('environment') && !extraction_job.key?('env'), 'extraction regression receives no signing environment or secrets')
 extraction_runs = extraction_job.fetch('steps').map { |step| step.fetch('run', '') }.join("\n")

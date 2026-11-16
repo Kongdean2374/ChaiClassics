@@ -30,6 +30,8 @@
 "difficulty.normal" = "Normal";
 "difficulty.custom" = "Custom";
 "settings.title" = "Settings";
+"settings.general" = "General";
+"settings.support" = "Support";
 "settings.appearance" = "Appearance";
 "theme.system" = "System";
 "theme.light" = "Light";
@@ -43,7 +45,7 @@
 "settings.awake.detail" = "Only while a game is active in the foreground. Menus, pause and background restore normal auto-lock.";
 "settings.autosave" = "Autosave is always on";
 "settings.autosave.detail" = "Every effective action is saved locally. Autosave cannot be disabled. Restart always requires confirmation.";
-"settings.legal" = "Legal & support";
+"settings.legal" = "Legal";
 "settings.about" = "About";
 "settings.name" = "Name";
 "settings.version" = "Version";
@@ -104,9 +106,15 @@
 "legal.privacy" = "Privacy Policy";
 "legal.terms" = "Terms of Use";
 "legal.support" = "Support & Contact";
-"legal.unavailable" = "The bundled document could not be read. Keep the app and its saves, and report this through TestFlight feedback or GitHub Support.";
-"support.github" = "Open GitHub issue tracker";
-"support.external" = "This optional external link needs internet. Submitting an issue may require a GitHub account. Games and bundled policies need neither.";
+"legal.unavailable" = "The bundled document could not be read. Keep the app and its saves, and contact support using the official website or email link on this page.";
+"legal.offline" = "This document is included in the app and can be read offline.";
+"legal.online" = "View on the official website";
+"support.website" = "Official website";
+"support.email" = "Report an issue by email";
+"support.email.subject" = "ChaiClassics | Issue report";
+"support.email.body" = "ChaiClassics version: %@\niOS version: %@\nGame:\nDevice model (optional):\nIssue description:\nSteps to reproduce:\nExpected result:\n\nReview before sending. You may attach screenshots yourself. Do not include passwords, keys or complete save files.";
+"support.email.detail" = "Reporting opens a mail draft for you to review and send. If it does not open, select the address above and use your preferred mail service.";
+"support.external" = "Websites and email need internet and are handled by your browser and mail service. Game data is not uploaded automatically. Games and bundled documents work offline.";
 "mines.chooseSize" = "1. Choose board size";
 "mines.chooseCount" = "2. Choose mine count";
 "mines.estimatedDifficulty" = "Estimated difficulty: %@ · %.1f%% mines";
