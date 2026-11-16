@@ -1,4 +1,5 @@
 # No extra test gems: executes under the exact deployment bundle on Linux/macOS.
+require 'fastlane'
 require 'match'
 require_relative '../fastlane/lib/signing_config'
 
