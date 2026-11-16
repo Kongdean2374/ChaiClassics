@@ -82,6 +82,15 @@ def main(argv=None):
         if assets:
             for line in format_asset_report(assets): print(line)
         if assets and assets['failure']: return result.returncode or 1
+        if args.lane in ('beta','diagnose_signed_archive') and not asset_complete(assets):
+            # Preserve fixed pre-archive match/keychain failures even when no
+            # asset report could be written. Do not mislabel these as archiving.
+            private_log.seek(0)
+            raw = private_log.read()
+            for code in ASSET_MESSAGES:
+                if ('[CHAI_SIGNING:'+code+']').encode() in raw:
+                    print('Release failed ['+code+']: '+ASSET_MESSAGES[code])
+                    return result.returncode or 1
         archive = load_archive_report(archive_path)
         if archive_path.stat().st_size or args.lane == 'diagnose_signed_archive':
             diagnosis=diagnose(archive,private_log,workdir)
@@ -92,15 +101,6 @@ def main(argv=None):
                 return result.returncode or 1
         release = load_release_report(release_path)
         if args.lane == 'beta':
-            if not asset_complete(assets):
-                # Preserve failures before the asset verifier can write a report;
-                # BUILD_CONFIG has not started yet and must not be blamed.
-                private_log.seek(0)
-                raw = private_log.read()
-                for code in ASSET_MESSAGES:
-                    if ('[CHAI_SIGNING:'+code+']').encode() in raw:
-                        print('Release failed ['+code+']: '+ASSET_MESSAGES[code])
-                        return result.returncode or 1
             if release:
                 for line in format_release_report(release): print(line)
                 if not release_complete(release): return result.returncode or 1

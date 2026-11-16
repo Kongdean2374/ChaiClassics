@@ -114,4 +114,14 @@ class ArchiveDiagnosticTests(unittest.TestCase):
                 self.assertEqual(runner.main(['diagnose_signed_archive']),0 if complete else 1)
             self.assertNotIn('DO_NOT_PRINT',output.getvalue())
 
+    def test_failed_asset_setup_is_preserved_before_archive_diagnosis(self):
+        def fake_run(*args,**kwargs):
+            kwargs['stdout'].write(b'DO_NOT_PRINT [CHAI_SIGNING:ASSET_MATCH_READ]')
+            return subprocess.CompletedProcess(args[0],1)
+        output=io.StringIO()
+        with patch.object(runner,'preflight',return_value=0),patch.object(runner.subprocess,'run',side_effect=fake_run),contextlib.redirect_stdout(output):
+            self.assertEqual(runner.main(['diagnose_signed_archive']),1)
+        self.assertIn('[ASSET_MATCH_READ]',output.getvalue())
+        self.assertNotIn('ARCHIVE_REPORT_INVALID',output.getvalue());self.assertNotIn('DO_NOT_PRINT',output.getvalue())
+
 if __name__=='__main__':unittest.main()
