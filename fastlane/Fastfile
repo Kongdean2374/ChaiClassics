@@ -5,6 +5,10 @@ require "open3"
 require "fileutils"
 require "plist"
 
+def project_path(*parts)
+  File.join(File.expand_path("..", FastlaneCore::FastlaneFolder.path), *parts)
+end
+
 def required!(*names)
   missing = names.select { |name| ENV[name].to_s.empty? }
   UI.user_error!("Missing GitHub Secrets: #{missing.join(', ')}. See docs/RELEASING.md") unless missing.empty?
@@ -90,14 +94,14 @@ platform :ios do
     key = api_key
     number = next_apple_build(key, version)
     with_signing do |profile_uuid, identity, keychain|
-      build_app(project: "ChaiClassics.xcodeproj", scheme: "ChaiClassics", configuration: "Release", clean: true,
-        output_directory: "build/release", output_name: "ChaiClassics.ipa", export_method: "app-store-connect",
+      build_app(project: project_path("ChaiClassics.xcodeproj"), scheme: "ChaiClassics", configuration: "Release", clean: true,
+        output_directory: project_path("build", "release"), output_name: "ChaiClassics.ipa", export_method: "app-store-connect",
         codesigning_identity: identity,
         xcargs: "DEVELOPMENT_TEAM=#{ENV.fetch('APPLE_TEAM_ID')} PROVISIONING_PROFILE_SPECIFIER=#{profile_uuid} MARKETING_VERSION=#{version} CURRENT_PROJECT_VERSION=#{number} OTHER_CODE_SIGN_FLAGS='--keychain #{keychain}'",
         export_options: { signingStyle: "manual", teamID: ENV.fetch("APPLE_TEAM_ID"), provisioningProfiles: { "cc.chaihome.chaiclassics" => profile_uuid } })
       notes = "Commit #{ENV.fetch('GITHUB_SHA')} | run #{ENV.fetch('GITHUB_RUN_ID')}, attempt #{ENV.fetch('GITHUB_RUN_ATTEMPT')}"
-      upload_to_testflight(api_key: key, app_identifier: "cc.chaihome.chaiclassics", ipa: "build/release/ChaiClassics.ipa", changelog: notes, skip_waiting_for_build_processing: true)
-      File.write("build/release/provenance.txt", "version=#{version}\nbuild=#{number}\ncommit=#{ENV.fetch('GITHUB_SHA')}\n")
+      upload_to_testflight(api_key: key, app_identifier: "cc.chaihome.chaiclassics", ipa: project_path("build", "release", "ChaiClassics.ipa"), changelog: notes, skip_waiting_for_build_processing: true)
+      File.write(project_path("build", "release", "provenance.txt"), "version=#{version}\nbuild=#{number}\ncommit=#{ENV.fetch('GITHUB_SHA')}\n")
     end
   end
 

@@ -6,6 +6,9 @@ on:
         description: 'Version (e.g. 0.1.0)'
         required: true
         default: '0.1.0'
+env:
+  FASTLANE_OPT_OUT_USAGE: '1'
+  FASTLANE_SKIP_UPDATE_CHECK: '1'
 permissions:
   contents: read
 concurrency:
@@ -44,6 +47,7 @@ jobs:
       - name: Install pinned fastlane
         run: |
           bundle config set path vendor/bundle
+          bundle config set frozen true
           bundle install --jobs 4
       - name: Archive, sign and upload
         run: bundle exec fastlane ios beta
