@@ -10,7 +10,16 @@ begin
   params = ChaiRelease.export_options(ReleaseFixture.options)
   ReleaseFixture.silence { Gym.config = ChaiRelease.validate_options!(params) }
   stage = 'EXPORT_PLIST_GENERATOR'
-  xml = ReleaseFixture.silence { Gym::PackageCommandGeneratorXcode7.config_content }
+  xml = ReleaseFixture.silence do
+    Dir.mktmpdir('gym-export-plist-') do |directory|
+      Gym.cache[:config_path] = File.join(directory,'ExportOptions.plist')
+      Gym.cache[:temporary_output_path] = File.join(directory,'Export')
+      # config_content is private in 2.228.0; exercise the same public generator
+      # as Gym::Runner instead of calling an internal implementation method.
+      Gym::PackageCommandGeneratorXcode7.generate
+      File.read(Gym::PackageCommandGeneratorXcode7.config_path)
+    end
+  end
   stage = 'EXPORT_PLIST_PARSE'
   plist = Plist.parse_xml(xml)
   stage = 'EXPORT_METHOD_BINDING'
@@ -51,7 +60,12 @@ begin
     puts 'PASS: real Xcode export parser rejects the invalid method control and accepts legacy app-store; unsigned fixture cannot establish signed production export success.'
   end
   puts 'LIMIT: no production signed IPA export or TestFlight upload was performed; real signing assets are excluded from CI.'
-rescue StandardError
+rescue StandardError => error
   # stage is assigned only fixed literals, never dynamic tool/error data.
-  abort "FAIL: pinned Gym/Xcode export regression [#{stage}]; raw values, tool output and paths suppressed."
+  classes = %w[NoMethodError NameError ArgumentError TypeError RuntimeError FastlaneCore::Interface::FastlaneError]
+  category = classes.include?(error.class.name) ? error.class.name : 'UNKNOWN'
+  sources = %w[package_command_generator_xcode7.rb configuration.rb config_item.rb gym_xcode_macos_test.rb helper.rb ui.rb]
+  location = error.backtrace_locations&.find { |item| sources.include?(File.basename(item.path)) }
+  source = location ? File.basename(location.path) + ':' + location.lineno.to_s : 'unknown'
+  abort "FAIL: pinned Gym/Xcode export regression [#{stage}] kind=#{category} source=#{source}; raw values, tool output and sensitive paths suppressed."
 end
