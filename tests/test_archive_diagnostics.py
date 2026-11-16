@@ -51,10 +51,12 @@ class ArchiveDiagnosticTests(unittest.TestCase):
         cases=[('secret.swift:42:9: error: DO_NOT_PRINT','COMPILE','SWIFT_COMPILE_ERROR'),
                ('secret.m:3:2: error: DO_NOT_PRINT','COMPILE','CLANG_COMPILE_ERROR'),
                ('Command CodeSign failed with a nonzero exit code DO_NOT_PRINT','SIGNING','CODESIGN_FAILED'),
+               ('No signing certificate DO_NOT_PRINT found','SIGNING','SIGNING_IDENTITY_UNAVAILABLE'),
                ('error: target does not support provisioning profiles DO_NOT_PRINT','PROFILE','PROFILE_NOT_APPLICABLE'),
                ('User interaction is not allowed DO_NOT_PRINT','KEYCHAIN','KEYCHAIN_ACCESS_DENIED'),
                ('Could not resolve package dependencies DO_NOT_PRINT','SWIFT_PACKAGE','PACKAGE_RESOLUTION_FAILED'),
                ('xcodebuild -showBuildSettings timed out DO_NOT_PRINT','BUILD_SETTINGS','BUILD_SETTINGS_TIMEOUT'),
+               ('Signing for DO_NOT_PRINT requires a development team','BUILD_SETTINGS','SIGNING_TEAM_REQUIRED'),
                ('archive is empty DO_NOT_PRINT','ARCHIVE_FORMAT','ARCHIVE_EMPTY')]
         for raw,category,code in cases:
             diagnosis=self.diagnose(raw)

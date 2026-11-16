@@ -15,6 +15,7 @@ RULES = [
     ('COMPILE','LINKER_FAILED',r'linker command failed|ld: (?:error:|symbol\(s\) not found|framework not found|library not found)'),
     ('SIGNING','CODESIGN_FAILED',r'Command CodeSign failed|codesign.*(?:failed|errSecInternalComponent)|code object is not signed at all'),
     ('SIGNING','SIGNING_CONFLICT',r'has conflicting provisioning settings|automatically signed.*manually specified'),
+    ('SIGNING','SIGNING_IDENTITY_UNAVAILABLE',r'No signing certificate|No code signing identity found'),
     ('PROFILE','PROFILE_NOT_APPLICABLE',r'does not support provisioning profiles'),
     ('PROFILE','PROFILE_NOT_FOUND',r'No profiles for|requires a provisioning profile|provisioning profile .* (?:not found|could not be found)'),
     ('PROFILE','PROFILE_CERT_MISMATCH',r'provisioning profile .* (?:does not|doesn.t) include signing certificate'),
@@ -30,6 +31,7 @@ RULES = [
     ('BUILD_SETTINGS','DESTINATION_UNAVAILABLE',r'Unable to find a destination|Ineligible destinations for'),
     ('BUILD_SETTINGS','SDK_UNAVAILABLE',r'(?:SDK|sdk).* (?:cannot be located|not installed|could not be found)'),
     ('BUILD_SETTINGS','BUILD_OPTION_INVALID',r'xcodebuild: error:.*(?:invalid option|unknown build action|unrecognized option)'),
+    ('BUILD_SETTINGS','SIGNING_TEAM_REQUIRED',r'Signing for .* requires a development team'),
     ('ARCHIVE_FORMAT','ARCHIVE_EMPTY',r'archive is empty|archive .* (?:does not contain|is not a valid archive)|no .*archive.*found'),
 ]
 RULES = [(category,code,re.compile(pattern,re.I)) for category,code,pattern in RULES]

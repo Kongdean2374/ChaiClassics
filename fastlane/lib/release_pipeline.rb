@@ -127,22 +127,29 @@ module ChaiRelease
     raise Failure.new('BUILD_CONFIG', reason)
   end
 
+  def self.read_archive_plist!(file, commands: ChaiSigningAssets::Commands.new)
+    # xcarchive metadata contains Date values; native plist XML preserves types
+    # which a JSON conversion cannot reliably represent.
+    text, ok = commands.run('plutil', '-convert', 'xml1', '-o', '-', file)
+    raise Failure.new('ARCHIVE', 'ARCHIVE_CONTENT_INVALID') unless ok
+    data = Plist.parse_xml(text)
+    raise Failure.new('ARCHIVE', 'ARCHIVE_CONTENT_INVALID') unless data.is_a?(Hash)
+    data
+  rescue Failure
+    raise
+  rescue StandardError
+    raise Failure.new('ARCHIVE', 'ARCHIVE_CONTENT_INVALID')
+  end
+
   def self.verify_archive!(path:, assets:, commands: ChaiSigningAssets::Commands.new, on_stage: ->(_) {})
     app = File.join(path, 'Products/Applications/ChaiClassics.app')
     raise Failure.new('ARCHIVE', 'ARCHIVE_CONTENT_INVALID') unless File.directory?(app)
-    read_plist = lambda do |file|
-      text, ok = commands.run('plutil', '-convert', 'json', '-o', '-', file)
-      raise Failure.new('ARCHIVE', 'ARCHIVE_CONTENT_INVALID') unless ok
-      data = JSON.parse(text)
-      raise Failure.new('ARCHIVE', 'ARCHIVE_CONTENT_INVALID') unless data.is_a?(Hash)
-      data
-    end
-    info = read_plist.call(File.join(path, 'Info.plist'))
+    info = read_archive_plist!(File.join(path, 'Info.plist'), commands: commands)
     unless info['ArchiveVersion'] == 2 && info.dig('ApplicationProperties', 'ApplicationPath') == 'Applications/ChaiClassics.app'
       raise Failure.new('ARCHIVE', 'ARCHIVE_CONTENT_INVALID')
     end
     on_stage.call('ARCHIVE_FORMAT_VALID')
-    app_info = read_plist.call(File.join(app, 'Info.plist'))
+    app_info = read_archive_plist!(File.join(app, 'Info.plist'), commands: commands)
     unless app_info['CFBundleIdentifier'] == ChaiSigning::APP_IDENTIFIER && app_info['CFBundleSupportedPlatforms'].is_a?(Array) && app_info['CFBundleSupportedPlatforms'].include?('iPhoneOS')
       raise Failure.new('ARCHIVE', 'ARCHIVE_APP_INVALID')
     end

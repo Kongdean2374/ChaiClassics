@@ -60,6 +60,11 @@ begin
       'CODE_SIGNING_REQUIRED=NO','CODE_SIGN_IDENTITY=','archive')
     ReleaseFixture.check(built.success?)
     puts 'PASS: real Xcode created the unsigned iOS fixture archive without signing credentials.'
+    stage = 'ARCHIVE_TYPED_METADATA'
+    archive_info = ChaiRelease.read_archive_plist!(File.join(archive,'Info.plist'))
+    ReleaseFixture.check(archive_info['ArchiveVersion']==2 && archive_info.dig('ApplicationProperties','ApplicationPath')=='Applications/ChaiClassics.app')
+    ReleaseFixture.check(archive_info['CreationDate'].is_a?(Time) || archive_info['CreationDate'].is_a?(DateTime))
+    puts 'PASS: production archive metadata parser reads real Xcode archive format and preserves its native date type.'
     export = lambda do |method|
       path = File.join(directory,'options.plist')
       File.write(path,plist.merge('method' => method).to_plist)

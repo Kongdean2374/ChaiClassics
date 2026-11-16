@@ -111,7 +111,7 @@ Dir.mktmpdir('release-report-test-') do |directory|
   File.binwrite(File.join(app,'embedded.mobileprovision'),'fixture-cms')
   commands = Object.new
   commands.define_singleton_method(:run) do |*argv, input: nil|
-    return [JSON.generate(Plist.parse_xml(argv.last)),true] if argv.first == 'plutil'
+    return [File.read(argv.last),argv[2]=='xml1'] if argv.first == 'plutil'
     if argv[1] == '-d'
       prefix = argv[2].delete_prefix('--extract-certificates=')
       File.binwrite(prefix+'0',cert.to_der)

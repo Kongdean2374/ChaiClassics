@@ -12,7 +12,7 @@ Dir.mktmpdir('archive-session-fixture-') do |root|
   commands = Object.new
   commands.define_singleton_method(:run) do |*argv, input: nil|
     if argv.first == 'plutil'
-      return [JSON.generate(Plist.parse_xml(argv.last)),true]
+      return [File.read(argv.last),argv[2]=='xml1']
     elsif argv[1] == '-d'
       File.binwrite(argv[2].delete_prefix('--extract-certificates=')+'0',cert.to_der)
     end
@@ -48,7 +48,7 @@ Dir.mktmpdir('archive-session-fixture-') do |root|
     data=attempt.call(bad,'ARCHIVE_BUILD_FAILED') { raise 'Builder must not be called' }
     check.call(data['failure']=='ARCHIVE_SANDBOX_INVALID');count+=1
     app=File.join(options[:archive_path],'Products/Applications/ChaiClassics.app');FileUtils.mkdir_p(app)
-    info={'ArchiveVersion'=>2,'ApplicationProperties'=>{'ApplicationPath'=>'Applications/ChaiClassics.app'}}
+    info={'ArchiveVersion'=>2,'CreationDate'=>Time.now,'ApplicationProperties'=>{'ApplicationPath'=>'Applications/ChaiClassics.app'}}
     File.write(File.join(options[:archive_path],'Info.plist'),info.to_plist)
     app_info={'CFBundleIdentifier'=>ChaiSigning::APP_IDENTIFIER,'CFBundleSupportedPlatforms'=>['iPhoneOS']}
     File.write(File.join(app,'Info.plist'),app_info.to_plist)
