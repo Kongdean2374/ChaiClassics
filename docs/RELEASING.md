@@ -54,7 +54,7 @@ GitHub Actions → **Initialize Signing (match)** → Run workflow → main。Te
 
 Actions → **TestFlight** → Run workflow → main 與版本（如 0.1.0）。CI 成功後在 macOS 用 `match readonly: true` 下載並解密既有資產到臨時 keychain，再 Release archive／export IPA、上傳 ASC。
 
-Readonly 缺資產、過期或無有效私鑰就停止，**不退回建立模式**。先檢查初始化結果及同一 MATCH_PASSWORD，再依明確需要手動執行初始化。TestFlight workflow 不接受手動 p12。
+一般 TestFlight 的 Developer API Key 只用於 ASC App／build 查詢及上傳，不探測 Certificates／Profiles 管理 API；管理權限探測僅在 Admin 初始化 lane。Readonly 缺資產、過期或無有效私鑰就停止，**不退回建立模式**。先檢查初始化結果及同一 MATCH_PASSWORD，再依明確需要手動執行初始化。TestFlight workflow 不接受手動 p12。
 
 版本三段數字手動輸入。Build number 固定 `GITHUB_RUN_NUMBER.0.GITHUB_RUN_ATTEMPT`（上限 9999.0.99）；ASC 同版本若已用或倒退則拒絕，應新建 TestFlight dispatch，不重跑早於現有 build 的 run。初始化、TestFlight、App Store 共用 concurrency，防止同 repo 同時修改／使用簽署資產。
 

@@ -4,7 +4,7 @@ ChaiClassics 原始碼 Public、未加 LICENSE。簽署資產只放 **Private Ko
 
 所有簽署必須 workflow_dispatch + trusted main，先免簽署 CI，再 environment 注入憑證。PR／push CI 無 Apple Secrets，不使用 pull_request_target。production／signing-bootstrap 的 required reviewers 與 main 部署保護需管理員在 Settings 啟用，YAML 名稱不代表已配置。
 
-初始化 Job 僅在 signing-bootstrap Environment 讀取 SIGNING_ASC_KEY_ID／SIGNING_ASC_ISSUER_ID／SIGNING_ASC_API_KEY_P8 Admin Secrets，再映射到 ASC_*。一般 TestFlight／App Store 保留原本 Developer API Key；Admin Key 不傳給 CI 或日常上傳。
+初始化 Job 僅在 signing-bootstrap Environment 讀取 SIGNING_ASC_KEY_ID／SIGNING_ASC_ISSUER_ID／SIGNING_ASC_API_KEY_P8 Admin Secrets，再映射到 ASC_*。一般 TestFlight／App Store 保留原本 Developer API Key；Admin Key 不傳給 CI 或日常上傳。readonly TestFlight 不探測 Apple 憑證／Profile 管理 API，不把初始化權限強加給 Developer Key。
 
 只有 Initialize Signing lane 是 match readonly:false。TestFlight 固定 readonly:true，Matchfile 的安全預設也是 true。限定一個 Bundle ID／Team，沒有 nuke、revoke、強制更新或自動撤銷其他 App 證書的功能；配額不足就失敗。不要為解決錯誤撤銷不明用途的團隊憑證。
 

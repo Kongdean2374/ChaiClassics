@@ -139,7 +139,7 @@ platform :ios do
     trusted_dispatch!
     version = validated_version
     key = api_key
-    verify_apple_access!
+    # Developer upload keys need no Certificates/Profiles portal access in readonly mode.
     number = next_apple_build(key, version)
     with_match_signing(key, readonly: true) do |profile_uuid, identity, keychain|
       build_app(project: project_path("ChaiClassics.xcodeproj"), scheme: "ChaiClassics", configuration: "Release", clean: true,

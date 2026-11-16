@@ -39,3 +39,11 @@ check(!bootstrap.fetch('jobs').fetch('ci').key?('secrets'), 'Admin keys must not
 check(job.fetch('steps').any? { |step| step['run'] == 'python3 scripts/run_signing_lane.py initialize_signing' }, 'retain credential-safe log wrapper')
 check(job.fetch('steps').all? { |step| !step.fetch('run', '').include?('secrets.') }, 'never interpolate secrets directly into shell')
 puts "PASS: #{workflows.length} workflow YAML files parsed; bootstrap Admin mapping, Developer-key isolation, shared secrets, manual main guards and safe runner verified."
+
+fastfile = File.read(File.join(root, 'fastlane/Fastfile'))
+bootstrap_lane = fastfile.split('lane :initialize_signing do', 2).last.split('lane :beta do', 2).first
+beta_lane = fastfile.split('lane :beta do', 2).last.split('lane :prepare_store do', 2).first
+check(bootstrap_lane.include?('verify_apple_access!'), 'Admin bootstrap must verify Apple management permissions')
+check(!beta_lane.include?('verify_apple_access!'), 'Developer readonly upload must not require Apple certificate/profile management permissions')
+check(beta_lane.include?('with_match_signing(key, readonly: true)'), 'Developer upload must remain match readonly')
+puts 'PASS: Admin-only portal permission probe; Developer readonly TestFlight does not require management permissions.'
