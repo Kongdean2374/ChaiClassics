@@ -1,4 +1,5 @@
 require 'yaml'
+require 'open3'
 
 root = File.expand_path('..', __dir__)
 def check(condition, message)
@@ -82,6 +83,15 @@ intel_jobs.each do |entry|
   check(entry.fetch('steps').any? { |step| step['run'] == 'bash scripts/select_xcode.sh' }, 'Intel runner must explicitly select Xcode 26+ instead of its older default')
 end
 puts 'PASS: Simulator, real macOS regressions and TestFlight use explicit Intel hosts and retain Xcode 26+ selection.'
+test_job = workflows.fetch('ci.yml').fetch('jobs').fetch('test')
+phase_runs = test_job.fetch('steps').map { |step| step.fetch('run', '') }.select { |run| run.start_with?('bash scripts/ci.sh') }
+check(phase_runs == %w[verify unit build ui].map { |phase| 'bash scripts/ci.sh ' + phase }, 'all four verification phases remain required and ordered')
+check(test_job['timeout-minutes'] == 45, 'Intel CI has a bounded total runtime')
+ci_script = File.read(File.join(root, 'scripts/ci.sh'))
+check(ci_script.include?('-test-timeouts-enabled YES') && ci_script.include?('-default-test-execution-time-allowance 180') && ci_script.include?('-maximum-test-execution-time-allowance 240'), 'Intel UI allowance stays enabled and bounded')
+_, _, invalid_phase = Open3.capture3('bash', File.join(root, 'scripts/ci.sh'), 'unknown-phase')
+check(invalid_phase.exitstatus == 64, 'unknown CI phase must fail instead of silently skipping verification')
+puts 'PASS: visible ordered CI phases, bounded Intel UI/total runtimes and rejected unknown phase; all tests retained.'
 check(!extraction_job.key?('environment') && !extraction_job.key?('env'), 'extraction regression receives no signing environment or secrets')
 extraction_runs = extraction_job.fetch('steps').map { |step| step.fetch('run', '') }.join("\n")
 check(extraction_runs.include?('bundle exec ruby tests/codesign_extraction_macos_test.rb') && !extraction_runs.include?('secrets.') && !extraction_runs.include?('run_signing_lane'), 'real codesign extraction CI runs without match or Apple operations')

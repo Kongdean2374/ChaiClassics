@@ -13,7 +13,7 @@ permissions:
 jobs:
   test:
     runs-on: macos-15-intel
-    timeout-minutes: 35
+    timeout-minutes: 45
     env:
       COMPATIBILITY_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
     steps:
@@ -23,8 +23,14 @@ jobs:
           persist-credentials: false
       - name: Select installed Xcode 26 or newer
         run: bash scripts/select_xcode.sh
-      - name: Verify puzzles, Swift tests, build and iOS UI tests
-        run: bash scripts/ci.sh
+      - name: Verify puzzles, save compatibility and generated project
+        run: bash scripts/ci.sh verify
+      - name: Run Swift game and save tests
+        run: bash scripts/ci.sh unit
+      - name: Build iOS Simulator app
+        run: bash scripts/ci.sh build
+      - name: Run all iOS UI tests
+        run: bash scripts/ci.sh ui
       - name: Preserve verification report and simulator results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

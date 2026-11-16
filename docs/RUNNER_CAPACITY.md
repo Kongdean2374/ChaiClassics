@@ -10,6 +10,10 @@ match readonly、既有私鑰／憑證配對、Developer API Key、Secrets、Env
 
 Intel 也可能排隊；切換是避開已確認的 ARM64 容量瓶頸，不代表保證立即取得機器。須以新 main 的完整 CI 實際驗證 Intel 編譯、Swift／UI 測試與發布工具相容性。
 
+首次 Intel CI [43935523740](https://github.com/Kongdean2374/ChaiClassics/actions/runs/43935523740) 已成功取得兩台機器並選用 Xcode 26.3。19 項 Swift 測試與 App 編譯通過；雙語法律 UI 流程實測 162 秒，超過原 120 秒上限，後續測試遇到 app termination 失敗並重啟 runner。重啟後各 UI 操作有通過紀錄，但整輪仍為 failure，不能當作完整通過。
+
+因此將 UI 每項預設／最大時間改成 180／240 秒，仍啟用 XCTest timeouts；整個 App 工作限制 45 分鐘。全部 UI 斷言、測試數量、序列執行與測試內容保留。`scripts/ci.sh` 預設仍跑完整流程；CI 分開呼叫 verify／unit／build／ui，直接顯示題庫相容性、Swift 測試、App 編譯及 UI 測試四個階段。未知階段會失敗，不能靜默跳過。
+
 ## 手動重新觸發
 
 舊 Run 綁定舊 commit；對舊 Run 按 Re-run 仍使用舊 runner 設定。新 main 的 CI 通過後，從 TestFlight 工作流程頁面新開 Run workflow，選 main、Version 0.1.1、Apple Team ID 留空。
