@@ -1,0 +1,121 @@
+require "base64"
+require "tmpdir"
+require "securerandom"
+require "open3"
+require "fileutils"
+require "plist"
+
+def required!(*names)
+  missing = names.select { |name| ENV[name].to_s.empty? }
+  UI.user_error!("Missing GitHub Secrets: #{missing.join(', ')}. See docs/RELEASING.md") unless missing.empty?
+end
+
+def command!(*args)
+  stdout, _stderr, status = Open3.capture3(*args)
+  UI.user_error!("Signing command failed: #{File.basename(args.first)} (details suppressed to protect signing data)") unless status.success?
+  stdout
+end
+
+def api_key
+  required!("ASC_KEY_ID", "ASC_ISSUER_ID", "ASC_API_KEY_P8_BASE64")
+  app_store_connect_api_key(key_id: ENV.fetch("ASC_KEY_ID"), issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+    key_content: ENV.fetch("ASC_API_KEY_P8_BASE64"), is_key_content_base64: true, in_house: false)
+end
+
+def with_signing
+  required!("APPLE_TEAM_ID", "DISTRIBUTION_CERT_P12_BASE64", "DISTRIBUTION_CERT_PASSWORD", "APPSTORE_PROFILE_BASE64")
+  Dir.mktmpdir("chai-signing-") do |dir|
+    keychain = File.join(dir, "signing.keychain-db")
+    password = SecureRandom.hex(32)
+    cert = File.join(dir, "distribution.p12")
+    profile = File.join(dir, "app.mobileprovision")
+    File.binwrite(cert, Base64.strict_decode64(ENV.fetch("DISTRIBUTION_CERT_P12_BASE64")))
+    File.binwrite(profile, Base64.strict_decode64(ENV.fetch("APPSTORE_PROFILE_BASE64")))
+    File.chmod(0600, cert); File.chmod(0600, profile)
+    original = command!("security", "list-keychains", "-d", "user").scan(/"([^"]+)"/).flatten
+    installed = backup = nil
+    begin
+      command!("security", "create-keychain", "-p", password, keychain)
+      command!("security", "set-keychain-settings", "-lut", "21600", keychain)
+      command!("security", "unlock-keychain", "-p", password, keychain)
+      command!("security", "list-keychains", "-d", "user", "-s", keychain, *original)
+      command!("security", "import", cert, "-P", ENV.fetch("DISTRIBUTION_CERT_PASSWORD"), "-A", "-t", "cert", "-f", "pkcs12", "-k", keychain)
+      command!("security", "set-key-partition-list", "-S", "apple-tool:,apple:,codesign:", "-k", password, keychain)
+      data = Plist.parse_xml(command!("security", "cms", "-D", "-i", profile))
+      UI.user_error!("Provisioning profile must match cc.chaihome.chaiclassics and APPLE_TEAM_ID") unless
+        data.dig("Entitlements", "application-identifier") == "#{ENV.fetch('APPLE_TEAM_ID')}.cc.chaihome.chaiclassics" && data.fetch("TeamIdentifier").include?(ENV.fetch("APPLE_TEAM_ID"))
+      UI.user_error!("Profile must be a non-expired App Store distribution profile") if
+        data["ProvisionedDevices"] || data["ProvisionsAllDevices"] || data.dig("Entitlements", "get-task-allow") || data.fetch("ExpirationDate") <= Time.now
+      profile_dir = File.expand_path("~/Library/MobileDevice/Provisioning Profiles")
+      FileUtils.mkdir_p(profile_dir)
+      installed = File.join(profile_dir, "#{data.fetch('UUID')}.mobileprovision")
+      backup = File.binread(installed) if File.exist?(installed)
+      FileUtils.cp(profile, installed)
+      identity = command!("security", "find-identity", "-v", "-p", "codesigning", keychain)[/\b([A-F0-9]{40})\b/, 1]
+      UI.user_error!("No valid signing identity in uploaded certificate") unless identity
+      yield data.fetch("UUID"), identity, keychain
+    ensure
+      backup ? File.binwrite(installed, backup) : FileUtils.rm_f(installed) if installed
+      Open3.capture3("security", "list-keychains", "-d", "user", "-s", *original)
+      Open3.capture3("security", "delete-keychain", keychain)
+    end
+  end
+end
+
+def validated_version
+  version = ENV.fetch("RELEASE_VERSION")
+  UI.user_error!("RELEASE_VERSION must be three numeric components") unless version.match?(/\A\d+\.\d+\.\d+\z/)
+  version
+end
+
+def next_apple_build(key, version)
+  # ASC provides authoritative monotonicity, also covers manual uploads outside GitHub.
+  app = Spaceship::ConnectAPI::App.find("cc.chaihome.chaiclassics")
+  UI.user_error!("Create App Store Connect App Record first") unless app
+  builds = Spaceship::ConnectAPI::Build.all(app_id: app.id, version: version, sort: "-uploadedDate", limit: 100)
+  previous = builds.map do |build|
+    components = build.version.to_s.split(".").map(&:to_i)
+    components.length == 1 ? components[0] : components[0] * 10000 + components.fetch(1, 0) * 100 + components.fetch(2, 0)
+  end.max || 0
+  # UTC minutes since epoch + attempt, compared with latest accepted build.
+  candidate = [((Time.now.utc - Time.utc(2026, 1, 1)) / 60).to_i * 100 + Integer(ENV.fetch("GITHUB_RUN_ATTEMPT")), previous + 1].max
+  UI.user_error!("Build number capacity exceeded") if candidate >= 100_000_000
+  "#{candidate / 10000}.#{candidate / 100 % 100}.#{candidate % 100}"
+end
+
+default_platform(:ios)
+platform :ios do
+  desc "Signed archive and manual TestFlight upload; never triggered by push"
+  lane :beta do
+    version = validated_version
+    key = api_key
+    number = next_apple_build(key, version)
+    with_signing do |profile_uuid, identity, keychain|
+      build_app(project: "ChaiClassics.xcodeproj", scheme: "ChaiClassics", configuration: "Release", clean: true,
+        output_directory: "build/release", output_name: "ChaiClassics.ipa", export_method: "app-store-connect",
+        codesigning_identity: identity,
+        xcargs: "DEVELOPMENT_TEAM=#{ENV.fetch('APPLE_TEAM_ID')} PROVISIONING_PROFILE_SPECIFIER=#{profile_uuid} MARKETING_VERSION=#{version} CURRENT_PROJECT_VERSION=#{number} OTHER_CODE_SIGN_FLAGS='--keychain #{keychain}'",
+        export_options: { signingStyle: "manual", teamID: ENV.fetch("APPLE_TEAM_ID"), provisioningProfiles: { "cc.chaihome.chaiclassics" => profile_uuid } })
+      notes = "Commit #{ENV.fetch('GITHUB_SHA')} | run #{ENV.fetch('GITHUB_RUN_ID')}, attempt #{ENV.fetch('GITHUB_RUN_ATTEMPT')}"
+      upload_to_testflight(api_key: key, app_identifier: "cc.chaihome.chaiclassics", ipa: "build/release/ChaiClassics.ipa", changelog: notes, skip_waiting_for_build_processing: true)
+      File.write("build/release/provenance.txt", "version=#{version}\nbuild=#{number}\ncommit=#{ENV.fetch('GITHUB_SHA')}\n")
+    end
+  end
+
+  desc "Select an iPhone-tested TestFlight build and prepare metadata, without submission or public release"
+  lane :prepare_store do
+    version = validated_version
+    key = api_key
+    required!("TESTED_BUILD_NUMBER", "RELEASE_NOTES", "TESTED_COMMIT")
+    UI.user_error!("Selected build must come from the current reviewed main commit") unless ENV.fetch("TESTED_COMMIT") == ENV.fetch("GITHUB_SHA")
+    # Merchant supplies and reviews real metadata/screenshots directly in ASC.
+    # Only upload this version's release notes and select an already-tested build.
+    Dir.mktmpdir("chai-metadata-") do |metadata|
+      FileUtils.mkdir_p(File.join(metadata, "zh-Hant"))
+      File.write(File.join(metadata, "zh-Hant", "release_notes.txt"), ENV.fetch("RELEASE_NOTES"))
+      deliver(api_key: key, app_identifier: "cc.chaihome.chaiclassics", app_version: version, build_number: ENV.fetch("TESTED_BUILD_NUMBER"),
+        metadata_path: metadata, skip_screenshots: true, skip_binary_upload: true,
+        submit_for_review: false, automatic_release: false, force: true, run_precheck_before_submit: false)
+    end
+  end
+end

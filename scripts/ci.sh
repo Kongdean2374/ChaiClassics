@@ -1,9 +1,12 @@
 #!/bin/bash
 set -euo pipefail
+ruby -c fastlane/Fastfile
+bash -n scripts/select_xcode.sh
+python3 scripts/check_compatibility.py
 python3 scripts/verify_sudoku.py --report sudoku-verification.json
 python3 scripts/create_project.py
 git diff --exit-code -- ChaiClassics.xcodeproj
-swift test --parallel
+swift test
 xcodebuild -project ChaiClassics.xcodeproj -scheme ChaiClassics -destination 'generic/platform=iOS Simulator' -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO build
 DESTINATION=$(python3 - <<'PY'
 import json,subprocess,platform
@@ -13,4 +16,4 @@ if not phones: raise SystemExit('No available iPhone simulator')
 print('platform=iOS Simulator,arch='+platform.machine()+',id='+phones[0]['udid'])
 PY
 )
-xcodebuild -project ChaiClassics.xcodeproj -scheme ChaiClassics -destination "$DESTINATION" -derivedDataPath build/DerivedData -resultBundlePath build/UITests.xcresult CODE_SIGNING_ALLOWED=NO ONLY_ACTIVE_ARCH=YES test
+xcodebuild -project ChaiClassics.xcodeproj -scheme ChaiClassics -destination "$DESTINATION" -derivedDataPath build/DerivedData -resultBundlePath build/UITests.xcresult CODE_SIGNING_ALLOWED=NO ONLY_ACTIVE_ARCH=YES -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 90 -maximum-test-execution-time-allowance 120 test

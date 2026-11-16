@@ -11,8 +11,13 @@ jobs:
   test:
     runs-on: macos-15
     timeout-minutes: 35
+    env:
+      COMPATIBILITY_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - name: Select installed Xcode 26 or newer
         run: bash scripts/select_xcode.sh
       - name: Verify puzzles, Swift tests, build and iOS UI tests

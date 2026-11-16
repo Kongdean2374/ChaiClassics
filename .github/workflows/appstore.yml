@@ -1,0 +1,63 @@
+name: Prepare App Store (no submission)
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version already tested in TestFlight'
+        required: true
+      build_number:
+        description: 'Exact TestFlight build number'
+        required: true
+      tested_commit:
+        description: 'Full commit SHA recorded by the tested TestFlight build'
+        required: true
+      release_notes:
+        description: 'Release notes for this version'
+        required: true
+      iphone_tested:
+        description: 'I completed docs/TESTING.md on a real iPhone for this build'
+        type: boolean
+        required: true
+        default: false
+      metadata_reviewed:
+        description: 'I reviewed App Store metadata, screenshots and privacy declarations'
+        type: boolean
+        required: true
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: apple-release
+  cancel-in-progress: false
+jobs:
+  ci:
+    if: github.ref == 'refs/heads/main' && inputs.iphone_tested && inputs.metadata_reviewed
+    uses: ./.github/workflows/ci.yml
+  prepare:
+    needs: ci
+    if: github.ref == 'refs/heads/main' && inputs.iphone_tested && inputs.metadata_reviewed
+    environment: production
+    runs-on: macos-15
+    timeout-minutes: 25
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_API_KEY_P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
+      RELEASE_VERSION: ${{ inputs.version }}
+      TESTED_BUILD_NUMBER: ${{ inputs.build_number }}
+      TESTED_COMMIT: ${{ inputs.tested_commit }}
+      RELEASE_NOTES: ${{ inputs.release_notes }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - run: python3 scripts/check_release_secrets.py
+      - uses: ruby/setup-ruby@v1.207.0
+        with:
+          ruby-version: '3.3'
+          bundler: '2.5.23'
+      - run: |
+          bundle config set path vendor/bundle
+          bundle install --jobs 4
+      - name: Select tested build and prepare version (manual submission remains required)
+        run: bundle exec fastlane ios prepare_store

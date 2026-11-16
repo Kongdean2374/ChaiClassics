@@ -1,0 +1,55 @@
+name: TestFlight
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g. 0.1.0)'
+        required: true
+        default: '0.1.0'
+permissions:
+  contents: read
+concurrency:
+  group: apple-release
+  cancel-in-progress: false
+jobs:
+  ci:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/ci.yml
+  upload:
+    needs: ci
+    if: github.ref == 'refs/heads/main'
+    environment: testflight
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_API_KEY_P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      DISTRIBUTION_CERT_P12_BASE64: ${{ secrets.DISTRIBUTION_CERT_P12_BASE64 }}
+      DISTRIBUTION_CERT_PASSWORD: ${{ secrets.DISTRIBUTION_CERT_PASSWORD }}
+      APPSTORE_PROFILE_BASE64: ${{ secrets.APPSTORE_PROFILE_BASE64 }}
+      RELEASE_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Check signing configuration without printing secrets
+        run: python3 scripts/check_release_secrets.py --signing
+      - run: bash scripts/select_xcode.sh
+      - uses: ruby/setup-ruby@v1.207.0
+        with:
+          ruby-version: '3.3'
+          bundler: '2.5.23'
+      - name: Install pinned fastlane
+        run: |
+          bundle config set path vendor/bundle
+          bundle install --jobs 4
+      - name: Archive, sign and upload
+        run: bundle exec fastlane ios beta
+      - name: Preserve build provenance (no signing files or IPA)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: testflight-provenance
+          path: build/release/provenance.txt
+          if-no-files-found: error
