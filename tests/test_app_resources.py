@@ -60,7 +60,8 @@ class AppResourceTests(unittest.TestCase):
     def test_v010_rules_saves_and_puzzles_are_unchanged(self):
         # Frozen SHA-256 values from released commit 13961946e203115783ffa68924195240062c0e23.
         # This also runs in release-tooling's shallow checkout, without fetching Git history.
-        # Signing code/workflows remain outside this App redesign.
+        # Signing behavior remains frozen. The later runner-capacity fix may
+        # change only TestFlight's single hosted CPU label, normalized below.
         released={
             'Core/Sudoku.swift': '25c829a99f7e70d5e4a11f1f92329727371bc3d9aa7837a88ee088675e5fc4cb',
             'Core/Minesweeper.swift': '9be7abf2be3c5762fc837148f73cd23049ddefbce5eef5cb490673163a40437d',
@@ -75,7 +76,12 @@ class AppResourceTests(unittest.TestCase):
             '.github/workflows/initialize-signing.yml': 'c3a4ab2713229f4111d94156db9382e4027c48ae006a4b1b58298fe75a0fb93b',
         }
         for path, expected in released.items():
-            self.assertEqual(hashlib.sha256((ROOT/path).read_bytes()).hexdigest(),expected,path)
+            actual=(ROOT/path).read_bytes()
+            if path=='.github/workflows/testflight.yml':
+                intel=b'    runs-on: macos-15-intel\n'
+                self.assertEqual(actual.count(intel),1,'exactly one explicit Intel upload runner')
+                actual=actual.replace(intel,b'    runs-on: macos-15\n')
+            self.assertEqual(hashlib.sha256(actual).hexdigest(),expected,path)
     def test_test_sandbox_never_resets_production_storage(self):
         source=(ROOT/'App/UITestBootstrap.swift').read_text()
         self.assertTrue(source.startswith('#if DEBUG && targetEnvironment(simulator)'))

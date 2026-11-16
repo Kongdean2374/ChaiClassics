@@ -76,7 +76,12 @@ check(!fastfile.include?('readonly: false'), 'all post-bootstrap lanes are reado
 puts 'PASS: existing-asset-only manual verification; no ASC key, certificate creation or upload.'
 
 extraction_job = workflows.fetch('ci.yml').fetch('jobs').fetch('codesign-extraction')
-check(extraction_job['runs-on'] == 'macos-15', 'real codesign regression runs on macOS')
+intel_jobs = [workflows.fetch('ci.yml').fetch('jobs').fetch('test'), extraction_job, flight.fetch('jobs').fetch('upload')]
+intel_jobs.each do |entry|
+  check(entry['runs-on'] == 'macos-15-intel', 'CI and TestFlight use the explicit Intel pool, without paid larger-runner labels')
+  check(entry.fetch('steps').any? { |step| step['run'] == 'bash scripts/select_xcode.sh' }, 'Intel runner must explicitly select Xcode 26+ instead of its older default')
+end
+puts 'PASS: Simulator, real macOS regressions and TestFlight use explicit Intel hosts and retain Xcode 26+ selection.'
 check(!extraction_job.key?('environment') && !extraction_job.key?('env'), 'extraction regression receives no signing environment or secrets')
 extraction_runs = extraction_job.fetch('steps').map { |step| step.fetch('run', '') }.join("\n")
 check(extraction_runs.include?('bundle exec ruby tests/codesign_extraction_macos_test.rb') && !extraction_runs.include?('secrets.') && !extraction_runs.include?('run_signing_lane'), 'real codesign extraction CI runs without match or Apple operations')
