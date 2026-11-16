@@ -31,7 +31,7 @@ struct HomeView: View {
             .background(Color(.systemGroupedBackground))
             .navigationTitle("經典小遊戲")
             .navigationDestination(for: GameID.self) { id in
-                switch id { case .sudoku: SudokuMenuView() }
+                switch id { case .sudoku: SudokuMenuView(); case .minesweeper: MinesMenuView() }
             }
             .toolbar { NavigationLink { SettingsView() } label: { Image(systemName: "gearshape") }.accessibilityLabel("設定") }
         }

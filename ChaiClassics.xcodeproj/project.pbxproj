@@ -4,8 +4,12 @@
 71EA824A2B9EE5AF7380F148 = {isa = PBXBuildFile; fileRef = 0E24B7B46EF7613D0971BFD6;};
 1914F990295816D67A130418 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "App/HomeView.swift"; sourceTree = SOURCE_ROOT;};
 61CF06C35A089820E023FB9C = {isa = PBXBuildFile; fileRef = 1914F990295816D67A130418;};
+C36C0A6F9473E96D9EC974A4 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "App/MinesView.swift"; sourceTree = SOURCE_ROOT;};
+6F9B132481E6FCCAA387ABCE = {isa = PBXBuildFile; fileRef = C36C0A6F9473E96D9EC974A4;};
 17FE544553AE9F64195314A5 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "App/SudokuView.swift"; sourceTree = SOURCE_ROOT;};
 C0A9713B7041CD3F07C9C54D = {isa = PBXBuildFile; fileRef = 17FE544553AE9F64195314A5;};
+62D0101AD78C49CC82D3B56F = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "App/ZoomBoard.swift"; sourceTree = SOURCE_ROOT;};
+6DE52821FA256AB9C36CC5DC = {isa = PBXBuildFile; fileRef = 62D0101AD78C49CC82D3B56F;};
 C5FAFA8EAF903A76CE776A67 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UITests/ChaiClassicsUITests.swift"; sourceTree = SOURCE_ROOT;};
 876BFB2DEC4C490B2F2AB57D = {isa = PBXBuildFile; fileRef = C5FAFA8EAF903A76CE776A67;};
 3685E330EC5277A9DD5661C6 = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = App/Assets.xcassets; sourceTree = SOURCE_ROOT;};
@@ -15,7 +19,7 @@ B58968AD397FA1A20599C9F3 = {isa = PBXFileReference; explicitFileType = wrapper.c
 582681C2EAE02B3F3D399C0C = {isa = XCLocalSwiftPackageReference; relativePath = .;};
 94A0426E8D3203DA5468CCF0 = {isa = XCSwiftPackageProductDependency; package = 582681C2EAE02B3F3D399C0C; productName = ChaiCore;};
 1C25D3719CB905525B1D275B = {isa = PBXBuildFile; productRef = 94A0426E8D3203DA5468CCF0;};
-12F228D423625990E510D345 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (71EA824A2B9EE5AF7380F148,61CF06C35A089820E023FB9C,C0A9713B7041CD3F07C9C54D,); runOnlyForDeploymentPostprocessing = 0;};
+12F228D423625990E510D345 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (71EA824A2B9EE5AF7380F148,61CF06C35A089820E023FB9C,6F9B132481E6FCCAA387ABCE,C0A9713B7041CD3F07C9C54D,6DE52821FA256AB9C36CC5DC,); runOnlyForDeploymentPostprocessing = 0;};
 564153AA19766FD682F23DA4 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (04200CFFD12D083534B07BB1,); runOnlyForDeploymentPostprocessing = 0;};
 02ED7495DE965AE8AC7554FB = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (1C25D3719CB905525B1D275B,); runOnlyForDeploymentPostprocessing = 0;};
 0FF2C5F9A662AE7FCE4DD541 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (876BFB2DEC4C490B2F2AB57D,); runOnlyForDeploymentPostprocessing = 0;};
@@ -34,6 +38,6 @@ DE58E2B17C19600779694943 = {isa = PBXTargetDependency; target = C13732C8E715C9BE
 C13732C8E715C9BEE4FA51C9 = {isa = PBXNativeTarget; buildConfigurationList = F37922C48DA5978D02C9E50E; buildPhases = (12F228D423625990E510D345,02ED7495DE965AE8AC7554FB,564153AA19766FD682F23DA4,); buildRules = (); dependencies = (); name = ChaiClassics; packageProductDependencies = (94A0426E8D3203DA5468CCF0,); productName = ChaiClassics; productReference = E6FC57C251E9E1BEC1D3C0D2; productType = "com.apple.product-type.application";};
 5A84779F73F7B6419BDB1882 = {isa = PBXNativeTarget; buildConfigurationList = 2C89FC06BA9452D155609FB8; buildPhases = (0FF2C5F9A662AE7FCE4DD541,85E7CC12DF00E9455E70D716,); buildRules = (); dependencies = (DE58E2B17C19600779694943,); name = ChaiClassicsUITests; productName = ChaiClassicsUITests; productReference = B58968AD397FA1A20599C9F3; productType = "com.apple.product-type.bundle.ui-testing";};
 FBDC4F23F93125BBEEAE800C = {isa = PBXGroup; children = (E6FC57C251E9E1BEC1D3C0D2,B58968AD397FA1A20599C9F3,); name = Products; sourceTree = "<group>";};
-325F10A6957A34D66CB8C0E4 = {isa = PBXGroup; children = (0E24B7B46EF7613D0971BFD6,1914F990295816D67A130418,17FE544553AE9F64195314A5,C5FAFA8EAF903A76CE776A67,3685E330EC5277A9DD5661C6,FBDC4F23F93125BBEEAE800C,); sourceTree = "<group>";};
+325F10A6957A34D66CB8C0E4 = {isa = PBXGroup; children = (0E24B7B46EF7613D0971BFD6,1914F990295816D67A130418,C36C0A6F9473E96D9EC974A4,17FE544553AE9F64195314A5,62D0101AD78C49CC82D3B56F,C5FAFA8EAF903A76CE776A67,3685E330EC5277A9DD5661C6,FBDC4F23F93125BBEEAE800C,); sourceTree = "<group>";};
 98F54143AB4E86B28C3AFEE0 = {isa = PBXProject; attributes = {LastUpgradeCheck = 2600; TargetAttributes = {C13732C8E715C9BEE4FA51C9 = {CreatedOnToolsVersion = 26.0;}; 5A84779F73F7B6419BDB1882 = {CreatedOnToolsVersion = 26.0; TestTargetID = C13732C8E715C9BEE4FA51C9;};};}; buildConfigurationList = 862894B703A6DEDF96A9DD6C; compatibilityVersion = "Xcode 14.0"; developmentRegion = "zh-Hant"; knownRegions = (en,"zh-Hant",Base); mainGroup = 325F10A6957A34D66CB8C0E4; productRefGroup = FBDC4F23F93125BBEEAE800C; projectDirPath = ""; projectRoot = ""; packageReferences = (582681C2EAE02B3F3D399C0C,); targets = (C13732C8E715C9BEE4FA51C9,5A84779F73F7B6419BDB1882,);};
 }; rootObject = 98F54143AB4E86B28C3AFEE0;}

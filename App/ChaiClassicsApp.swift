@@ -21,6 +21,7 @@ struct ChaiClassicsApp: App {
 @MainActor
 final class AppModel: ObservableObject {
     @Published private(set) var sudoku = SudokuProgress()
+    @Published private(set) var mines: MinesweeperBoard?
     @Published private(set) var puzzles: [SudokuPuzzle] = []
     @Published var error: String?
     @Published private(set) var blocked: Set<GameID> = []
@@ -45,6 +46,13 @@ final class AppModel: ObservableObject {
             }
             if store?.recoveredBackup == true { error = "已從上一份完整備份恢復數獨進度。" }
         } catch { blocked.insert(.sudoku); self.error = "數獨資料無法讀取，已保留原檔並停止覆寫：\(error.localizedDescription)" }
+        do {
+            if let saved = try store?.load(MinesweeperBoard.self, namespace: "minesweeper") {
+                guard saved.isValidSave else { throw SaveStore.StoreError.corrupt }
+                mines = saved
+            }
+            if store?.recoveredBackup == true { error = "已從上一份完整備份恢復踩地雷進度。" }
+        } catch { blocked.insert(.minesweeper); self.error = "踩地雷資料無法讀取，已停止覆寫：\(error.localizedDescription)" }
     }
 
     func saveSudoku(_ next: SudokuProgress) {
@@ -64,6 +72,19 @@ final class AppModel: ObservableObject {
         var next = sudoku; next.record(board, puzzle: puzzle); saveSudoku(next)
     }
     func hasSave(_ game: GameID) -> Bool {
-        switch game { case .sudoku: return sudoku.currentID != nil }
+        switch game { case .sudoku: return sudoku.currentID != nil; case .minesweeper: return mines != nil }
+    }
+}
+
+
+extension AppModel {
+    func saveMines(_ next: MinesweeperBoard) {
+        guard !blocked.contains(.minesweeper), let store else { return }
+        do { try store.save(next, namespace: "minesweeper"); mines = next }
+        catch { self.error = "寫入失敗，本次操作未儲存：\(error.localizedDescription)" }
+    }
+    func editMines(_ change: (inout MinesweeperBoard) -> Void) {
+        guard var board = mines else { return }
+        change(&board); saveMines(board)
     }
 }
