@@ -89,4 +89,20 @@ class ReleaseReportTests(unittest.TestCase):
             report=self.report('UPLOAD_AUTH');report.update(http_status=status)
             self.assertIsNone(self.load(report))
 
+    def test_prebuild_asset_failure_is_not_mislabeled_as_build_config(self):
+        for partial in [False,True]:
+            def fake_run(*args,**kwargs):
+                kwargs['stdout'].write(b'DO_NOT_PRINT_PRIVATE_DATA [CHAI_SIGNING:ASSET_PROFILE_INSTALL]')
+                report=self.report('BUILD_CONFIG');report.update(status='running',phase=None,reason=None)
+                pathlib.Path(kwargs['env']['CHAI_RELEASE_REPORT_PATH']).write_text(json.dumps(report))
+                if partial:
+                    data=dict(schema=1,readonly=True,stages=assets.STAGES[:-1],profile_source='match_env',path_hint='present',failure=None)
+                    pathlib.Path(kwargs['env']['CHAI_SIGNING_ASSET_REPORT_PATH']).write_text(json.dumps(data))
+                return subprocess.CompletedProcess(args[0],1)
+            output=io.StringIO()
+            with patch.object(runner,'preflight',return_value=0),patch.object(runner.subprocess,'run',side_effect=fake_run),contextlib.redirect_stdout(output):
+                self.assertEqual(runner.main(['beta']),1)
+            self.assertIn('[ASSET_PROFILE_INSTALL]',output.getvalue())
+            self.assertNotIn('[BUILD_CONFIG]',output.getvalue());self.assertNotIn('DO_NOT_PRINT',output.getvalue())
+
 if __name__=='__main__':unittest.main()

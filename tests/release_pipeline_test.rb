@@ -11,7 +11,7 @@ old_error = nil
 ReleaseFixture.silence do
   begin
     FastlaneCore::Configuration.create(Fastlane::Actions::BuildAppAction.available_options,
-      options.merge(export_method: 'app-store-connect'))
+      options.merge(export_method: 'app-store-connect', codesigning_identity: options[:export_options][:signingCertificate]))
   rescue StandardError => error
     old_error = error
   end
@@ -19,6 +19,13 @@ end
 check.call(old_error && old_error.message.include?("Unsupported export_method 'app-store-connect'"))
 puts 'PASS: locked fastlane 2.228.0 rejects the original app-store-connect value before archive/upload.'
 count += 1
+
+legacy_identity = ReleaseFixture.silence do
+  FastlaneCore::Configuration.create(Fastlane::Actions::BuildAppAction.available_options,
+    options.merge(codesigning_identity: options[:export_options][:signingCertificate]))
+end
+check.call(legacy_identity[:codesigning_identity] == options[:export_options][:signingCertificate]); count += 1
+puts 'PASS: locked Gym also accepts a SHA-1 string; it is not the reproduced option-validation failure.'
 
 [ChaiRelease.archive_options(options), ChaiRelease.export_options(options)].each do |params|
   config = ReleaseFixture.silence { ChaiRelease.validate_options!(params) }

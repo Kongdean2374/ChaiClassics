@@ -10,7 +10,7 @@
 
 ## 匯出相容性與驗證界線
 
-Gym 參數與 export plist method 使用相容的 `app-store`。Xcode 26 的新名稱是 app-store-connect；macOS CI 讀取實際選定 Xcode 的 help，要求它仍列出 app-store 舊名稱，並由鎖定 Gym 實際產生 export plist，核對 method、manual、destination=export、signingCertificate、profile mapping 與不自動改 build number。此組合不會讓 Xcode 自行上傳。
+Gym 參數與 export plist method 使用相容的 `app-store`。Xcode 26 的新名稱是 app-store-connect；macOS CI 由鎖定 Gym 實際產生 export plist，核對 method、manual、destination=export、signingCertificate、profile mapping 與不自動改 build number。接著建立真正的 unsigned iOS fixture archive，分別交給 Xcode export parser：不合法 method 必須被拒絕，app-store 必須通過 method 檢查（後續無正式憑證／profile 的失敗是預期範圍）。不以 help 是否列出 deprecated alias 作為唯一證據。此組合不會讓 Xcode 自行上傳。
 
 無 Secrets CI 不執行正式 signed IPA export，也不呼叫 Apple。它證明 options／plist／Xcode 文件相容；真正 archive、export IPA 與 ASC transfer 仍須在使用者手動 TestFlight run 驗收。不可將這些測試稱為首次 TestFlight 已成功。
 
