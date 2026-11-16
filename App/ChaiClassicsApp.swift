@@ -21,6 +21,7 @@ struct ChaiClassicsApp: App {
 @MainActor
 final class AppModel: ObservableObject {
     @Published private(set) var sudoku = SudokuProgress()
+    @Published private(set) var sliding: SlidingBoard?
     @Published private(set) var mines: MinesweeperBoard?
     @Published private(set) var puzzles: [SudokuPuzzle] = []
     @Published var error: String?
@@ -53,6 +54,13 @@ final class AppModel: ObservableObject {
             }
             if store?.recoveredBackup == true { error = "已從上一份完整備份恢復踩地雷進度。" }
         } catch { blocked.insert(.minesweeper); self.error = "踩地雷資料無法讀取，已停止覆寫：\(error.localizedDescription)" }
+        do {
+            if let saved = try store?.load(SlidingBoard.self, namespace: "sliding") {
+                guard saved.isValidSave else { throw SaveStore.StoreError.corrupt }
+                sliding = saved
+            }
+            if store?.recoveredBackup == true { error = "已從上一份完整備份恢復滑塊拼圖進度。" }
+        } catch { blocked.insert(.sliding); self.error = "滑塊拼圖資料無法讀取，已停止覆寫：\(error.localizedDescription)" }
     }
 
     func saveSudoku(_ next: SudokuProgress) {
@@ -72,7 +80,7 @@ final class AppModel: ObservableObject {
         var next = sudoku; next.record(board, puzzle: puzzle); saveSudoku(next)
     }
     func hasSave(_ game: GameID) -> Bool {
-        switch game { case .sudoku: return sudoku.currentID != nil; case .minesweeper: return mines != nil }
+        switch game { case .sudoku: return sudoku.currentID != nil; case .minesweeper: return mines != nil; case .sliding: return sliding != nil }
     }
 }
 
@@ -86,5 +94,18 @@ extension AppModel {
     func editMines(_ change: (inout MinesweeperBoard) -> Void) {
         guard var board = mines else { return }
         change(&board); saveMines(board)
+    }
+}
+
+
+extension AppModel {
+    func saveSliding(_ next: SlidingBoard) {
+        guard !blocked.contains(.sliding), let store else { return }
+        do { try store.save(next, namespace: "sliding"); sliding = next }
+        catch { self.error = "寫入失敗，本次操作未儲存：\(error.localizedDescription)" }
+    }
+    func editSliding(_ change: (inout SlidingBoard) -> Void) {
+        guard var board = sliding else { return }
+        change(&board); saveSliding(board)
     }
 }

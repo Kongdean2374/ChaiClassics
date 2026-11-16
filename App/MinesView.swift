@@ -66,7 +66,7 @@ struct MinesPlayView: View {
                 if paused || scenePhase != .active {
                     Button("繼續遊戲") { paused = false }.frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    ZoomBoard(size: CGSize(width: board.configuration.width * 34, height: board.configuration.height * 34)) {
+                    ZoomBoard(size: CGSize(width: CGFloat(board.configuration.width * 34), height: CGFloat(board.configuration.height * 34))) {
                         MinesGrid(board: board, tap: { i in model.editMines { $0.tap(i) } }, flag: { i in model.editMines { $0.toggleFlag(i) } })
                     }.accessibilityIdentifier("mines.zoomBoard")
                 }
