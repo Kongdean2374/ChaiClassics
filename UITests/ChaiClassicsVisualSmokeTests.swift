@@ -2,7 +2,12 @@ import XCTest
 
 /// Focused 0.1.3 smoke selection; the existing full game/regression suite remains intact.
 final class ChaiClassicsVisualSmokeTests: XCTestCase {
-    override func setUpWithError() throws { continueAfterFailure = false }
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+        // Also request the measured allowance when this class is included in
+        // manual full UI. Xcode still enforces that invocation's maximum cap.
+        executionTimeAllowance = 300
+    }
 
     private func launch(profile: String, suppressionFlag: String? = nil, allGames: Bool = false) throws -> XCUIApplication {
         let app = XCUIApplication()
