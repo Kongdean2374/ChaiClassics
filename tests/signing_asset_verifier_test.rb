@@ -59,8 +59,12 @@ class FixtureCommands
       return ['',failure != 'sign']
     end
     return ['',failure != 'verify'] if argv[0,2] == ['codesign','--verify']
-    if argv[0,3] == ['codesign','-d','--extract-certificates']
-      File.binwrite(argv[3] + '0', embedded.to_der) unless failure == 'extract'
+    if argv[0,2] == ['codesign','-d']
+      # Mirror codesign's optional-argument contract, not the old broken call.
+      raise 'Extraction prefix must use one argv with equals' unless argv.length == 4 && argv[2].start_with?('--extract-certificates=')
+      prefix = argv[2].delete_prefix('--extract-certificates=')
+      return ['',false] if failure == 'extract-command'
+      File.binwrite(prefix + '0', failure == 'embedded-content' ? 'invalid-der' : embedded.to_der) unless failure == 'extract'
       return ['',true]
     end
     raise 'Unexpected mocked command; no real Apple, keychain or signing operation is permitted in this test'
@@ -176,7 +180,7 @@ Dir.mktmpdir('asset-tests-') do |dir|
   commands.certificate = other_cert
   verify.call(make.call,'ASSET_CERT_PROFILE_PAIR'); count += 1
   commands.certificate = cert
-  {'decode'=>'ASSET_PROFILE_DECODE','keychain'=>'ASSET_KEYCHAIN_CERT','build'=>'ASSET_PROBE_BUILD','sign'=>'ASSET_PRIVATE_KEY_SIGN','verify'=>'ASSET_SIGNATURE_VERIFY','extract'=>'ASSET_SIGNED_CERT_PAIR'}.each do |failure,code|
+  {'decode'=>'ASSET_PROFILE_DECODE','keychain'=>'ASSET_KEYCHAIN_CERT','build'=>'ASSET_PROBE_BUILD','sign'=>'ASSET_PRIVATE_KEY_SIGN','verify'=>'ASSET_SIGNATURE_VERIFY','extract-command'=>'ASSET_CERT_EXTRACT','extract'=>'ASSET_EMBEDDED_CERT_CONTENT','embedded-content'=>'ASSET_EMBEDDED_CERT_CONTENT'}.each do |failure,code|
     commands.failure = failure
     verify.call(make.call(path: path, uuid: nil, name: nil),code); count += 1
   end

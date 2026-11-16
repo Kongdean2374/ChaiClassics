@@ -74,3 +74,10 @@ asset_lane = fastfile.split('lane :verify_signing_assets do', 2).last.split('lan
 check(asset_lane.include?('with_match_signing(nil, readonly: true)') && !asset_lane.include?('api_key') && !asset_lane.include?('upload_to_testflight'), 'no portal or upload in asset validation lane')
 check(!fastfile.include?('readonly: false'), 'all post-bootstrap lanes are readonly')
 puts 'PASS: existing-asset-only manual verification; no ASC key, certificate creation or upload.'
+
+extraction_job = workflows.fetch('ci.yml').fetch('jobs').fetch('codesign-extraction')
+check(extraction_job['runs-on'] == 'macos-15', 'real codesign regression runs on macOS')
+check(!extraction_job.key?('environment') && !extraction_job.key?('env'), 'extraction regression receives no signing environment or secrets')
+extraction_runs = extraction_job.fetch('steps').map { |step| step.fetch('run', '') }.join("\n")
+check(extraction_runs.include?('bundle exec ruby tests/codesign_extraction_macos_test.rb') && !extraction_runs.include?('secrets.') && !extraction_runs.include?('run_signing_lane'), 'real codesign extraction CI runs without match or Apple operations')
+puts 'PASS: credential-free real macOS extraction regression is required by CI.'

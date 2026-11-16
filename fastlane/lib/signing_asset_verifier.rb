@@ -9,7 +9,7 @@ require 'date'
 
 # Post-match validation of LOCAL assets. This module never calls Apple or Git.
 module ChaiSigningAssets
-  CODES = %w[ASSET_READONLY_REQUIRED ASSET_KEYCHAIN_SETUP ASSET_MATCH_READ ASSET_PROFILE_PATH ASSET_PROFILE_READ ASSET_PROFILE_DECODE ASSET_PROFILE_CONTENT ASSET_PROFILE_AMBIGUOUS ASSET_PROFILE_METADATA ASSET_BUNDLE_ID ASSET_TEAM_ID ASSET_PROFILE_EXPIRED ASSET_PROFILE_TYPE ASSET_CERT_CONTENT ASSET_CERT_EXPIRED ASSET_CERT_NOT_YET_VALID ASSET_CERT_TEAM ASSET_CERT_TYPE ASSET_KEYCHAIN_CERT ASSET_CERT_PROFILE_PAIR ASSET_DISTRIBUTION_IDENTITY ASSET_IDENTITY_AMBIGUOUS ASSET_PROBE_BUILD ASSET_PRIVATE_KEY_SIGN ASSET_SIGNATURE_VERIFY ASSET_SIGNED_CERT_PAIR ASSET_PROFILE_INSTALL ASSET_INTERNAL].freeze
+  CODES = %w[ASSET_READONLY_REQUIRED ASSET_KEYCHAIN_SETUP ASSET_MATCH_READ ASSET_PROFILE_PATH ASSET_PROFILE_READ ASSET_PROFILE_DECODE ASSET_PROFILE_CONTENT ASSET_PROFILE_AMBIGUOUS ASSET_PROFILE_METADATA ASSET_BUNDLE_ID ASSET_TEAM_ID ASSET_PROFILE_EXPIRED ASSET_PROFILE_TYPE ASSET_CERT_CONTENT ASSET_CERT_EXPIRED ASSET_CERT_NOT_YET_VALID ASSET_CERT_TEAM ASSET_CERT_TYPE ASSET_KEYCHAIN_CERT ASSET_CERT_PROFILE_PAIR ASSET_DISTRIBUTION_IDENTITY ASSET_IDENTITY_AMBIGUOUS ASSET_PROBE_BUILD ASSET_PRIVATE_KEY_SIGN ASSET_SIGNATURE_VERIFY ASSET_CERT_EXTRACT ASSET_EMBEDDED_CERT_CONTENT ASSET_SIGNED_CERT_PAIR ASSET_PROFILE_INSTALL ASSET_INTERNAL].freeze
   STAGES = %w[MATCH_READONLY PROFILE_LOCATED PROFILE_DECODED BUNDLE_ID_VALID TEAM_ID_VALID PROFILE_DATES_VALID APPSTORE_PROFILE_VALID CERTIFICATE_VALID KEYCHAIN_CERTIFICATE_MATCH DISTRIBUTION_IDENTITY_MATCH PRIVATE_KEY_SIGNED SIGNATURE_VERIFIED SIGNED_CERTIFICATE_MATCH XCODE_PROFILE_READY].freeze
   SOURCES = %w[match_env match_metadata installed_scan unknown].freeze
   HINTS = %w[present stale missing].freeze
@@ -249,11 +249,21 @@ module ChaiSigningAssets
         stages << 'PRIVATE_KEY_SIGNED'
         run!('ASSET_SIGNATURE_VERIFY', 'codesign', '--verify', '--strict', '--verbose=0', binary)
         stages << 'SIGNATURE_VERIFIED'
-        prefix = File.join(dir, 'certificate')
-        run!('ASSET_SIGNED_CERT_PAIR', 'codesign', '-d', '--extract-certificates', prefix, binary)
-        begin embedded = OpenSSL::X509::Certificate.new(File.binread(prefix + '0')); rescue StandardError; raise Failure.new('ASSET_SIGNED_CERT_PAIR'); end
+        embedded = extract_signing_certificate!(binary, dir)
         raise Failure.new('ASSET_SIGNED_CERT_PAIR') unless embedded.to_der == certificate.to_der
         stages << 'SIGNED_CERTIFICATE_MATCH'
+      end
+    end
+
+    def extract_signing_certificate!(binary, directory)
+      prefix = File.join(directory, 'certificate')
+      # This is a getopt optional argument: a separate prefix becomes another
+      # input binary, not the extraction destination. Keep it in the same argv.
+      run!('ASSET_CERT_EXTRACT', 'codesign', '-d', "--extract-certificates=#{prefix}", binary)
+      begin
+        OpenSSL::X509::Certificate.new(File.binread(prefix + '0'))
+      rescue StandardError
+        raise Failure.new('ASSET_EMBEDDED_CERT_CONTENT')
       end
     end
   end

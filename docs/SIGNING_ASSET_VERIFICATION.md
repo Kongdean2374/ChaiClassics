@@ -14,6 +14,14 @@ CI 成功；certificates／profiles／bundleIds 預檢均 HTTP 200。私人 Chai
 
 該版 fastlane 的 profiles_path/install 仍用 legacy 目錄。新 verifier 同時搜尋 Xcode 16+ 的 Developer/Xcode/UserData 與 legacy MobileDevice 安裝目錄；不在公開日誌輸出實際使用者路徑。
 
+## Run 43826441030：實際簽名已通過，最後抽取指令有誤
+
+使用者手動執行的 [readonly run](https://github.com/Kongdean2374/ChaiClassics/actions/runs/43826441030) 已依序通過 profile、Bundle／Team／期限、certificate、Keychain identity、PRIVATE_KEY_SIGNED 與 SIGNATURE_VERIFIED；最後報 ASSET_SIGNED_CERT_PAIR。這證明本次既有資產可下載、解密、匯入及實際簽名，不是 Apple API 權限或私鑰簽名失敗。但最後的內嵌 DER 配對還未完成，不能宣稱整個驗收成功。
+
+發現 verifier 將 codesign 的 optional argument 拆成 `--extract-certificates` 與獨立 prefix；codesign 會把 prefix 當作待檢查的 binary，而不是抽取位置。已改為單一 argv `--extract-certificates=...`，繼續嚴格比較 leaf DER。原 mock 過度接受錯誤語法，已改成拒絕拆開的 prefix。
+
+CI 新增獨立 macOS job，對系統既有已簽署 binary 唯讀重現舊語法失敗，並直接執行 production extractor 驗證正確語法及 DER。該 job 不讀取 Secrets、不呼叫 match、不修改 Keychain，也不建立任何證書。另將抽取 command 失敗、輸出缺失／無效、真正 DER 不符分成三個固定碼。
+
 ## 目前政策：資產已初始化，只重用
 
 所有公開 lane 與 match_options 都強制 readonly:true，傳 false 會立即以 ASSET_READONLY_REQUIRED 拒絕。既有 Initialize Signing 入口也鎖定 readonly，不再提供自動建立、重發、撤銷或替換證書的路徑。不要重新執行 Initialize Signing。
@@ -50,7 +58,8 @@ match readonly 在此固定版本會讀取、解密、安裝既有資產，但�
 | App／Team／Profile 期限／用途 | ASSET_BUNDLE_ID、ASSET_TEAM_ID、ASSET_PROFILE_EXPIRED、ASSET_PROFILE_TYPE |
 | Certificate | ASSET_CERT_CONTENT、ASSET_CERT_EXPIRED、ASSET_CERT_NOT_YET_VALID、ASSET_CERT_TEAM、ASSET_CERT_TYPE |
 | Keychain 配對 | ASSET_KEYCHAIN_CERT、ASSET_CERT_PROFILE_PAIR、ASSET_DISTRIBUTION_IDENTITY、ASSET_IDENTITY_AMBIGUOUS |
-| 真實私鑰操作 | ASSET_PROBE_BUILD、ASSET_PRIVATE_KEY_SIGN、ASSET_SIGNATURE_VERIFY、ASSET_SIGNED_CERT_PAIR |
+| 真實私鑰操作 | ASSET_PROBE_BUILD、ASSET_PRIVATE_KEY_SIGN、ASSET_SIGNATURE_VERIFY |
+| 內嵌憑證抽取／配對 | ASSET_CERT_EXTRACT（command 失敗）、ASSET_EMBEDDED_CERT_CONTENT（leaf 缺失／無效）、ASSET_SIGNED_CERT_PAIR（實際 DER 不符） |
 | Xcode 準備／未知 | ASSET_PROFILE_INSTALL、ASSET_INTERNAL |
 
 ASSET_PRIVATE_KEY_SIGN 不等同「私鑰一定不存在」；ACL、解鎖、信任鏈／WWDR 或工具問題也可能使 codesign 失敗。不要因為一個失敗自動重建證書。
@@ -66,6 +75,6 @@ ASSET_PRIVATE_KEY_SIGN 不等同「私鑰一定不存在」；ACL、解鎖、信
 
 ## 測試與尚未實跑項目
 
-CI 用合成 X509／profile、模擬 macOS command adapter 驗證路徑 fallback、現代／legacy 目錄、精確配對、其他 App 不受影響、簽名／verify／extract 任何失敗都拒絕，以及固定碼無敏感資訊。這些不是對私人 repo 真資產的宣稱。
+CI 用合成 X509／profile、模擬 macOS command adapter 驗證路徑 fallback、現代／legacy 目錄、精確配對、其他 App 不受影響、簽名／verify／extract 任何失敗都拒絕，以及固定碼無敏感資訊。額外 macOS job 對系統 binary 使用真正 codesign，測 production extractor，不使用私人 repo 真資產。
 
-此次只修改、推送及執行免簽署 CI，不觸發 readonly workflow、Initialize Signing 或 TestFlight；真實 Keychain／私鑰／profile 配對須由上面的手動 readonly workflow 驗收。
+Run 43826441030 是使用者手動觸發，已提供上面列出的真資產通過階段。修正抽取語法後仍需使用者手動重跑 readonly workflow，完整通過 XCODE_PROFILE_READY 才算驗收；程式修正及 CI 不會自動重跑 readonly、Initialize Signing 或 TestFlight。既有證書可實際簽名，沒有依據要求調整 Apple 後台、重新初始化或重建證書。

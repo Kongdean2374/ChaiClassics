@@ -27,7 +27,9 @@ MESSAGES = {
  'ASSET_PROBE_BUILD': 'The local temporary Mach-O signing probe could not be compiled.',
  'ASSET_PRIVATE_KEY_SIGN': 'Real codesign using the selected identity failed. Check private-key access/ACL, keychain unlock and certificate trust chain; output suppressed.',
  'ASSET_SIGNATURE_VERIFY': 'The temporary Mach-O signature failed strict verification.',
- 'ASSET_SIGNED_CERT_PAIR': 'The actual embedded signing certificate does not match the validated profile certificate, or extraction failed.',
+ 'ASSET_CERT_EXTRACT': 'The codesign certificate extraction command failed. Paths and raw output were suppressed; this does not establish a certificate mismatch.',
+ 'ASSET_EMBEDDED_CERT_CONTENT': 'The extracted signing certificate is missing, unreadable or invalid. Contents and paths were suppressed.',
+ 'ASSET_SIGNED_CERT_PAIR': 'The extracted signing certificate DER does not match the validated profile certificate. No assets were replaced.',
  'ASSET_PROFILE_INSTALL': 'Validated profile could not be prepared in Xcode directories, or an occupied filename differs. No existing file was overwritten.',
  'ASSET_INTERNAL': 'Unclassified local verification error. Raw exception/path/certificate data was suppressed.',
 }

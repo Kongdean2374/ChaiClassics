@@ -34,6 +34,23 @@ jobs:
             sudoku-verification.json
             build/UITests.xcresult
           if-no-files-found: warn
+  codesign-extraction:
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@4a9ddd6f338a97768b8006bf671dfbad383215f4
+        with:
+          ruby-version: '3.3'
+          bundler: '2.5.23'
+      - name: Test real codesign certificate extraction without credentials
+        run: |
+          bundle config set path vendor/bundle
+          bundle config set frozen true
+          bundle install --jobs 4
+          bundle exec ruby tests/codesign_extraction_macos_test.rb
   release-tooling:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
