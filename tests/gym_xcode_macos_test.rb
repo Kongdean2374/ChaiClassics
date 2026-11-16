@@ -32,6 +32,23 @@ begin
   ReleaseFixture.check(plist['signingStyle'] == 'manual' && plist['manageAppVersionAndBuildNumber'] == false)
   puts 'PASS: real locked Gym generates the production export plist with exact certificate/profile binding.'
 
+  stage = 'TARGET_SIGNING_SCOPE'
+  settings = Shellwords.split(params.fetch(:xcargs)).to_h { |arg| arg.split('=',2) }
+  resolved = lambda do |extra|
+    out, _, status = Open3.capture3('xcodebuild','-showBuildSettings','-json','-project',params[:project],
+      '-alltargets','-configuration','Release','-sdk','iphoneos','CODE_SIGNING_ALLOWED=NO',*extra)
+    ReleaseFixture.check(status.success?)
+    JSON.parse(out).to_h { |target| [target.fetch('target'),target.fetch('buildSettings')] }
+  end
+  uuid = settings.fetch('CHAI_SIGNING_PROFILE')
+  legacy = resolved.call(["PROVISIONING_PROFILE_SPECIFIER=#{uuid}","DEVELOPMENT_TEAM=#{settings.fetch('CHAI_SIGNING_TEAM')}"])
+  scoped = resolved.call(Shellwords.split(params[:xcargs]))
+  ReleaseFixture.check(legacy.fetch('ChaiClassicsUITests')['PROVISIONING_PROFILE_SPECIFIER'] == uuid)
+  ReleaseFixture.check(scoped.fetch('ChaiClassics')['PROVISIONING_PROFILE_SPECIFIER'] == uuid)
+  ReleaseFixture.check(scoped.fetch('ChaiClassics')['DEVELOPMENT_TEAM'] == settings.fetch('CHAI_SIGNING_TEAM'))
+  ReleaseFixture.check(scoped.fetch('ChaiClassicsUITests').fetch('PROVISIONING_PROFILE_SPECIFIER','') != uuid)
+  puts 'PASS: real Xcode build settings reproduce legacy cross-target profile propagation; app-scoped bindings keep the app profile off the other target.'
+
   # A real UNSIGNED iOS fixture only tests the local Xcode export parser. No
   # signing Secrets, key imports, provisioning updates or uploads are allowed.
   Dir.mktmpdir('xcode-export-parser-') do |directory|

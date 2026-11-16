@@ -7,6 +7,7 @@ from check_release_secrets import main as preflight
 from apple_api_report import load_report, format_report, report_failed
 from signing_asset_report import load_asset_report, format_asset_report, asset_complete, MESSAGES as ASSET_MESSAGES
 from release_report import load_release_report, format_release_report, release_complete, MESSAGES as RELEASE_MESSAGES
+from archive_diagnostics import load_archive_report, archive_complete, diagnose, format_diagnosis
 
 DIAGNOSTICS = {
     'BUNDLE_ID': 'Register the exact Bundle ID cc.chaihome.chaiclassics in the Apple Developer team first. No alternative ID is selected automatically.',
@@ -48,12 +49,12 @@ def diagnostic(raw, lane):
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument('lane', choices=['initialize_signing', 'beta', 'prepare_store', 'diagnose_signing', 'verify_signing_assets'])
+    parser.add_argument('lane', choices=['initialize_signing', 'beta', 'prepare_store', 'diagnose_signing', 'verify_signing_assets', 'diagnose_signed_archive'])
     args = parser.parse_args(argv)
     flags = ['--trusted-dispatch']
     if args.lane in ('initialize_signing', 'beta'): flags += ['--signing', '--check-repo']
     if args.lane == 'diagnose_signing': flags += ['--team']
-    if args.lane == 'verify_signing_assets': flags += ['--assets', '--check-repo']
+    if args.lane in ('verify_signing_assets','diagnose_signed_archive'): flags += ['--assets', '--check-repo']
     if args.lane == 'initialize_signing': flags += ['--initialize']
     if preflight(flags): return 1
     root = pathlib.Path(__file__).resolve().parents[1]
@@ -66,15 +67,29 @@ def main(argv=None):
         asset_path.touch(mode=0o600)
         release_path = pathlib.Path(private_dir) / 'release.json'
         release_path.touch(mode=0o600)
+        archive_path = pathlib.Path(private_dir) / 'archive.json'
+        archive_path.touch(mode=0o600)
+        workdir = pathlib.Path(private_dir) / 'work'
+        workdir.mkdir(mode=0o700)
+        (workdir/'tmp').mkdir(mode=0o700)
         env = dict(os.environ, FASTLANE_OPT_OUT_USAGE='1', FASTLANE_SKIP_UPDATE_CHECK='1', FASTLANE_HIDE_CHANGELOG='1', CI='true',
                    CHAI_APPLE_DIAGNOSTIC_PATH=str(report_path), CHAI_SIGNING_ASSET_REPORT_PATH=str(asset_path),
-                   CHAI_RELEASE_REPORT_PATH=str(release_path))
+                   CHAI_RELEASE_REPORT_PATH=str(release_path),CHAI_ARCHIVE_REPORT_PATH=str(archive_path),
+                   CHAI_RELEASE_WORKDIR=str(workdir),TMPDIR=str(workdir/'tmp')+'/')
         result = subprocess.run(['bundle', 'exec', 'fastlane', 'ios', args.lane], cwd=root, env=env,
-                                stdout=private_log, stderr=subprocess.STDOUT)
+                                stdout=private_log, stderr=subprocess.STDOUT, umask=0o077)
         assets = load_asset_report(asset_path)
         if assets:
             for line in format_asset_report(assets): print(line)
         if assets and assets['failure']: return result.returncode or 1
+        archive = load_archive_report(archive_path)
+        if archive_path.stat().st_size or args.lane == 'diagnose_signed_archive':
+            diagnosis=diagnose(archive,private_log,workdir)
+            for line in format_diagnosis(diagnosis): print(line)
+        if args.lane == 'diagnose_signed_archive':
+            if not asset_complete(assets) or not archive_complete(archive) or result.returncode:
+                print('Release failed [ARCHIVE]: Signed archive verification did not complete. No export or upload was attempted.')
+                return result.returncode or 1
         release = load_release_report(release_path)
         if args.lane == 'beta':
             if not asset_complete(assets):
@@ -89,7 +104,7 @@ def main(argv=None):
             if release:
                 for line in format_release_report(release): print(line)
                 if not release_complete(release): return result.returncode or 1
-            if result.returncode == 0 and (not release_complete(release) or not asset_complete(assets)):
+            if result.returncode == 0 and (not release_complete(release) or not asset_complete(assets) or not archive_complete(archive)):
                 print('Release failed [BUILD_CONFIG]: Missing/incomplete safe release or signing report. Success was not assumed.')
                 return 1
         if args.lane == 'verify_signing_assets' and result.returncode == 0 and not asset_complete(assets):

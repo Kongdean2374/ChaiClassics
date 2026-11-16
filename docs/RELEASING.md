@@ -1,5 +1,7 @@
 > 目前狀態：私人簽署 repo 已有資產，手動 readonly Run 43830873332 已完整通過 XCODE_PROFILE_READY。所有 match 入口已鎖定 readonly；不要重跑 Initialize Signing。首次 TestFlight 的 Gym 參數阻斷與新的分階段診斷見 [TESTFLIGHT_DIAGNOSTICS.md](TESTFLIGHT_DIAGNOSTICS.md)。下方首次建立段落為歷史流程，不再提供新建證書行為。
 
+> 最新 ARCHIVE／COMMAND_FAILED 尚未取得原始根因。請先手動執行 **Diagnose Signed Archive**，完整步驟與成功判準見 [SIGNED_ARCHIVE_DIAGNOSTICS.md](SIGNED_ARCHIVE_DIAGNOSTICS.md)。一般 CI 通過不表示正式簽署封存成功；診斷未完整通過前不要重跑 TestFlight。
+
 # GitHub → match → TestFlight → App Store
 
 公開原始碼：Kongdean2374/ChaiClassics，預設 main。私密簽署：**Kongdean2374/ChaiClassics-Signing / main**。簽署流程僅 `workflow_dispatch` 且 `refs/heads/main`；一般 push／PR 的 CI 完全不讀 Apple／match Secrets。

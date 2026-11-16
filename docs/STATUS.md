@@ -38,3 +38,5 @@ Run 43818758376 已證實 Apple 預檢 200、私人 repo 既有加密資產寫�
 使用者手動 Run 43830873332（a3e66a5）已完整通過 readonly 真資產驗收，含實際私鑰簽名、strict verify、內嵌 DER 配對及 XCODE_PROFILE_READY。
 
 首次 TestFlight Run 43831551303：完整 CI／readonly 簽署通過，後續立即 UPLOAD_FAILED。查明原 export_method=app-store-connect 被鎖定 Gym 2.228.0 的 options verifier 拒絕，新增實際 pinned verifier 的重現／完整參數測試，改相容 app-store，增加完整 CN／原 SHA-1 綁定、archive 精確配對、五階段安全 report 與 macOS Xcode export plist 檢查。本次沒有自動 TestFlight／Apple 操作，正式 IPA export 與上傳仍待使用者手動新 run。見 TESTFLIGHT_DIAGNOSTICS.md。
+
+Run 43853135322（8fe6b19）：UPLOAD_AUTH、BUILD_CONFIG、readonly／真實簽署 probe 成功，ARCHIVE／COMMAND_FAILED。程式可將失敗限定在 build_app 內部，不能由已刪除的舊 raw log 判斷 compiler／signing／Gym 後處理原因。已修正全域 app profile／identity 會套到其他 targets 的設定缺陷，加入私密日誌白名單解析、build_app／後置驗證分離及獨立手動 Diagnose Signed Archive。一般 CI 與設定測試不代表正式簽署 archive 已成功；仍待使用者手動取得 SIGNED_ARCHIVE_VERIFIED 後才重試 TestFlight。見 SIGNED_ARCHIVE_DIAGNOSTICS.md。

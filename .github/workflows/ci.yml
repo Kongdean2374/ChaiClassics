@@ -73,6 +73,7 @@ jobs:
           bundle exec ruby tests/signing_config_test.rb
           bundle exec ruby tests/signing_asset_verifier_test.rb
           bundle exec ruby tests/release_pipeline_test.rb
+          bundle exec ruby tests/archive_session_test.rb
           bundle exec ruby tests/apple_api_diagnostics_test.rb
           bundle exec ruby tests/jwt_comparison_test.rb
           bundle exec ruby tests/workflow_config_test.rb

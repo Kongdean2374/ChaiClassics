@@ -11,7 +11,7 @@ old_error = nil
 ReleaseFixture.silence do
   begin
     FastlaneCore::Configuration.create(Fastlane::Actions::BuildAppAction.available_options,
-      options.merge(export_method: 'app-store-connect', codesigning_identity: options[:export_options][:signingCertificate]))
+    options.merge(export_method: 'app-store-connect', codesigning_identity: options[:export_options][:signingCertificate]))
   rescue StandardError => error
     old_error = error
   end
@@ -37,8 +37,13 @@ check.call(ChaiRelease.archive_options(options)[:skip_package_ipa] == true)
 check.call(ChaiRelease.export_options(options)[:skip_build_archive] == true)
 check.call(ChaiRelease.export_options(options)[:skip_package_ipa] == false)
 settings = Shellwords.split(options[:xcargs]).to_h { |setting| setting.split('=',2) }
-check.call(Shellwords.split(settings.fetch('OTHER_CODE_SIGN_FLAGS')) == ['--keychain', "/tmp/fixture's keychain/isolated.keychain-db"])
-check.call(options[:codesigning_identity].start_with?('Apple Distribution:') && !options[:codesigning_identity].match?(/\A[A-F0-9]{40}\z/))
+check.call(Shellwords.split(settings.fetch('CHAI_SIGNING_FLAGS')) == ['--keychain', "/tmp/fixture's keychain/isolated.keychain-db"])
+check.call(settings.fetch('CHAI_SIGNING_IDENTITY').start_with?('Apple Distribution:') && !options.key?(:codesigning_identity))
+check.call((settings.keys & %w[DEVELOPMENT_TEAM CODE_SIGN_IDENTITY PROVISIONING_PROFILE_SPECIFIER OTHER_CODE_SIGN_FLAGS]).empty?)
+saved_config = Gym.config
+Gym.instance_variable_set(:@config, ChaiRelease.validate_options!(options))
+check.call(Gym::BuildCommandGenerator.setting.empty?)
+Gym.instance_variable_set(:@config, saved_config)
 count += 1
 
 [options.merge(export_method: 'app-store-connect'), options.merge(nonexistent_gym_option: true), options.merge(clean: ['invalid'])].each do |bad|
@@ -56,7 +61,7 @@ end
 cert = ReleaseFixture.certificate
 begin
   ChaiRelease.build_options(root: '.',version: '0.1.0',number: '1.0.1',team: 'T123456789',profile_uuid: 'fixture',
-    identity: '0' * 40, certificate: cert, keychain: 'unused')
+    identity: '0' * 40, certificate: cert, keychain: 'unused', workdir: Dir.tmpdir)
   raise 'Expected mismatched fingerprint rejection'
 rescue ChaiRelease::Failure => error
   check.call(error.reason == 'IDENTITY_BINDING'); count += 1
@@ -100,10 +105,13 @@ Dir.mktmpdir('release-report-test-') do |directory|
 
   # Synthetic archive must retain the exact already-verified certificate/profile.
   app = File.join(directory,'archive/Products/Applications/ChaiClassics.app'); FileUtils.mkdir_p(app)
+  File.write(File.join(directory,'archive/Info.plist'),{'ArchiveVersion'=>2,'ApplicationProperties'=>{'ApplicationPath'=>'Applications/ChaiClassics.app'}}.to_plist)
+  File.write(File.join(app,'Info.plist'),{'CFBundleIdentifier'=>ChaiSigning::APP_IDENTIFIER,'CFBundleSupportedPlatforms'=>['iPhoneOS']}.to_plist)
   original = File.join(directory,'profile'); File.binwrite(original,'fixture-cms')
   File.binwrite(File.join(app,'embedded.mobileprovision'),'fixture-cms')
   commands = Object.new
   commands.define_singleton_method(:run) do |*argv, input: nil|
+    return [JSON.generate(Plist.parse_xml(argv.last)),true] if argv.first == 'plutil'
     if argv[1] == '-d'
       prefix = argv[2].delete_prefix('--extract-certificates=')
       File.binwrite(prefix+'0',cert.to_der)

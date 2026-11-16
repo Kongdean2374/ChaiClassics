@@ -7,6 +7,7 @@ require_relative "lib/signing_config"
 require_relative "lib/signing_asset_verifier"
 require_relative "lib/apple_api_diagnostics"
 require_relative "lib/release_pipeline"
+require_relative "lib/archive_diagnostics"
 
 def project_path(*parts)
   File.join(File.expand_path("..", FastlaneCore::FastlaneFolder.path), *parts)
@@ -167,6 +168,24 @@ platform :ios do
     end
   end
 
+  desc "Diagnose a real signed iOS Release archive with readonly assets; never export or upload"
+  lane :diagnose_signed_archive do
+    trusted_dispatch!
+    required!("APPLE_TEAM_ID", "SIGNING_REPO_PAT", "MATCH_PASSWORD")
+    version = validated_version
+    run = Integer(ENV.fetch('GITHUB_RUN_NUMBER'))
+    attempt = Integer(ENV.fetch('GITHUB_RUN_ATTEMPT'))
+    UI.user_error!('[CHAI_SIGNING:BUILD_CONFIG] Invalid local diagnostic build counter') unless (1..9999).cover?(run) && (1..99).cover?(attempt)
+    with_match_signing(nil, readonly: true) do |profile_uuid, identity, keychain, assets|
+      options = ChaiRelease.build_options(root: project_path, version: version, number: "#{run}.0.#{attempt}",
+        team: ENV.fetch('APPLE_TEAM_ID'), profile_uuid: profile_uuid, identity: identity,
+        certificate: assets.fetch(:certificate), keychain: keychain)
+      ChaiRelease.validate_options!(ChaiRelease.archive_options(options))
+      Fastlane::Actions.lane_context[:MATCH_PROVISIONING_PROFILE_MAPPING] = { ChaiSigning::APP_IDENTIFIER => profile_uuid }
+      ChaiArchive::Session.new.run!(options: options, assets: assets) { |params| build_app(**params) }
+    end
+  end
+
   desc "Signed archive and manual TestFlight upload; never triggered by push"
   lane :beta do
     trusted_dispatch!
@@ -189,12 +208,12 @@ platform :ios do
       # Keep build_app's match mapping merge pinned to the profile just verified.
       Fastlane::Actions.lane_context[:MATCH_PROVISIONING_PROFILE_MAPPING] = { ChaiSigning::APP_IDENTIFIER => profile_uuid }
       release.run('ARCHIVE') do
-        build_app(**ChaiRelease.archive_options(options))
-        ChaiRelease.verify_archive!(path: options.fetch(:archive_path), assets: assets)
+        ChaiArchive::Session.new.run!(options: options, assets: assets) { |params| build_app(**params) }
       end
       ipa = release.run('EXPORT_IPA') do
         output = build_app(**ChaiRelease.export_options(options))
-        verified = ChaiRelease.verify_ipa!(output, expected: project_path('build', 'release', 'ChaiClassics.ipa'))
+        verified = ChaiRelease.verify_ipa!(output, expected: File.join(options.fetch(:output_directory), 'ChaiClassics.ipa'))
+        FileUtils.mkdir_p(project_path('build','release'))
         File.write(project_path("build", "release", "provenance.txt"), "version=#{version}\nbuild=#{number}\ncommit=#{ENV.fetch('GITHUB_SHA')}\n")
         verified
       end

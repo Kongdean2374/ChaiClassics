@@ -7,7 +7,7 @@ require_relative 'signing_asset_verifier'
 module ChaiRelease
   FASTLANE_VERSION = '2.228.0'.freeze
   PHASES = %w[UPLOAD_AUTH BUILD_CONFIG ARCHIVE EXPORT_IPA UPLOAD_TRANSFER].freeze
-  REASONS = %w[TOOL_VERSION EXPORT_METHOD_UNSUPPORTED GYM_OPTIONS_REJECTED IDENTITY_BINDING KEY_CONFIG APP_RECORD_MISSING BUILD_NUMBER_CONFLICT AUTH_REJECTED ACCESS_REJECTED RESOURCE_MISSING RATE_LIMITED APPLE_SERVER INPUT_REJECTED SIGNING_REJECTED COMMAND_FAILED ARCHIVE_CONTENT_INVALID ARCHIVE_CERT_EXTRACT ARCHIVE_CERT_MISMATCH ARCHIVE_PROFILE_MISMATCH IPA_MISSING TRANSFER_FAILED UNKNOWN PROCESS_INTERRUPTED].freeze
+  REASONS = %w[TOOL_VERSION EXPORT_METHOD_UNSUPPORTED GYM_OPTIONS_REJECTED IDENTITY_BINDING KEY_CONFIG APP_RECORD_MISSING BUILD_NUMBER_CONFLICT AUTH_REJECTED ACCESS_REJECTED RESOURCE_MISSING RATE_LIMITED APPLE_SERVER INPUT_REJECTED SIGNING_REJECTED COMMAND_FAILED ARCHIVE_BUILD_FAILED ARCHIVE_VERIFY_FAILED ARCHIVE_CONTENT_INVALID ARCHIVE_APP_INVALID ARCHIVE_CERT_EXTRACT ARCHIVE_CERT_MISMATCH ARCHIVE_PROFILE_MISMATCH IPA_MISSING TRANSFER_FAILED UNKNOWN PROCESS_INTERRUPTED].freeze
   HTTP_STATUSES = [400,401,403,404,409,422,429,500,501,502,503,504].freeze
 
   class Failure < StandardError
@@ -85,21 +85,21 @@ module ChaiRelease
     end
   end
 
-  def self.build_options(root:, version:, number:, team:, profile_uuid:, identity:, certificate:, keychain:)
+  def self.build_options(root:, version:, number:, team:, profile_uuid:, identity:, certificate:, keychain:, workdir: ENV.fetch('CHAI_RELEASE_WORKDIR'))
     names = certificate.subject.to_a.select { |part| part[0] == 'CN' }.map { |part| part[1] }
     valid = names.length == 1 && names.first.match?(/\A(?:Apple Distribution|iPhone Distribution):/) &&
             identity.match?(/\A[A-Fa-f0-9]{40}\z/) && Digest::SHA1.hexdigest(certificate.to_der).casecmp?(identity)
     raise Failure.new('BUILD_CONFIG', 'IDENTITY_BINDING') unless valid
     flags = ['--keychain', keychain].shelljoin
-    settings = { 'DEVELOPMENT_TEAM' => team, 'CODE_SIGN_STYLE' => 'Manual',
-                 'PROVISIONING_PROFILE_SPECIFIER' => profile_uuid, 'MARKETING_VERSION' => version,
-                 'CURRENT_PROJECT_VERSION' => number, 'OTHER_CODE_SIGN_FLAGS' => flags }
+    settings = { 'CHAI_SIGNING_TEAM' => team, 'CHAI_SIGNING_IDENTITY' => names.first,
+                 'CHAI_SIGNING_PROFILE' => profile_uuid, 'CHAI_RELEASE_VERSION' => version,
+                 'CHAI_BUILD_NUMBER' => number, 'CHAI_SIGNING_FLAGS' => flags }
     {
       project: File.join(root, 'ChaiClassics.xcodeproj'), scheme: 'ChaiClassics', configuration: 'Release',
-      clean: true, archive_path: File.join(root, 'build/release/ChaiClassics.xcarchive'),
-      output_directory: File.join(root, 'build/release'), output_name: 'ChaiClassics.ipa',
-      buildlog_path: File.join(root, 'build/private-release-logs'),
-      export_method: 'app-store', codesigning_identity: names.first, skip_profile_detection: true,
+      clean: true, archive_path: File.join(workdir, 'archive/ChaiClassics.xcarchive'),
+      output_directory: File.join(workdir, 'export'), output_name: 'ChaiClassics.ipa',
+      buildlog_path: File.join(workdir, 'logs'), derived_data_path: File.join(workdir, 'DerivedData'),
+      export_method: 'app-store', skip_profile_detection: true, destination: 'generic/platform=iOS',
       xcargs: settings.map { |key,value| "#{key}=#{value}".shellescape }.join(' '),
       export_options: { method: 'app-store', destination: 'export', signingStyle: 'manual',
                         signingCertificate: identity, teamID: team, manageAppVersionAndBuildNumber: false,
@@ -127,19 +127,39 @@ module ChaiRelease
     raise Failure.new('BUILD_CONFIG', reason)
   end
 
-  def self.verify_archive!(path:, assets:, commands: ChaiSigningAssets::Commands.new)
+  def self.verify_archive!(path:, assets:, commands: ChaiSigningAssets::Commands.new, on_stage: ->(_) {})
     app = File.join(path, 'Products/Applications/ChaiClassics.app')
     raise Failure.new('ARCHIVE', 'ARCHIVE_CONTENT_INVALID') unless File.directory?(app)
+    read_plist = lambda do |file|
+      text, ok = commands.run('plutil', '-convert', 'json', '-o', '-', file)
+      raise Failure.new('ARCHIVE', 'ARCHIVE_CONTENT_INVALID') unless ok
+      data = JSON.parse(text)
+      raise Failure.new('ARCHIVE', 'ARCHIVE_CONTENT_INVALID') unless data.is_a?(Hash)
+      data
+    end
+    info = read_plist.call(File.join(path, 'Info.plist'))
+    unless info['ArchiveVersion'] == 2 && info.dig('ApplicationProperties', 'ApplicationPath') == 'Applications/ChaiClassics.app'
+      raise Failure.new('ARCHIVE', 'ARCHIVE_CONTENT_INVALID')
+    end
+    on_stage.call('ARCHIVE_FORMAT_VALID')
+    app_info = read_plist.call(File.join(app, 'Info.plist'))
+    unless app_info['CFBundleIdentifier'] == ChaiSigning::APP_IDENTIFIER && app_info['CFBundleSupportedPlatforms'].is_a?(Array) && app_info['CFBundleSupportedPlatforms'].include?('iPhoneOS')
+      raise Failure.new('ARCHIVE', 'ARCHIVE_APP_INVALID')
+    end
+    on_stage.call('ARCHIVE_APP_VALID')
     _, ok = commands.run('codesign', '--verify', '--strict', '--verbose=0', app)
     raise Failure.new('ARCHIVE', 'SIGNING_REJECTED') unless ok
+    on_stage.call('ARCHIVE_SIGNATURE_VALID')
     Dir.mktmpdir('chai-archive-certificate-') do |directory|
       embedded = ChaiSigningAssets.extract_signing_certificate!(app, directory, commands: commands)
       raise Failure.new('ARCHIVE', 'ARCHIVE_CERT_MISMATCH') unless embedded.to_der == assets.fetch(:certificate).to_der
     end
+    on_stage.call('ARCHIVE_CERTIFICATE_MATCH')
     embedded_profile = File.join(app, 'embedded.mobileprovision')
     unless File.binread(embedded_profile) == File.binread(assets.fetch(:path))
       raise Failure.new('ARCHIVE', 'ARCHIVE_PROFILE_MISMATCH')
     end
+    on_stage.call('ARCHIVE_PROFILE_MATCH')
   rescue Failure
     raise
   rescue ChaiSigningAssets::Failure

@@ -85,8 +85,21 @@ puts 'PASS: credential-free real macOS extraction regression is required by CI.'
 check(extraction_runs.include?('bundle exec ruby tests/gym_xcode_macos_test.rb'), 'real Xcode/Gym export configuration regression is required')
 tooling_runs = workflows.fetch('ci.yml').fetch('jobs').fetch('release-tooling').fetch('steps').map { |step| step.fetch('run','') }.join("\n")
 check(tooling_runs.include?('bundle exec ruby tests/release_pipeline_test.rb'), 'locked build_app validator regression is required')
+check(tooling_runs.include?('bundle exec ruby tests/archive_session_test.rb'), 'archive build/postcheck/sandbox regression is required')
 check(beta_lane.include?("release.run('ARCHIVE')") && beta_lane.include?("release.run('EXPORT_IPA')") && beta_lane.include?("release.run('UPLOAD_TRANSFER')"), 'archive/export/transfer have independent stages')
-check(beta_lane.include?('ChaiRelease.validate_options!') && beta_lane.include?('ChaiRelease.verify_archive!'), 'validate production options and preserve exact archive asset pairing')
+check(beta_lane.include?('ChaiRelease.validate_options!') && beta_lane.include?('ChaiArchive::Session.new.run!'), 'validate production options and preserve exact archive asset pairing')
 check(!beta_lane.include?('export_method: "app-store-connect"'), 'old unsupported Gym enum removed from beta')
 check((flight['on'] || flight[true]).keys == ['workflow_dispatch'], 'TestFlight remains manually dispatched')
 puts 'PASS: pinned build_app and Xcode regressions, independent release phases, exact archive pairing and manual TestFlight preserved.'
+
+signed = workflows.fetch('diagnose-signed-archive.yml')
+signed_job = signed.fetch('jobs').fetch('archive')
+check((signed['on'] || signed[true]).keys == ['workflow_dispatch'] && signed_job.fetch('if').include?("github.ref == 'refs/heads/main'") && signed_job.fetch('if').include?("github.event_name == 'workflow_dispatch'"), 'signed archive diagnosis main/manual only')
+check(signed.fetch('jobs').keys == ['archive'] && !signed_job.key?('needs'), 'independent signed diagnosis does not rerun full TestFlight CI')
+check(signed_job.fetch('env').keys.sort == %w[APPLE_TEAM_ID MATCH_PASSWORD RELEASE_VERSION SIGNING_REPO_PAT].sort, 'no ASC API credentials supplied to signed archive diagnosis')
+check(signed_job.fetch('steps').any? { |step| step['run'] == 'python3 scripts/run_signing_lane.py diagnose_signed_archive' }, 'signed diagnosis uses the private safe wrapper')
+check(signed_job.fetch('steps').none? { |step| step.fetch('uses','').include?('upload-artifact') }, 'no signed archive/raw log artifact')
+signed_lane = fastfile.split('lane :diagnose_signed_archive do',2).last.split('lane :beta do',2).first
+check(signed_lane.include?('with_match_signing(nil, readonly: true)') && signed_lane.include?('ChaiArchive::Session.new.run!'), 'real signed archive reuses the production archive session')
+check(!signed_lane.match?(/upload_to_testflight|export_options\(|api_key|next_apple_build|skip_codesigning/), 'no export, upload, Apple API or unsigned fallback in diagnostic lane')
+puts 'PASS: independent main/manual real signed archive diagnosis; readonly assets, no API key, export, upload, artifacts or unsigned fallback.'

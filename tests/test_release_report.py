@@ -12,6 +12,7 @@ sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]/'scripts'))
 import release_report as reports
 import signing_asset_report as assets
 import run_signing_lane as runner
+import archive_diagnostics as archives
 
 class ReleaseReportTests(unittest.TestCase):
     def report(self, phase=None):
@@ -62,6 +63,8 @@ class ReleaseReportTests(unittest.TestCase):
             if include_assets:
                 data=dict(schema=1,readonly=True,stages=assets.STAGES,profile_source='match_env',path_hint='present',failure=None)
                 pathlib.Path(kwargs['env']['CHAI_SIGNING_ASSET_REPORT_PATH']).write_text(json.dumps(data))
+                archive=dict(schema=1,phase='COMPLETE',status='complete',completed=archives.STAGES,failure=None,verification_code=None)
+                pathlib.Path(kwargs['env']['CHAI_ARCHIVE_REPORT_PATH']).write_text(json.dumps(archive))
             return subprocess.CompletedProcess(args[0],0 if success else 1)
         return run
 

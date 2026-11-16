@@ -33,8 +33,18 @@ def configs(name,settings):
     cs=[]
     for mode in ['Debug','Release']:
         s={**settings,'SWIFT_OPTIMIZATION_LEVEL':q('-Onone' if mode=='Debug' else '-O'),'DEBUG_INFORMATION_FORMAT':q('dwarf' if mode=='Debug' else 'dwarf-with-dsym')}
+        if name=='app' and mode=='Release':
+            # Only the app consumes these parameters. Passing Apple's signing
+            # settings globally also applies its profile to Swift Package targets.
+            s.update({'DEVELOPMENT_TEAM':q('$(CHAI_SIGNING_TEAM)'),
+                      'CODE_SIGN_IDENTITY[sdk=iphoneos*]':q('$(CHAI_SIGNING_IDENTITY)'),
+                      'PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]':q('$(CHAI_SIGNING_PROFILE)'),
+                      'OTHER_CODE_SIGN_FLAGS[sdk=iphoneos*]':q('$(inherited) $(CHAI_SIGNING_FLAGS)'),
+                      'CHAI_RELEASE_VERSION':'0.1.0','CHAI_BUILD_NUMBER':'1',
+                      'MARKETING_VERSION':q('$(CHAI_RELEASE_VERSION)'),
+                      'CURRENT_PROJECT_VERSION':q('$(CHAI_BUILD_NUMBER)')})
         if mode=='Debug': s['SWIFT_ACTIVE_COMPILATION_CONDITIONS']='DEBUG'; s['ENABLE_TESTABILITY']='YES'
-        cs.append(obj(name+mode,'{isa = XCBuildConfiguration; buildSettings = {'+' '.join(k+' = '+v+';' for k,v in s.items())+'}; name = '+mode+';}'))
+        cs.append(obj(name+mode,'{isa = XCBuildConfiguration; buildSettings = {'+' '.join((q(k) if '[' in k else k)+' = '+v+';' for k,v in s.items())+'}; name = '+mode+';}'))
     return obj(name+'configs','{isa = XCConfigurationList; buildConfigurations = '+array(cs)+'; defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;}')
 app_config=configs('app',app); ui_config=configs('ui',ui); project_config=configs('project',base)
 app_target=ident('appTarget'); ui_target=ident('uiTarget'); project_id=ident('project')

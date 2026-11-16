@@ -16,11 +16,11 @@ module ReleaseFixture
     cert
   end
 
-  def self.options(certificate: self.certificate)
+  def self.options(certificate: self.certificate, workdir: File.join(Dir.tmpdir,'chai-release-fixture'))
     root = File.expand_path('../..', __dir__)
     ChaiRelease.build_options(root: root, version: '0.1.0', number: '1.0.1', team: 'T123456789',
       profile_uuid: '01234567-0123-4567-89ab-0123456789ab', certificate: certificate,
-      identity: Digest::SHA1.hexdigest(certificate.to_der).upcase, keychain: "/tmp/fixture's keychain/isolated.keychain-db")
+      identity: Digest::SHA1.hexdigest(certificate.to_der).upcase, keychain: "/tmp/fixture's keychain/isolated.keychain-db", workdir: workdir)
   end
 
   def self.silence
