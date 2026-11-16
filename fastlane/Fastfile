@@ -73,14 +73,13 @@ def next_apple_build(key, version)
   app = Spaceship::ConnectAPI::App.find("cc.chaihome.chaiclassics")
   UI.user_error!("Create App Store Connect App Record first") unless app
   builds = Spaceship::ConnectAPI::Build.all(app_id: app.id, version: version, sort: "-uploadedDate", limit: 100)
-  previous = builds.map do |build|
-    components = build.version.to_s.split(".").map(&:to_i)
-    components.length == 1 ? components[0] : components[0] * 10000 + components.fetch(1, 0) * 100 + components.fetch(2, 0)
-  end.max || 0
-  # UTC minutes since epoch + attempt, compared with latest accepted build.
-  candidate = [((Time.now.utc - Time.utc(2026, 1, 1)) / 60).to_i * 100 + Integer(ENV.fetch("GITHUB_RUN_ATTEMPT")), previous + 1].max
-  UI.user_error!("Build number capacity exceeded") if candidate >= 100_000_000
-  "#{candidate / 10000}.#{candidate / 100 % 100}.#{candidate % 100}"
+  run = Integer(ENV.fetch("GITHUB_RUN_NUMBER"))
+  attempt = Integer(ENV.fetch("GITHUB_RUN_ATTEMPT"))
+  UI.user_error!("Build counter capacity exceeded; establish an explicit versioned counter migration") unless (1..9999).cover?(run) && (1..99).cover?(attempt)
+  candidate = [run, 0, attempt]
+  existing = builds.map { |build| (build.version.to_s.split(".").map(&:to_i) + [0, 0]).first(3) }
+  UI.user_error!("Refusing to reuse or decrease an Apple build number. Dispatch a NEW TestFlight run rather than retrying an older run; check any manual Apple uploads.") if existing.any? { |number| (number <=> candidate) >= 0 }
+  candidate.join(".")
 end
 
 default_platform(:ios)

@@ -25,7 +25,7 @@ Secrets 缺少時 workflow 會列出缺少的「名稱」並失敗，不顯示�
 
 先看 CI 全綠。在 Actions → TestFlight → Run workflow，選 main 與版本（例如 0.1.0）。流程先重跑完全相同 CI，成功後才讀發布 Secrets，在臨時 keychain 匯入證書，Release archive／export IPA 並上傳。結束必定移除臨時 keychain、profile 與簽署檔。簽署資產不放 artifact；只保留不含機密的 provenance.txt。
 
-版本三段數字由手動輸入。Build number 為 4.2.2 格式：以 UTC 分鐘／run attempt 作候選，並與 ASC 同版本最新建置比較取較大值；兩個發布 workflow 共用 concurrency，重跑會查新建置，避免重用已上傳號碼。GitHub run ID／完整 commit 另記於 changelog 與 provenance。Apple 處理未完成的極短時間內重跑仍可能遇到 ASC 一致性延遲；此時明確失敗，等前一建置處理完再重跑，不能宣稱成功。
+版本三段數字由手動輸入。Build number 固定為 `GITHUB_RUN_NUMBER.0.GITHUB_RUN_ATTEMPT`（4.2.2 格式上限 9999.0.99）；相同 run／attempt 必定得到相同值。只有 TestFlight workflow 產生新二進位，App Store workflow 選用既有 build。兩個發布 workflow 共用 concurrency；上傳前查詢 ASC 同版本既有 build，若號碼已用或倒退則明確拒絕。重新上傳請建立新的 TestFlight dispatch，不要重跑早於現有版本的舊 run。API 處理的短暫一致性延遲若導致 Apple 拒絕重複上傳，也必須讓流程失敗，再建立新 run。GitHub run ID／完整 commit 另記於 changelog 與 provenance，不能只用畫面版本猜測來源。
 
 上傳成功後 Apple 仍要處理。內部測試先在 ASC 分派測試群組；外部測試可能需要 Beta App Review。使用者須在 iPhone 安裝 TestFlight 並完成 docs/TESTING.md。沒有 Mac 也可使用 Actions 建置與 iPhone 驗收；建立／取得 Apple 簽署資產仍須由帳戶持有人透過受信任流程完成。
 
