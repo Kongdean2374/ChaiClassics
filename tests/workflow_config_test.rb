@@ -193,6 +193,7 @@ boot_step = ipad_steps.find { |step| step['id'] == 'boot' }
 test_step = ipad_steps.find { |step| step['id'] == 'ui' }
 check(boot_step && boot_step['run'] == 'bash scripts/ipad_screenshots.sh boot' && boot_step['timeout-minutes'] == 10, 'cold iPad startup has its own bounded step')
 check(test_step && test_step['run'] == 'bash scripts/ipad_screenshots.sh test' && test_step['timeout-minutes'] == 25, 'XCTest keeps a separate timeout for execution and xcresult finalization')
+check(ipad_job['timeout-minutes'] == 240 && ipad_steps.find { |step| step['id'] == 'games' }['timeout-minutes'] == 210, 'all 22 full journeys retain a bounded budget including confirmed deletion and relaunch rather than being cut off halfway')
 check(ipad_steps.index(boot_step) < ipad_steps.index(test_step), 'the selected iPad boots before XCTest starts')
 checkout = ipad_steps.find { |step| step.fetch('uses', '').start_with?('actions/checkout@') }
 check(checkout.dig('with', 'persist-credentials') == false, 'iPad checkout does not persist credentials')
@@ -205,6 +206,7 @@ check(artifact_paths.all? { |path| path.start_with?('build/ipad-screenshots/') }
 result_artifact = ipad_steps.find { |step| step.dig('with', 'name') == 'ChaiClassics-iPad-XCTest-Results' }
 check(result_artifact && result_artifact['if'] == 'always()' && result_artifact.dig('with', 'path') == 'build/ipad-screenshots/IPadScreenshots.xcresult', 'the complete xcresult remains available in a separate artifact even after UI failure')
 ipad_script = File.read(File.join(root, 'scripts/ipad_screenshots.sh'))
+check(ipad_script.include?('python3 scripts/ipad_startup_retry.py') && ipad_script.include?('IPadScreenshots-startup-attempt1.xcresult'), 'only a classified pre-case AX startup failure may be retried with its original result preserved')
 check(ipad_script.include?('-sdk iphonesimulator') && ipad_script.include?('CODE_SIGNING_ALLOWED=NO') && ipad_script.include?('test-without-building'), 'iPad tests execute an unsigned Simulator build')
 %w[Home Sudoku Minesweeper SlidingPuzzle].each do |game|
   check(ipad_script.include?('-only-testing:ChaiClassicsUITests/ChaiClassicsVisualSmokeTests/testIPad' + game + 'Screenshot'), "independent #{game} iPad case is selected")

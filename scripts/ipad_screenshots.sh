@@ -85,12 +85,35 @@ elif [[ "$CHAI_IPAD_PHASE" == games ]]; then
 else
   # Reuse the existing test target, helpers and isolated v0.1.0 seed data. Four
   # independent cases retain other screens when one game's assertions fail.
-  xcodebuild "${CHAI_IPAD_ARGS[@]}" -resultBundlePath "$CHAI_IPAD_RESULT" \
+  CHAI_IPAD_GALLERY_ARGS=("${CHAI_IPAD_ARGS[@]}" -resultBundlePath "$CHAI_IPAD_RESULT" \
     -only-testing:ChaiClassicsUITests/ChaiClassicsVisualSmokeTests/testIPadHomeScreenshot \
     -only-testing:ChaiClassicsUITests/ChaiClassicsVisualSmokeTests/testIPadSudokuScreenshot \
     -only-testing:ChaiClassicsUITests/ChaiClassicsVisualSmokeTests/testIPadMinesweeperScreenshot \
     -only-testing:ChaiClassicsUITests/ChaiClassicsVisualSmokeTests/testIPadSlidingPuzzleScreenshot \
     -parallel-testing-enabled NO -test-timeouts-enabled YES \
     -default-test-execution-time-allowance 600 -maximum-test-execution-time-allowance 720 \
-    test-without-building 2>&1 | tee "$CHAI_IPAD_OUTPUT/tests.log"
+    test-without-building)
+  CHAI_IPAD_GALLERY_EXIT=0
+  xcodebuild "${CHAI_IPAD_GALLERY_ARGS[@]}" 2>&1 | tee "$CHAI_IPAD_OUTPUT/tests.log" || CHAI_IPAD_GALLERY_EXIT=$?
+  if (( CHAI_IPAD_GALLERY_EXIT != 0 )); then
+    if ! xcrun xcresulttool get test-results summary --path "$CHAI_IPAD_RESULT" \
+      > "$CHAI_IPAD_OUTPUT/startup-summary.json" 2> "$CHAI_IPAD_OUTPUT/startup-summary-error.log"; then
+      echo 'The original result cannot classify a pre-case startup failure; no retry.'
+    fi
+    if python3 scripts/ipad_startup_retry.py --log "$CHAI_IPAD_OUTPUT/tests.log" --summary "$CHAI_IPAD_OUTPUT/startup-summary.json"; then
+      CHAI_IPAD_FIRST_RESULT="$CHAI_IPAD_OUTPUT/IPadScreenshots-startup-attempt1.xcresult"
+      if [[ -e "$CHAI_IPAD_FIRST_RESULT" ]]; then
+        echo 'A startup attempt is already preserved; refusing another retry.' >&2
+        exit "$CHAI_IPAD_GALLERY_EXIT"
+      fi
+      mv "$CHAI_IPAD_RESULT" "$CHAI_IPAD_FIRST_RESULT"
+      mv "$CHAI_IPAD_OUTPUT/tests.log" "$CHAI_IPAD_OUTPUT/tests-startup-attempt1.log"
+      echo 'No UI case began. Original AX startup failure preserved; restarting the same Simulator once.'
+      xcrun simctl shutdown "$CHAI_IPAD_UDID"
+      bash scripts/ipad_screenshots.sh boot
+      CHAI_IPAD_GALLERY_EXIT=0
+      xcodebuild "${CHAI_IPAD_GALLERY_ARGS[@]}" 2>&1 | tee "$CHAI_IPAD_OUTPUT/tests.log" || CHAI_IPAD_GALLERY_EXIT=$?
+    fi
+  fi
+  exit "$CHAI_IPAD_GALLERY_EXIT"
 fi

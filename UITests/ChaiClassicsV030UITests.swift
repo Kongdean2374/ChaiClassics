@@ -43,17 +43,27 @@ final class ChaiClassicsV030UITests: XCTestCase {
             }
             // Form virtualizes rows: a below-screen History link need not
             // exist in the snapshot until its actual list has been scrolled.
-            let forms = app.collectionViews.firstMatch, tables = app.tables.firstMatch
-            if forms.exists || tables.exists {
-                let list = forms.exists ? forms : tables
-                if element.exists && element.frame.midY<safe.minY || !element.exists && attempt>=9 { list.swipeDown(velocity:.slow) }
-                else { list.swipeUp(velocity:.slow) }
-            } else {
-                let low = origin.withOffset(CGVector(dx:5,dy:safe.maxY-30))
-                let high = origin.withOffset(CGVector(dx:5,dy:safe.minY+35))
-                let down = element.exists ? element.frame.midY<safe.minY : attempt>=9
-                if down { high.press(forDuration:0.1,thenDragTo:low) } else { low.press(forDuration:0.1,thenDragTo:high) }
+            let lists = app.collectionViews.allElementsBoundByIndex + app.tables.allElementsBoundByIndex
+            let list = lists.last(where: { $0.isHittable })
+            let outer = app.scrollViews.allElementsBoundByIndex
+                .filter { !$0.identifier.hasSuffix(".zoomBoard") && $0.isHittable }
+                .max(by: { $0.frame.height<$1.frame.height })
+            // A presented settings Form can coexist with its background menu.
+            // Use the foreground scroll container's real bounds, including an
+            // iPad's centered content or a constrained layout-test viewport.
+            let container = list?.frame ?? outer?.frame ?? safe
+            let viewport = container.intersection(safe)
+            guard !viewport.isNull, viewport.height>90 else { break }
+            let down = element.exists ? element.frame.midY<viewport.minY : attempt>=9
+            var distance = viewport.height*0.3
+            if element.exists {
+                let overhang = down ? viewport.minY-element.frame.minY : element.frame.maxY-viewport.maxY
+                distance = min(distance,max(28,overhang+12))
             }
+            let x = max(window.minX+5,container.minX+5), startY = down ? viewport.minY+30 : viewport.maxY-30
+            origin.withOffset(CGVector(dx:x-window.minX,dy:startY-window.minY)).press(forDuration:0.1,
+                thenDragTo:origin.withOffset(CGVector(dx:x-window.minX,dy:startY+(down ? distance : -distance)-window.minY)),
+                withVelocity:.slow,thenHoldForDuration:0.1)
         }
         let identifier = element.exists ? element.identifier : "missing-control"
         attachUIEvidence(app,name:"v030-unreachable-"+identifier)

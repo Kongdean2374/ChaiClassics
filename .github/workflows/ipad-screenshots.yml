@@ -20,7 +20,10 @@ jobs:
     if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop/0.2.0' || github.ref == 'refs/heads/develop/0.2.1' || github.ref == 'refs/heads/develop/0.2.2' || github.ref == 'refs/heads/develop/0.3.0') && github.event_name == 'workflow_dispatch'
     # Map inputs to standard hosted pools; arbitrary labels cannot select paid hosts.
     runs-on: ${{ inputs.runner == 'macos-15' && 'macos-15' || 'macos-15-intel' }}
-    timeout-minutes: 150
+    # The first measured 22-game run used 85 minutes while most new journeys
+    # stopped halfway at an offscreen link. Keep their remaining real
+    # confirmation/relaunch checks bounded without a premature job cutoff.
+    timeout-minutes: 240
     env:
       CHAI_IPAD_REQUESTED_RUNNER: ${{ inputs.runner }}
       CHAI_IPAD_DEVICE_NAME: ${{ inputs.device_name }}
@@ -76,7 +79,7 @@ jobs:
         # Preserve independent game evidence after a gallery assertion fails.
         # The failed gallery step still fails the job and candidate proof.
         if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.boot.outcome == 'success' }}
-        timeout-minutes: 110
+        timeout-minutes: 210
         run: bash scripts/ipad_screenshots.sh games
       - name: Export XCTest screenshots and diagnostics
         id: export
@@ -146,5 +149,13 @@ jobs:
         with:
           name: ChaiClassics-iPad-Games-XCTest-Results
           path: build/ipad-screenshots/IPadGames.xcresult
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Preserve the original pre-case startup failure when retried
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ChaiClassics-iPad-Startup-Retry-Results
+          path: build/ipad-screenshots/IPadScreenshots-startup-attempt1.xcresult
           if-no-files-found: warn
           retention-days: 14
