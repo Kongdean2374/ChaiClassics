@@ -36,10 +36,14 @@ elif name == 'xcrun':
             {'name': 'iPhone 17 Pro', 'udid': 'SIM-PRO'},
             {'name': 'iPhone 17 Pro Max', 'udid': 'SIM-PRO-MAX'}]
         print(json.dumps({'devices': {'com.apple.CoreSimulator.SimRuntime.iOS-26-0': devices}}))
+    elif args == ['simctl', 'bootstatus', 'SIM-PRO-MAX', '-b']:
+        if os.environ.get('CHAI_MOCK_BOOT_EXIT'): raise SystemExit(int(os.environ['CHAI_MOCK_BOOT_EXIT']))
     elif args == ['xcresulttool', 'get', 'test-results', 'summary', '--path', 'build/UITests.xcresult']:
         if os.environ.get('CHAI_MOCK_SUMMARY_EXIT'): raise SystemExit(int(os.environ['CHAI_MOCK_SUMMARY_EXIT']))
         print(json.dumps({'fixture': 'shell-only; no XCTest executed'}))
     else: raise SystemExit(97)
+elif name == 'open':
+    if args != ['-a', 'Simulator', '--args', '-CurrentDeviceUDID', 'SIM-PRO-MAX']: raise SystemExit(95)
 elif name == 'xcodebuild':
     if '' in args: raise SystemExit(96)
     Path(args[args.index('-resultBundlePath') + 1]).mkdir(parents=True, exist_ok=True)
@@ -59,7 +63,7 @@ class CIShellTests(unittest.TestCase):
             shutil.copyfile(ROOT / 'scripts' / name, self.root / 'scripts' / name)
         shutil.copytree(ROOT / 'UITests', self.root / 'UITests')
         self.bin = self.root / 'bin'; self.bin.mkdir()
-        for name in ('xcrun', 'xcodebuild', 'git'):
+        for name in ('xcrun', 'xcodebuild', 'git', 'open'):
             file = self.bin / name
             file.write_text(MOCK_TOOL)
             file.chmod(0o755)
@@ -167,6 +171,25 @@ class CIShellTests(unittest.TestCase):
         result, calls = self.run_ui('full', CHAI_MOCK_SUMMARY_EXIT='9')
         self.assertEqual(result.returncode, 1, result.stderr)
         self.invocation(calls)
+
+    def test_boots_the_same_selected_phone_before_xctest_without_erasing_or_retrying(self):
+        result, calls = self.run_ui('full')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        boot = {'tool': 'xcrun', 'args': ['simctl', 'bootstatus', 'SIM-PRO-MAX', '-b']}
+        launch = {'tool': 'open', 'args': ['-a', 'Simulator', '--args', '-CurrentDeviceUDID', 'SIM-PRO-MAX']}
+        self.assertEqual(calls.count(boot), 1)
+        self.assertEqual(calls.count(launch), 1)
+        build_index = next(i for i, c in enumerate(calls) if c['tool'] == 'xcodebuild')
+        self.assertLess(calls.index(boot), calls.index(launch))
+        self.assertLess(calls.index(launch), build_index)
+        self.assertFalse(any('erase' in call['args'] for call in calls))
+        self.invocation(calls)
+
+    def test_failed_boot_cannot_start_xctest_or_report_a_pass(self):
+        result, calls = self.run_ui('full', CHAI_MOCK_BOOT_EXIT='17')
+        self.assertEqual(result.returncode, 17, result.stderr)
+        self.assertFalse(any(call['tool'] in ('xcodebuild', 'open') for call in calls))
+        self.assertFalse((self.root / 'build/UITests-summary.json').exists())
 
     def test_no_available_phone_stops_before_build(self):
         result, calls = self.run_ui('full', CHAI_MOCK_NO_SIMULATORS='1')

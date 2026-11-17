@@ -44,6 +44,13 @@ APPROVED_TIMEOUT_CEILINGS = {
         '84ab95e08fd2103f38e03e741e79db1b74ba6f1263862b8a5fd18916db839f87',
         '7978a7bd5c9d6e7336a80b7fd84abef7271581239e3e4015c1e39fea66abd00e', 720),
 }
+# Exact CI-only preflight addition. It warms the already selected device, before
+# the unchanged XCTest command. No erase, retry, selectors or result handling.
+# Both complete source hashes and removal back to the exact baseline are required.
+APPROVED_CI_BOOTSTRAP = (
+    '2e1252ec7bd4cd555a4320b85626bf754d14877c71b5326e80a1abdbb92d25bd',
+    '99d12fc7647d1d9d9cba8b2fb486f5e709dfbf7649625498cc9d8476eb49daef',
+    b'# CHAI_CI_EXPLICIT_BOOT_V1: selected-device-only, no erase or test retry.\n# The real part_a run failed before any case began while XCTest waited for AX.\n# Warm the same Simulator before starting its automation session, as Visual Smoke does.\nCHAI_SIM_UDID="${CHAI_SIM_DESTINATION##*,id=}"\nmkdir -p build\nxcrun simctl bootstatus "$CHAI_SIM_UDID" -b 2>&1 | tee build/simulator-boot.log\nopen -a Simulator --args -CurrentDeviceUDID "$CHAI_SIM_UDID"\n')
 GAME_FILES = {
     'sudoku': {'Core/Sudoku.swift', 'App/SudokuView.swift'},
     'mines': {'Core/Minesweeper.swift', 'App/MinesView.swift', ZOOM_BOARD_FILE},
@@ -208,6 +215,12 @@ def shared_content_digest(path, mode, data):
     enabled timeouts and failed-case treatment are never relaxed.
     """
     raw = hashlib.sha256(data).hexdigest()
+    if mode == '100644' and path == 'scripts/ci.sh':
+        before, after, block = APPROVED_CI_BOOTSTRAP
+        if raw == after and data.count(block) == 1:
+            normalized = data.replace(block, b'', 1)
+            if hashlib.sha256(normalized).hexdigest() == before:
+                data, raw = normalized, before
     if mode == '100644' and path in APPROVED_TIMEOUT_CEILINGS:
         before, after, ceiling = APPROVED_TIMEOUT_CEILINGS[path]
         if raw in (before, after):

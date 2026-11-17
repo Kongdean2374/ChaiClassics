@@ -39,6 +39,13 @@ phones.sort(key=lambda d: ('Pro Max' in d['name'], 'Plus' in d['name'], [int(n) 
 print('platform=iOS Simulator,arch='+platform.machine()+',id='+phones[0]['udid'])
 PY
 )
+# CHAI_CI_EXPLICIT_BOOT_V1: selected-device-only, no erase or test retry.
+# The real part_a run failed before any case began while XCTest waited for AX.
+# Warm the same Simulator before starting its automation session, as Visual Smoke does.
+CHAI_SIM_UDID="${CHAI_SIM_DESTINATION##*,id=}"
+mkdir -p build
+xcrun simctl bootstatus "$CHAI_SIM_UDID" -b 2>&1 | tee build/simulator-boot.log
+open -a Simulator --args -CurrentDeviceUDID "$CHAI_SIM_UDID"
 # Intel CI measured 162s for the complete bilingual legal flow. Keep every
 # assertion and serial execution; bound each case instead of killing valid work
 # at the previous 120s maximum and cascading into app-termination failures.

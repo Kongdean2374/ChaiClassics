@@ -14,6 +14,11 @@ class TimeoutCaseEquivalenceTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.current={path:(ROOT/path).read_bytes() for path in scoped.APPROVED_TIMEOUT_CEILINGS}
+        before, after, block = scoped.APPROVED_CI_BOOTSTRAP
+        current = cls.current['scripts/ci.sh']
+        if scoped.hashlib.sha256(current).hexdigest() == after:
+            cls.current['scripts/ci.sh'] = current.replace(block, b'', 1)
+            assert scoped.hashlib.sha256(cls.current['scripts/ci.sh']).hexdigest() == before
 
     def test_only_exact_audited_pairs_project_to_the_original_script_digest(self):
         self.assertEqual(len(self.current),2)

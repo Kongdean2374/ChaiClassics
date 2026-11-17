@@ -99,3 +99,11 @@ Run `44165246236` 的早期原始診斷 artifact `14368567039` 已下載並核�
 `App/MinesView.swift` 的 MinesGrid 現在只在真正可操作時建立格子的手勢、按鈕 traits、accessibility action 與 ID。暫停時仍畫出同一盤面的 MinesCellFace，供既有霧化效果使用，但不建立可操作格子；恢復後重新建立原操作區。保留原有棋盤大小、縮放、資料、長按插旗及 Core 存檔格式。原有 `testIPadMinesweeperScreenshot` 的實際暫停／恢復／設定／棋盤互動斷言全部保留，作為此次已確認問題的原生回歸。
 
 同一次 Intel gallery 在第 25 分鐘被工作步驟上限中斷，數獨尚未完成；不能當成四張截圖已通過。新的候選改用既有標準 `macos-15` ARM pool 執行，以觀察原生 AX 查詢效能；不使用付費機器，也不把尚未完成的案例或時間調整當成通過證據。iPhone `44165238789` 已完成四項真實畫面測試，但因本次改動踩地雷，其 gallery 仍須重跑；無相依改動的其他通過案例可在來源與原始結果吻合時保留。
+
+## iPhone 原生測試啟動前失敗與預啟動
+
+第二輪分組 A（Run `44165139973`）完成 Core 223 項、Simulator App build、工具與 codesign 萃取測試，但 XCTest runner 在任何案例開始前就因 `AX loaded notification` 逾時。原始 `test-results` artifact `14369800378` 已下載，摘要只有一項 runner 錯誤、零通過；這輪沒有任何可沿用的遊戲測試通過紀錄。
+
+CI UI 階段現先對既定 destination 的同一 UDID 執行 `simctl bootstatus -b`，再開啟 Simulator，然後執行原有唯一一次 xcodebuild test。沒有抹除裝置、改變測試篩選或重試真正失敗的案例；預啟動失敗直接中止。兩項實際 shell 呼叫回歸驗證順序、同一裝置、無 erase、無額外 XCTest 呼叫及失敗傳回。
+
+來源保留規則只認可這個完整腳本 SHA-256 與移除七行預啟動後完全一致的基準腳本；任何其他參數、流程、裝置、結果處理或檔案模式變更都不能套用。四項等價性與負面測試確認，實際未執行／失敗的案例仍不能成為通過證據。包含所有既有安全回歸的 Python 278 項本機通過；這些 shell fixtures 並非真實 iPhone／iPad 測試成功。
