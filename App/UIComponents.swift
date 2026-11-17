@@ -28,6 +28,7 @@ struct ContinueCard: View {
             }
             Spacer(minLength: 0)
         }.padding(.vertical, 10)
+            .contentShape(Rectangle())
     }
 }
 struct GameplayActivity: ViewModifier {

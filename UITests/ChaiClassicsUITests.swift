@@ -25,6 +25,54 @@ extension XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [selected], timeout: 5), .completed,
                        "Native segment did not select: " + label, file: file, line: line)
     }
+
+    func nativeConfirmationButton(_ identifier: String, app: XCUIApplication) -> XCUIElement {
+        // Recent iOS versions expose nested Buttons with the same identifier.
+        // Restrict the query to the presented native sheet, then select one.
+        app.sheets.buttons.matching(identifier: identifier).firstMatch
+    }
+
+    func attachUIEvidence(_ app: XCUIApplication, name: String) {
+        let hierarchy = XCTAttachment(string: app.debugDescription)
+        hierarchy.name = name + "-hierarchy"; hierarchy.lifetime = .keepAlways; add(hierarchy)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = name; screenshot.lifetime = .keepAlways; add(screenshot)
+    }
+
+    func tapNativeConfirmation(_ identifier: String, app: XCUIApplication,
+                               file: StaticString = #filePath, line: UInt = #line) {
+        let action = nativeConfirmationButton(identifier, app: app)
+        XCTAssertTrue(action.waitForExistence(timeout: 10), file: file, line: line)
+        XCTAssertTrue(action.isEnabled, file: file, line: line)
+        XCTAssertTrue(action.isHittable, file: file, line: line)
+        action.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !action.exists }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 10), .completed,
+                       "Native confirmation did not dismiss: " + identifier, file: file, line: line)
+    }
+
+    func cancelNativeConfirmation(_ identifier: String, app: XCUIApplication,
+                                  file: StaticString = #filePath, line: UInt = #line) {
+        let action = nativeConfirmationButton(identifier, app: app)
+        XCTAssertTrue(action.waitForExistence(timeout: 5), file: file, line: line)
+        let cancel = app.sheets.buttons.matching(NSPredicate(format: "label IN %@", ["取消", "Cancel"])).firstMatch
+        if cancel.exists {
+            cancel.tap()
+        } else {
+            // A native popover omits its Cancel row. Dismiss outside its sheet;
+            // the subsequent board assertions still prove that no reset ran.
+            XCTAssertTrue(app.popovers.firstMatch.exists, file: file, line: line)
+            let sheet = app.sheets.containing(.button, identifier: identifier).firstMatch
+            let frame = app.frame
+            let point = CGPoint(x: frame.minX + frame.width * 0.04, y: frame.minY + frame.height * 0.94)
+            XCTAssertFalse(sheet.frame.contains(point), file: file, line: line)
+            app.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: point.x - frame.minX, dy: point.y - frame.minY)).tap()
+        }
+        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !action.exists }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed,
+                       "Cancel must dismiss the native confirmation.", file: file, line: line)
+    }
 }
 
 final class ChaiClassicsUITests: XCTestCase {
@@ -60,13 +108,13 @@ final class ChaiClassicsUITests: XCTestCase {
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
     }
     private func scrollFullyIntoView(_ element: XCUIElement, app: XCUIApplication) {
-        let window = app.frame
-        let navigation = app.navigationBars.firstMatch
-        let top = navigation.exists ? navigation.frame.maxY : window.minY
-        var usable = CGRect(x: window.minX + 10, y: top, width: window.width - 20, height: window.maxY - 20 - top)
-        let viewport = app.scrollViews.firstMatch
-        if viewport.exists { usable = usable.intersection(viewport.frame) }
         for _ in 0..<6 {
+            let window = app.frame
+            let navigation = app.navigationBars.firstMatch
+            let top = navigation.exists ? navigation.frame.maxY : window.minY
+            var usable = CGRect(x: window.minX + 10, y: top, width: window.width - 20, height: window.maxY - 20 - top)
+            let viewport = app.scrollViews.firstMatch
+            if viewport.exists { usable = usable.intersection(viewport.frame) }
             if element.exists {
                 let frame = element.frame
                 if frame.width > 0 && frame.height > 0 && usable.contains(frame) {
@@ -76,7 +124,9 @@ final class ChaiClassicsUITests: XCTestCase {
             }
             app.swipeUp()
         }
-        XCTFail("Control did not become fully visible: " + element.identifier)
+        let identifier = element.exists ? element.identifier : "missing-control"
+        attachUIEvidence(app, name: "scroll-visibility-failure-" + identifier)
+        XCTFail("Control did not become fully visible: " + identifier)
     }
     private func visibleMinesCell(_ app: XCUIApplication, viewport: XCUIElement, columns: Int, rows: Int) -> XCUIElement {
         // Read transformed geometry; asking XCTest to hit-test offscreen UIKit
@@ -165,7 +215,9 @@ final class ChaiClassicsUITests: XCTestCase {
     func testMinesFirstRevealAndRestoration() {
         let app = launch("mines")
         app.buttons["game.minesweeper"].tap(); startMines(app)
-        if app.buttons["mines.confirmNew"].waitForExistence(timeout: 1) { app.buttons["mines.confirmNew"].tap() }
+        if nativeConfirmationButton("mines.confirmNew", app: app).waitForExistence(timeout: 1) {
+            tapNativeConfirmation("mines.confirmNew", app: app)
+        }
         let first = app.buttons["mines.cell.0"]
         XCTAssertTrue(first.waitForExistence(timeout: 5))
         XCTAssertEqual(app.segmentedControls.count, 0)
@@ -183,13 +235,15 @@ final class ChaiClassicsUITests: XCTestCase {
     func testSlidingCanStartAndRestore() {
         let app = launch("sliding")
         app.buttons["game.sliding"].tap(); startSliding(app)
-        if app.buttons["sliding.confirmNew"].waitForExistence(timeout: 1) { app.buttons["sliding.confirmNew"].tap() }
+        if nativeConfirmationButton("sliding.confirmNew", app: app).waitForExistence(timeout: 1) {
+            tapNativeConfirmation("sliding.confirmNew", app: app)
+        }
         XCTAssertTrue(app.buttons["sliding.tile.0"].waitForExistence(timeout: 5))
         let labels = (0..<9).map { app.buttons["sliding.tile.\($0)"].label }
         app.terminate(); app.launch()
         app.buttons["game.sliding"].tap(); app.buttons["sliding.continue"].tap()
         XCTAssertEqual(labels, (0..<9).map { app.buttons["sliding.tile.\($0)"].label })
-        app.buttons["sliding.restart"].tap(); app.buttons["取消"].tap()
+        app.buttons["sliding.restart"].tap(); cancelNativeConfirmation("sliding.confirmRestart", app: app)
         XCTAssertEqual(labels, (0..<9).map { app.buttons["sliding.tile.\($0)"].label })
         app.buttons["sliding.pause"].tap(); XCTAssertTrue(app.buttons["繼續"].exists)
         app.buttons["sliding.pause"].tap(); XCTAssertTrue(app.buttons["sliding.tile.0"].exists)
@@ -245,7 +299,7 @@ final class ChaiClassicsUITests: XCTestCase {
         XCTAssertTrue(cell.label.contains("未揭開")); cell.tap()
         XCTAssertTrue(cell.label.contains("已揭開")); XCTAssertFalse(cell.label.contains("旗標"))
         XCTAssertTrue(app.buttons["mines.cell.30"].label.contains("旗標"))
-        app.buttons["mines.restart"].tap(); app.buttons["取消"].tap()
+        app.buttons["mines.restart"].tap(); cancelNativeConfirmation("mines.confirmRestart", app: app)
         XCTAssertTrue(cell.label.contains("已揭開"))
         app.terminate(); app.launch()
         app.buttons["game.minesweeper"].tap(); app.buttons["mines.continue"].tap()
@@ -262,7 +316,8 @@ final class ChaiClassicsUITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(first.frame.width, 32)
         XCTAssertLessThan(abs(app.buttons["mines.cell.80"].frame.maxY - viewport.frame.maxY), 6)
         screenshot(app,"mines-centered-9x9")
-        back(app); app.segmentedControls["mines.size"].buttons["30×16"].tap(); startMines(app); app.buttons["mines.confirmNew"].tap()
+        back(app); app.segmentedControls["mines.size"].buttons["30×16"].tap(); startMines(app)
+        tapNativeConfirmation("mines.confirmNew", app: app)
         let before = app.buttons["mines.cell.0"].frame.width
         viewport.pinch(withScale: 1.8, velocity: 1)
         let zoomed = NSPredicate { _,_ in app.buttons["mines.cell.0"].frame.width > before * 1.2 }
@@ -362,7 +417,7 @@ final class ChaiClassicsUITests: XCTestCase {
                 let page = app.descendants(matching: .any).matching(identifier: "document." + document).firstMatch
                 XCTAssertTrue(page.waitForExistence(timeout: 5))
                 if document != "support" {
-                    XCTAssertTrue(app.staticTexts.matching(NSPredicate(format:"label CONTAINS %@",english ? "Document version: 0.1.2" : "文件版本：0.1.2")).firstMatch.exists)
+                    XCTAssertTrue(app.staticTexts.matching(NSPredicate(format:"label CONTAINS %@",english ? "Document version: 0.2.0" : "文件版本：0.2.0")).firstMatch.exists)
                 }
                 let online = externalLink("legal.online." + document, app: app)
                 scrollFullyIntoView(online, app: app)

@@ -26,7 +26,11 @@ final class ChaiClassicsV020UITests: XCTestCase {
         app.launch()
         app.launchArguments = arguments
         if storageNotice { dismissStorageNotice(app) }
-        XCTAssertTrue(app.buttons["game.sudoku"].waitForExistence(timeout: 10))
+        if extra.contains("--ui-content-size") {
+            XCTAssertTrue(app.staticTexts["home.accessibleTitle"].waitForExistence(timeout: 10))
+        } else {
+            XCTAssertTrue(app.buttons["game.sudoku"].waitForExistence(timeout: 10))
+        }
         return app
     }
 
@@ -119,6 +123,19 @@ final class ChaiClassicsV020UITests: XCTestCase {
     private func capture(_ app: XCUIApplication, _ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
+    }
+
+    private func requireMemoryButtons(_ count: Int, app: XCUIApplication) {
+        let cards = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'memory.card.'"))
+        let appeared = cards.firstMatch.waitForExistence(timeout: 10)
+        // Keep the real accessibility roles and labels as evidence. In
+        // particular, a generic element must not stand in for a card Button.
+        let hierarchy = XCTAttachment(string: app.debugDescription)
+        hierarchy.name = "v020-memory-\(count)-card-button-hierarchy"
+        hierarchy.lifetime = .keepAlways; add(hierarchy)
+        capture(app, "v020-memory-\(count)-card-button-readiness")
+        XCTAssertTrue(appeared, "Memory cards must be exposed as real accessibility Buttons.")
+        XCTAssertEqual(cards.count, count)
     }
 
     private func assertNoHomeProgress(_ card: XCUIElement) {
@@ -380,6 +397,7 @@ final class ChaiClassicsV020UITests: XCTestCase {
         let app = launch("v020-memory", fixture: "memory")
         open("memory", app: app); tap("memory.mode.easy", app: app); tap("memory.continue", app: app)
         XCTAssertTrue(app.staticTexts["memory.pairs"].label.contains("7/8"))
+        requireMemoryButtons(16, app: app)
         let cards = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'memory.card.'"))
         let remaining = cards.allElementsBoundByIndex.filter(\.isEnabled).map(\.identifier)
         XCTAssertEqual(remaining.count, 2)
@@ -434,6 +452,7 @@ final class ChaiClassicsV020UITests: XCTestCase {
             else { choose(game + ".difficulty", option: game == "maze" ? "Hard · 21×21" : "Hard", app: app) }
             tap(game + ".start", app: app)
             if game == "memory" {
+                requireMemoryButtons(36, app: app)
                 XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'memory.card.'")).count, 36)
                 XCTAssertTrue(app.staticTexts["memory.pairs"].label.contains("0/18"))
             } else if game == "twentyfour" {
@@ -457,8 +476,7 @@ final class ChaiClassicsV020UITests: XCTestCase {
         show(app.buttons["memory.start"], app: app, requireHittable: false)
         XCTAssertFalse(app.buttons["memory.start"].isEnabled)
         tap("storage.recover.memory", app: app)
-        let confirm = app.buttons.matching(identifier: "storage.confirmRecovery.memory").firstMatch
-        XCTAssertTrue(confirm.waitForExistence(timeout: 5)); confirm.tap()
+        tapNativeConfirmation("storage.confirmRecovery.memory", app: app)
         XCTAssertFalse(app.buttons["storage.recover.memory"].exists)
         XCTAssertTrue(app.buttons["memory.start"].isEnabled)
         tap("memory.start", app: app)
@@ -529,6 +547,13 @@ final class ChaiClassicsV020UITests: XCTestCase {
                 let app = launch("v020-layout", language: language, appearance: "dark",
                                  extra: ["--uitest-viewport-width", "320", "--ui-content-size", size, "--ui-reduce-motion"])
                 let first = app.buttons["game.sudoku"], second = app.buttons["game.minesweeper"]
+                let title = language == "en" ? "Classic Games" : "經典小遊戲"
+                let fullTitle = app.staticTexts.matching(identifier: "home.accessibleTitle").firstMatch
+                XCTAssertTrue(fullTitle.waitForExistence(timeout: 5))
+                XCTAssertEqual(fullTitle.label, title)
+                XCTAssertTrue(visibleArea(app).contains(fullTitle.frame), "The complete multiline Home title must fit inside the visible scroll viewport.")
+                attachUIEvidence(app, name: "v020-viewport-320-\(language)-\(size)-full-title")
+                show(first, app: app)
                 XCTAssertTrue(first.waitForExistence(timeout: 5))
                 XCTAssertGreaterThan(first.frame.width, 130)
                 assertNoHomeProgress(first)

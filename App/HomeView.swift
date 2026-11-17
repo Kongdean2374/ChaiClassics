@@ -3,11 +3,20 @@ import ChaiCore
 
 struct HomeView: View {
     @EnvironmentObject var model: AppModel
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 26) {
+                    if dynamicTypeSize.isAccessibilitySize {
+                        Text(model.t("home.title"))
+                            .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityAddTraits(.isHeader)
+                            .accessibilityIdentifier("home.accessibleTitle")
+                    }
                     introduction
                     VStack(alignment: .leading, spacing: 14) {
                         Text(model.t("home.games"))
@@ -34,7 +43,8 @@ struct HomeView: View {
                 .frame(maxWidth: .infinity)
             }
             .background { GameCanvas() }
-            .navigationTitle(model.t("home.title"))
+            .navigationTitle(dynamicTypeSize.isAccessibilitySize ? "" : model.t("home.title"))
+            .navigationBarTitleDisplayMode(dynamicTypeSize.isAccessibilitySize ? .inline : .automatic)
             .navigationDestination(for: CatalogItemID.self) { id in
                 if let item = GameCatalog.item(id) {
                     switch item.kind {

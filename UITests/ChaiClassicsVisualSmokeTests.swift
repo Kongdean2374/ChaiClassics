@@ -63,13 +63,15 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
     private func back(_ app: XCUIApplication) { app.buttons["navigation.back"].tap() }
 
     private func scrollFullyIntoView(_ element: XCUIElement, app: XCUIApplication) {
-        let window = app.frame
-        let navigation = app.navigationBars.firstMatch
-        let top = navigation.exists ? navigation.frame.maxY : window.minY
-        var usable = CGRect(x: window.minX + 10, y: top, width: window.width - 20, height: window.maxY - 20 - top)
-        let viewport = app.scrollViews.firstMatch
-        if viewport.exists { usable = usable.intersection(viewport.frame) }
         for _ in 0..<5 {
+            // Navigation can finish changing from a large Home title to an
+            // inline destination title during this search. Never cache its frame.
+            let window = app.frame
+            let navigation = app.navigationBars.firstMatch
+            let top = navigation.exists ? navigation.frame.maxY : window.minY
+            var usable = CGRect(x: window.minX + 10, y: top, width: window.width - 20, height: window.maxY - 20 - top)
+            let viewport = app.scrollViews.firstMatch
+            if viewport.exists { usable = usable.intersection(viewport.frame) }
             if element.exists {
                 let frame = element.frame
                 if frame.width > 0 && frame.height > 0 && usable.contains(frame) { return }
@@ -77,7 +79,9 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
             }
             app.swipeUp()
         }
-        XCTFail("Control did not become fully visible: " + element.identifier)
+        let identifier = element.exists ? element.identifier : "missing-control"
+        attachUIEvidence(app, name: "scroll-visibility-failure-" + identifier)
+        XCTFail("Control did not become fully visible: " + identifier)
     }
 
     func testFreshWinCelebratesOnceAndRestoredWinDoesNotReplay() throws {
@@ -104,8 +108,16 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         expectProbe(app, starts: 0, active: false)
 
         app.buttons["sliding.restart"].tap()
-        app.buttons["sliding.confirmRestart"].tap()
+        tapNativeConfirmation("sliding.confirmRestart", app: app)
+        let restarted = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            !app.staticTexts["sliding.complete"].exists &&
+            app.staticTexts["sliding.moves"].label == "0 步" &&
+            app.buttons["sliding.tile.7"].isEnabled
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [restarted], timeout: 10), .completed)
         XCTAssertFalse(app.staticTexts["sliding.complete"].exists)
+        XCTAssertEqual(app.staticTexts["sliding.moves"].label, "0 步")
+        XCTAssertEqual(app.buttons["sliding.tile.6"].label, "空格")
         expectProbe(app, starts: 0, active: false)
     }
 
@@ -143,6 +155,10 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
 
         for (game, playElement) in [("sudoku", "sudoku.cell.1"), ("minesweeper", "mines.cell.30"), ("sliding", "sliding.tile.8")] {
             app.buttons["game." + game].tap()
+            let title = ["sudoku": "數獨", "minesweeper": "踩地雷", "sliding": "滑塊拼圖"][game]!
+            XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 10))
+            let menuBack = app.buttons.matching(identifier: "navigation.back").firstMatch
+            XCTAssertTrue(menuBack.waitForExistence(timeout: 5)); XCTAssertTrue(menuBack.isHittable)
             screenshot(app, name: "visual-013-" + game + "-menu-dark")
             let continueID = game == "minesweeper" ? "mines.continue" : game + ".continue"
             let resume = app.buttons[continueID]
@@ -332,6 +348,12 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         screenshot(app, name: "v020-iPad-home-bottom")
         let folder = app.buttons["catalog.solitaire"]
         scrollFullyIntoView(folder, app: app); folder.tap()
+        let arrived = app.navigationBars["接龍"].waitForExistence(timeout: 10)
+        let directory = app.descendants(matching: .any).matching(identifier: "catalog.folder.solitaire").firstMatch
+        let directoryExists = directory.waitForExistence(timeout: 5)
+        attachUIEvidence(app, name: "v020-iPad-solitaire-arrival")
+        XCTAssertTrue(arrived, "The folder's own navigation title must arrive before inspecting card geometry.")
+        XCTAssertTrue(directoryExists)
         let solitaire = ["klondike", "spider", "freecell", "pyramid", "tripeaks"].map { app.buttons["catalog." + $0] }
         for card in solitaire {
             scrollFullyIntoView(card, app: app)
