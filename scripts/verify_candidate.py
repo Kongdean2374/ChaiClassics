@@ -238,10 +238,11 @@ def verify_tooling_only_equivalence(source_sha, target_sha, root=ROOT, *, tree_r
     # Only exact audited boot/ceiling pairs may retain an already successful
     # whole screenshot run. App/runtime edits, helpers and protected test bodies
     # still fail below; this never supplies missing/failed XCTest results.
-    from verify_scoped_ci import APPROVED_TIMEOUT_CEILINGS, APPROVED_CI_JOB_TIMEOUT, shared_content_digest
+    from verify_scoped_ci import APPROVED_TIMEOUT_CEILINGS, APPROVED_CI_JOB_TIMEOUT, APPROVED_IPAD_JOB_BUDGET, shared_content_digest
     execution_equivalence = {}
     canonical_execution = {path: pair[0] for path, pair in APPROVED_TIMEOUT_CEILINGS.items()}
     canonical_execution['.github/workflows/ci.yml'] = APPROVED_CI_JOB_TIMEOUT[0]
+    canonical_execution['.github/workflows/ipad-screenshots.yml'] = APPROVED_IPAD_JOB_BUDGET[0]
     if tested_cases is not None:
         for path in changed:
             if path not in canonical_execution or path not in before or path not in after:

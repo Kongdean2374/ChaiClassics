@@ -6,7 +6,7 @@ import UIKit
 final class ChaiClassicsV020UITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
-        executionTimeAllowance = 420
+        executionTimeAllowance = 600
         XCUIDevice.shared.orientation = .portrait
     }
 
@@ -312,10 +312,17 @@ final class ChaiClassicsV020UITests: XCTestCase {
         XCTAssertEqual(visitedPreviews.count, 17)
     }
 
-    func testCompleteCatalogAndThirteenComingSoonPagesInEnglish() { inspectCatalog(language: "en") }
-    func testCompleteCatalogAndThirteenComingSoonPagesInTraditionalChinese() { inspectCatalog(language: "zh-Hant") }
+    func testCompleteCatalogAndThirteenComingSoonPagesInEnglish() {
+        executionTimeAllowance = 900
+        inspectCatalog(language: "en")
+    }
+    func testCompleteCatalogAndThirteenComingSoonPagesInTraditionalChinese() {
+        executionTimeAllowance = 900
+        inspectCatalog(language: "zh-Hant")
+    }
 
     func testAllEightPlayableCardsOpenRealMenus() {
+        executionTimeAllowance = 900
         let app = launch("v020-catalog")
         let controls = ["sudoku": "sudoku.difficulty.easy", "minesweeper": "mines.start", "sliding": "sliding.start",
                         "tictactoe": "tictactoe.start", "connectfour": "connectfour.start", "twentyfour": "twentyfour.start", "memory": "memory.start", "maze": "maze.start"]
@@ -414,7 +421,7 @@ final class ChaiClassicsV020UITests: XCTestCase {
     /// No seeds or AI overrides are used: each configuration starts through the
     /// real single-player menu, then waits for the production background task.
     private func inspectSinglePlayerAI(_ game: String,difficulty: String) {
-        executionTimeAllowance = 420
+        executionTimeAllowance = 600
         let cellPrefix = game == "tictactoe" ? "tictactoe.cell." : "connectfour.column."
         let cellCount = game == "tictactoe" ? 9 : 7
         do {

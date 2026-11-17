@@ -14,6 +14,11 @@ class TimeoutCaseEquivalenceTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.current={path:(ROOT/path).read_bytes() for path in scoped.APPROVED_TIMEOUT_CEILINGS}
+        before_default, after_default = scoped.APPROVED_CI_DEFAULT_ALLOWANCE
+        current = cls.current['scripts/ci.sh']
+        if scoped.hashlib.sha256(current).hexdigest() == after_default:
+            cls.current['scripts/ci.sh'] = current.replace(b'-default-test-execution-time-allowance 600', b'-default-test-execution-time-allowance 420')
+            assert scoped.hashlib.sha256(cls.current['scripts/ci.sh']).hexdigest() == before_default
         before, after, block = scoped.APPROVED_CI_BOOTSTRAP
         current = cls.current['scripts/ci.sh']
         if scoped.hashlib.sha256(current).hexdigest() == after:
@@ -26,7 +31,7 @@ class TimeoutCaseEquivalenceTests(unittest.TestCase):
             before,after,ceiling=scoped.APPROVED_TIMEOUT_CEILINGS[path]
             original=data.replace(b'-maximum-test-execution-time-allowance 1800',('-maximum-test-execution-time-allowance '+str(ceiling)).encode())
             self.assertEqual(scoped.hashlib.sha256(original).hexdigest(),before)
-            self.assertEqual(scoped.hashlib.sha256(data).hexdigest(),after)
+            self.assertIn(scoped.hashlib.sha256(data).hexdigest(),after if isinstance(after,tuple) else (after,))
             self.assertEqual(scoped.shared_content_digest(path,'100644',original),before)
             self.assertEqual(scoped.shared_content_digest(path,'100644',data),before)
 
@@ -54,12 +59,12 @@ class TimeoutCaseEquivalenceTests(unittest.TestCase):
             with mock.patch.dict(scoped.APPROVED_TIMEOUT_CEILINGS,{path:(before,changed,ceiling)}):
                 self.assertEqual(scoped.shared_content_digest(path,'100644',modified),changed)
 
-    def test_ipad_gallery_ceiling_and_every_original_selector_are_unchanged(self):
+    def test_both_ipad_phases_keep_bounded_ceilings_and_every_original_selector(self):
         data=self.current['scripts/ipad_screenshots.sh']
         games,gallery=data.split(b'else\n  # Reuse the existing test target',1)
         self.assertEqual(games.count(b'-maximum-test-execution-time-allowance 1800'),1)
-        self.assertEqual(gallery.count(b'-maximum-test-execution-time-allowance 720'),1)
-        self.assertNotIn(b'-maximum-test-execution-time-allowance 1800',gallery)
+        self.assertEqual(gallery.count(b'-maximum-test-execution-time-allowance 1800'),1)
+        self.assertNotIn(b'-test-timeouts-enabled NO',gallery)
         self.assertEqual(data.count(b'-only-testing:ChaiClassicsUITests/ChaiClassicsVisualSmokeTests/testIPad'),4)
 
     def test_real_source_pair_changes_only_the_long_shogi_case_not_the_other_seventy(self):

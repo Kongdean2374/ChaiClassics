@@ -620,6 +620,9 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
     func testIPadSudokuScreenshot() throws {
         try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "Requires the dedicated 13-inch iPad simulator.")
         let app = try launchIPadGallery()
+        // Native Intel snapshots of 81 cells plus all controls exceed 600s.
+        // Retain every interaction and geometry assertion with a bounded case.
+        executionTimeAllowance = 1800
         openIPadSavedGame(app, game: "sudoku", prefix: "sudoku", firstCell: "sudoku.cell.0")
         let corners = [0, 8, 72, 80].map { app.buttons["sudoku.cell.\($0)"] }
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "sudoku.cell.")).count, 81)

@@ -11,6 +11,10 @@ class CIBootEquivalenceTests(unittest.TestCase):
     def setUp(self):
         self.path='scripts/ci.sh'
         self.current=(Path(__file__).resolve().parents[1]/self.path).read_bytes()
+        old_default,new_default=scoped.APPROVED_CI_DEFAULT_ALLOWANCE
+        if hashlib.sha256(self.current).hexdigest()==new_default:
+            self.current=self.current.replace(b'-default-test-execution-time-allowance 600',b'-default-test-execution-time-allowance 420')
+            assert hashlib.sha256(self.current).hexdigest()==old_default
         self.before,self.after,self.block=scoped.APPROVED_CI_BOOTSTRAP
         self.original=self.current.replace(self.block,b'',1)
         self.canonical=scoped.APPROVED_TIMEOUT_CEILINGS[self.path][0]

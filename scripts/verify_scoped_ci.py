@@ -42,7 +42,7 @@ APPROVED_TIMEOUT_CEILINGS = {
         '2e1252ec7bd4cd555a4320b85626bf754d14877c71b5326e80a1abdbb92d25bd', 600),
     'scripts/ipad_screenshots.sh': (
         '84ab95e08fd2103f38e03e741e79db1b74ba6f1263862b8a5fd18916db839f87',
-        '7978a7bd5c9d6e7336a80b7fd84abef7271581239e3e4015c1e39fea66abd00e', 720),
+        ('7978a7bd5c9d6e7336a80b7fd84abef7271581239e3e4015c1e39fea66abd00e', 'bd822a320c43f61b46b9851031406013eeaf65b35fec89ebb3a135424946436c'), 720),
 }
 # Exact CI-only preflight addition. It warms the already selected device, before
 # the unchanged XCTest command. No erase, retry, selectors or result handling.
@@ -60,6 +60,9 @@ APPROVED_V030_TOOLBAR_HELPER = (
     '            if element.exists, element.isHittable, safe.contains(CGPoint(x:element.frame.midX,y:element.frame.midY)) { return }\n',
     '            if element.exists, element.isHittable {\n                let target = element.frame\n                // Navigation controls belong to the native bar, above scroll content.\n                if let navigation, navigation.frame.contains(target), window.contains(target) { return }\n                if safe.contains(CGPoint(x:target.midX,y:target.midY)) { return }\n            }\n')
 APPROVED_CI_JOB_TIMEOUT = ('de7240119cf78c8f32cb1808eed6e0cffb3fb02b2c05a4ad15234ad4f4bec37f', 'eb2e8c4b0fd12b3b3298d0767706b0fceffeaf203f8a73008de4fbc933ebf815')
+APPROVED_IPAD_JOB_BUDGET = ('edc902f4bfb8fd2079c4c87f8ff440e708ff05044506820e80ab39392322b1d3', '766f7ac020bafcbc3369abc4c25c4c221dd2923b125dbae47ba6cc1939e1eb92')
+APPROVED_V020_CASE_ALLOWANCE = ('eb479e2277033521ebb2dd6ebe58f9ef79ef34f07d58de98f7926f7b3f74ee25', 'b6326fba442492b2927237e4fe5c5a08eb1d1d1416a5b699cd979b35e1a86fe3')
+APPROVED_CI_DEFAULT_ALLOWANCE = ('99d12fc7647d1d9d9cba8b2fb486f5e709dfbf7649625498cc9d8476eb49daef', 'da404efc21b0114c9827542f46ee4a3d44583b00c9fee8e3a2f31b3d58792414')
 GAME_FILES = {
     'sudoku': {'Core/Sudoku.swift', 'App/SudokuView.swift'},
     'mines': {'Core/Minesweeper.swift', 'App/MinesView.swift', ZOOM_BOARD_FILE},
@@ -160,7 +163,7 @@ SESSION_BODY_PROFILES = {
     'ChaiClassicsVisualSmokeTests/testIPadSlidingPuzzleScreenshot': (
         'dc44b6a2007ac9c0642246cdeef782a9dea80a7ead2fc3125db02618d8d67516', ('sliding',)),
     'ChaiClassicsVisualSmokeTests/testIPadSudokuScreenshot': (
-        '4d9a5ef4e6cb0700fedb363d282e73def865c5840ca194bc3370bb0ccbe403e9', ('sudoku',)),
+        '2a85dcd2a715c03fad1f19c270084bb890071650e5dada8154196b60b465e234', ('sudoku',)),
     'ChaiClassicsVisualSmokeTests/testLowPowerSuppressesCelebrationButStillCompletesGame': (
         'd61c0385dafb936cc689eb2a99a09bfa0054600f25f224fa476b2d9e75893cba', ('sliding',)),
     'ChaiClassicsVisualSmokeTests/testMazeCommonSessionLifecycleAndContinueDeletion': (
@@ -224,12 +227,26 @@ def shared_content_digest(path, mode, data):
     enabled timeouts and failed-case treatment are never relaxed.
     """
     raw = hashlib.sha256(data).hexdigest()
+    if mode == '100644' and path == '.github/workflows/ipad-screenshots.yml':
+        before, after = APPROVED_IPAD_JOB_BUDGET
+        if raw == after:
+            normalized = data.replace(b'    timeout-minutes: 330\n', b'    timeout-minutes: 240\n', 1)
+            normalized = normalized.replace(b'        id: boot\n        timeout-minutes: 15\n', b'        id: boot\n        timeout-minutes: 10\n', 1)
+            normalized = normalized.replace(b'        id: ui\n        timeout-minutes: 60\n', b'        id: ui\n        timeout-minutes: 25\n', 1)
+            if hashlib.sha256(normalized).hexdigest() == before:
+                return before
     if mode == '100644' and path == '.github/workflows/ci.yml':
         before, after = APPROVED_CI_JOB_TIMEOUT
         if raw == after and data.count(b'    timeout-minutes: 180\n') == 1:
             normalized = data.replace(b'    timeout-minutes: 180\n', b'    timeout-minutes: 90\n', 1)
             if hashlib.sha256(normalized).hexdigest() == before:
                 return before
+    if mode == '100644' and path == 'scripts/ci.sh':
+        before, after = APPROVED_CI_DEFAULT_ALLOWANCE
+        if raw == after:
+            normalized = data.replace(b'-default-test-execution-time-allowance 600', b'-default-test-execution-time-allowance 420')
+            if hashlib.sha256(normalized).hexdigest() == before:
+                data, raw = normalized, before
     if mode == '100644' and path == 'scripts/ci.sh':
         before, after, block = APPROVED_CI_BOOTSTRAP
         if raw == after and data.count(block) == 1:
@@ -238,7 +255,7 @@ def shared_content_digest(path, mode, data):
                 data, raw = normalized, before
     if mode == '100644' and path in APPROVED_TIMEOUT_CEILINGS:
         before, after, ceiling = APPROVED_TIMEOUT_CEILINGS[path]
-        if raw in (before, after):
+        if raw == before or raw in (after if isinstance(after, tuple) else (after,)):
             normalized = data.replace(b'-maximum-test-execution-time-allowance 1800',
                                       ('-maximum-test-execution-time-allowance ' + str(ceiling)).encode())
             if hashlib.sha256(normalized).hexdigest() == before:
@@ -312,8 +329,19 @@ def zoom_board_is_mines_only(tree):
     return True
 
 
-def external_scaffold_digest(path, mode, scaffold):
+def scaffold_budget_digest(path, mode, scaffold):
     raw = hashlib.sha256(scaffold.encode()).hexdigest()
+    if path == 'UITests/ChaiClassicsV020UITests.swift' and mode == '100644':
+        before, after = APPROVED_V020_CASE_ALLOWANCE
+        if raw == after and scaffold.count('executionTimeAllowance = 600') == 2:
+            normalized = scaffold.replace('executionTimeAllowance = 600', 'executionTimeAllowance = 420')
+            if hashlib.sha256(normalized.encode()).hexdigest() == before:
+                return before
+    return raw
+
+
+def external_scaffold_digest(path, mode, scaffold):
+    raw = scaffold_budget_digest(path, mode, scaffold)
     if path != 'UITests/ChaiClassicsV030UITests.swift' or mode != '100644':
         return raw
     before, after, old_block, new_block = APPROVED_V030_TOOLBAR_HELPER
@@ -350,7 +378,7 @@ def fingerprints(tree):
                     require(identity not in methods, 'Duplicate UI test identity.')
                     methods[identity] = source[start:end]
                     scaffold = scaffold[:start] + '{TEST_BODY}' + scaffold[end:]
-            helper_fingerprints[Path(path).stem] = hashlib.sha256(scaffold.encode()).hexdigest()
+            helper_fingerprints[Path(path).stem] = scaffold_budget_digest(path, mode, scaffold)
             scaffolds.append((path, mode, helper_fingerprints[Path(path).stem]))
             external_scaffolds[path] = external_scaffold_digest(path, mode, scaffold)
         elif (path in SHARED_SESSION_FILES or path not in ALL_GAME_FILES or path.startswith('Core/')
@@ -473,6 +501,12 @@ def covered(test, item):
 def planned_tests(target_fingerprints, records):
     coverage = inherited_coverage(target_fingerprints, records)
     missing = sorted(test for test in target_fingerprints if not covered(test, coverage.get(test)))
+    # A changed iPad-only case still skips on phone; retain a real current UI
+    # sentinel alongside it, rather than emitting a skipped-only green run.
+    if missing and all(test.split('/')[-1] in candidate.IPAD_TESTS for test in missing):
+        sentinel = FAST_SENTINEL if FAST_SENTINEL in target_fingerprints else next(
+            test for test in sorted(target_fingerprints) if test.split('/')[-1] not in candidate.IPAD_TESTS)
+        return sorted([sentinel] + missing)
     # Never turn an empty selector into an accidentally unfiltered or fictional green run.
     return missing or [FAST_SENTINEL if FAST_SENTINEL in target_fingerprints else
                        next(test for test in sorted(target_fingerprints) if test.split('/')[-1] not in candidate.IPAD_TESTS)]

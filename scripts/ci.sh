@@ -51,7 +51,7 @@ open -a Simulator --args -CurrentDeviceUDID "$CHAI_SIM_UDID"
 # at the previous 120s maximum and cascading into app-termination failures.
 CHAI_UI_EXIT=0
 mkdir -p build
-xcodebuild -project ChaiClassics.xcodeproj -scheme ChaiClassics -destination "$CHAI_SIM_DESTINATION" -derivedDataPath build/DerivedData -resultBundlePath build/UITests.xcresult CODE_SIGNING_ALLOWED=NO ONLY_ACTIVE_ARCH=YES "${CHAI_UI_ARGS[@]}" -test-timeouts-enabled YES -default-test-execution-time-allowance 420 -maximum-test-execution-time-allowance 1800 test 2>&1 | tee build/UITests.log || CHAI_UI_EXIT=$?
+xcodebuild -project ChaiClassics.xcodeproj -scheme ChaiClassics -destination "$CHAI_SIM_DESTINATION" -derivedDataPath build/DerivedData -resultBundlePath build/UITests.xcresult CODE_SIGNING_ALLOWED=NO ONLY_ACTIVE_ARCH=YES "${CHAI_UI_ARGS[@]}" -test-timeouts-enabled YES -default-test-execution-time-allowance 600 -maximum-test-execution-time-allowance 1800 test 2>&1 | tee build/UITests.log || CHAI_UI_EXIT=$?
 if [[ -d build/UITests.xcresult ]]; then
   xcrun xcresulttool get test-results summary --path build/UITests.xcresult > build/UITests-summary.json || CHAI_UI_EXIT=1
 fi

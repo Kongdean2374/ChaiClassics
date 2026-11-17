@@ -25,3 +25,7 @@ GitHub Actions → CI → Run workflow 可選 `ui_scope`。`full` 執行全部 7
 ### V030 私有導覽列 helper 與整組時限
 
 原生證據確認可見設定按鈕位於導覽列內、原私有捲動 helper 卻只接受列下內容。僅固定的兩個完整 scaffold 與精確逆向還原可把此差異限制於 final V030 XCTest 類別的 17 項；其他 54 項的實際通過紀錄仍須原始 ZIP、摘要、log、來源及相依性全部相符。未知 helper／setup／全域更動仍使全部失效。整組 CI 時限 90→180 分鐘同樣只接受固定完整 YAML 與單行逆向還原；取消、未完成、缺摘要或失敗案例不因時限調整得到通過資格。
+
+### 有界的 XCTest 時間預算
+
+Intel 實測完整目錄／版面案例超過 420 秒後會觸發 XCTest watchdog，影響下一項 App 啟停。已用固定來源、精確還原與負面測試核准一般 whole-case 600 秒及 V020 兩個同值設定；既有通過紀錄的字面斷言、遊戲資料與每步等待不變。另有固定 iPad job／boot／gallery 預算組合及 gallery maximum ceiling。未知時間、命令、權限、selector、模式或其他 setup 變化仍不等價。iPad-only 變更在手機略過時，加跑一個真實 Home 案例；失敗／取消／未執行紀錄不計為通過。

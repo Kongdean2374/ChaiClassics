@@ -91,7 +91,7 @@ else
     -only-testing:ChaiClassicsUITests/ChaiClassicsVisualSmokeTests/testIPadMinesweeperScreenshot \
     -only-testing:ChaiClassicsUITests/ChaiClassicsVisualSmokeTests/testIPadSlidingPuzzleScreenshot \
     -parallel-testing-enabled NO -test-timeouts-enabled YES \
-    -default-test-execution-time-allowance 600 -maximum-test-execution-time-allowance 720 \
+    -default-test-execution-time-allowance 600 -maximum-test-execution-time-allowance 1800 \
     test-without-building)
   CHAI_IPAD_GALLERY_EXIT=0
   xcodebuild "${CHAI_IPAD_GALLERY_ARGS[@]}" 2>&1 | tee "$CHAI_IPAD_OUTPUT/tests.log" || CHAI_IPAD_GALLERY_EXIT=$?

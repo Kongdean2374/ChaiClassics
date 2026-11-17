@@ -111,7 +111,7 @@ check(scope_inputs['options'].include?('beta'), 'manual CI exposes the explicit 
 check(ci_workflow['run-name'].include?('inputs.ui_scope') && test_job['name'].nil?, 'CI run title identifies scope without changing verification job identities')
 check(test_job['timeout-minutes'] == 180, 'unsigned ARM CI has a bounded total runtime')
 ci_script = File.read(File.join(root, 'scripts/ci.sh'))
-check(ci_script.include?('-test-timeouts-enabled YES') && ci_script.include?('-default-test-execution-time-allowance 420') && ci_script.include?('-maximum-test-execution-time-allowance 1800'), 'ordinary cases keep their original allowances; the measured long Shogi journey has an explicit bounded cap')
+check(ci_script.include?('-test-timeouts-enabled YES') && ci_script.include?('-default-test-execution-time-allowance 600') && ci_script.include?('-maximum-test-execution-time-allowance 1800'), 'ordinary UI cases retain bounded 600s XCTest budgets; the measured long Shogi journey has an explicit bounded cap')
 _, _, invalid_phase = Open3.capture3('bash', File.join(root, 'scripts/ci.sh'), 'unknown-phase')
 check(invalid_phase.exitstatus == 64, 'unknown CI phase must fail instead of silently skipping verification')
 puts 'PASS: visible ordered CI phases, bounded UI/total runtimes and rejected unknown phase; all tests retained.'
@@ -191,9 +191,9 @@ check(!ipad_source.match?(/secrets\.|run_signing_lane|fastlane|upload_to_testfli
 ipad_steps = ipad_job.fetch('steps')
 boot_step = ipad_steps.find { |step| step['id'] == 'boot' }
 test_step = ipad_steps.find { |step| step['id'] == 'ui' }
-check(boot_step && boot_step['run'] == 'bash scripts/ipad_screenshots.sh boot' && boot_step['timeout-minutes'] == 10, 'cold iPad startup has its own bounded step')
-check(test_step && test_step['run'] == 'bash scripts/ipad_screenshots.sh test' && test_step['timeout-minutes'] == 25, 'XCTest keeps a separate timeout for execution and xcresult finalization')
-check(ipad_job['timeout-minutes'] == 240 && ipad_steps.find { |step| step['id'] == 'games' }['timeout-minutes'] == 210, 'all 22 full journeys retain a bounded budget including confirmed deletion and relaunch rather than being cut off halfway')
+check(boot_step && boot_step['run'] == 'bash scripts/ipad_screenshots.sh boot' && boot_step['timeout-minutes'] == 15, 'cold iPad startup has its own bounded step')
+check(test_step && test_step['run'] == 'bash scripts/ipad_screenshots.sh test' && test_step['timeout-minutes'] == 60, 'XCTest keeps a separate timeout for execution and xcresult finalization')
+check(ipad_job['timeout-minutes'] == 330 && ipad_steps.find { |step| step['id'] == 'games' }['timeout-minutes'] == 210, 'all 22 full journeys retain a bounded budget including confirmed deletion and relaunch rather than being cut off halfway')
 check(ipad_steps.index(boot_step) < ipad_steps.index(test_step), 'the selected iPad boots before XCTest starts')
 checkout = ipad_steps.find { |step| step.fetch('uses', '').start_with?('actions/checkout@') }
 check(checkout.dig('with', 'persist-credentials') == false, 'iPad checkout does not persist credentials')

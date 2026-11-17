@@ -16,6 +16,10 @@ class ScreenshotBootEquivalenceTests(unittest.TestCase):
         # Shallow release-tooling checkouts retain all required runtime sources;
         # this fixture models the exact boot block removal, not a fake UI pass.
         cls.target['scripts/ci.sh']=('100644',(ROOT/'scripts/ci.sh').read_bytes())
+        old_default,new_default=scoped.APPROVED_CI_DEFAULT_ALLOWANCE
+        current=cls.target['scripts/ci.sh'][1]
+        if scoped.hashlib.sha256(current).hexdigest()==new_default:
+            cls.target['scripts/ci.sh']=('100644',current.replace(b'-default-test-execution-time-allowance 600',b'-default-test-execution-time-allowance 420'))
         cls.original=dict(cls.target)
         before,after,block=scoped.APPROVED_CI_BOOTSTRAP
         data=cls.original['scripts/ci.sh'][1]

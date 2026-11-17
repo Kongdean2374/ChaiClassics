@@ -23,7 +23,7 @@ jobs:
     # The first measured 22-game run used 85 minutes while most new journeys
     # stopped halfway at an offscreen link. Keep their remaining real
     # confirmation/relaunch checks bounded without a premature job cutoff.
-    timeout-minutes: 240
+    timeout-minutes: 330
     env:
       CHAI_IPAD_REQUESTED_RUNNER: ${{ inputs.runner }}
       CHAI_IPAD_DEVICE_NAME: ${{ inputs.device_name }}
@@ -49,11 +49,11 @@ jobs:
         run: bash scripts/ipad_screenshots.sh build
       - name: Boot the selected 13-inch iPad Simulator
         id: boot
-        timeout-minutes: 10
+        timeout-minutes: 15
         run: bash scripts/ipad_screenshots.sh boot
       - name: Run four portrait iPad UI screenshot tests
         id: ui
-        timeout-minutes: 25
+        timeout-minutes: 60
         run: bash scripts/ipad_screenshots.sh test
       - name: Export gallery diagnostics before the longer game journeys
         if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.boot.outcome == 'success' }}
