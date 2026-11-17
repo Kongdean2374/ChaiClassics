@@ -11,10 +11,13 @@ final class ChaiClassicsV020UITests: XCTestCase {
     }
 
     private let playable = ["sudoku", "minesweeper", "sliding", "tictactoe", "connectfour", "twentyfour", "memory", "maze"]
-    private let singlePreviews = ["nonogram", "kakuro", "klotski", "gomoku", "reversi", "snake", "fallingblocks", "brickbreaker"]
+    private let boardPlayable = ["tictactoe", "connectfour"]
+    private let boardPreviews = ["gomoku", "reversi", "xiangqi", "banqi", "chess", "shogi"]
+    private let singlePreviews = ["nonogram", "kakuro", "klotski", "snake", "fallingblocks", "brickbreaker"]
     private let solitaire = ["klondike", "spider", "freecell", "pyramid", "tripeaks"]
     private var homeIDs: Set<String> {
-        Set(playable.map { "game." + $0 } + singlePreviews.map { "catalog." + $0 } + ["catalog.solitaire"])
+        Set(playable.filter { !boardPlayable.contains($0) }.map { "game." + $0 }
+            + singlePreviews.map { "catalog." + $0 } + ["catalog.boardgames", "catalog.solitaire"])
     }
 
     private func launch(_ profile: String, fixture: String? = nil, language: String = "en", appearance: String = "light", extra: [String] = [], seeds: [String: Data] = [:], storageNotice: Bool = false) -> XCUIApplication {
@@ -87,6 +90,15 @@ final class ChaiClassicsV020UITests: XCTestCase {
     }
 
     private func open(_ game: String, app: XCUIApplication) {
+        let directory = app.descendants(matching: .any).matching(identifier: "catalog.folder.boardgames").firstMatch
+        if boardPlayable.contains(game) {
+            if !directory.exists {
+                tap("catalog.boardgames", app: app)
+                XCTAssertTrue(directory.waitForExistence(timeout: 10))
+            }
+        } else if directory.exists {
+            back(app)
+        }
         let card = app.buttons["game." + game]
         show(card, app: app); card.tap()
     }
@@ -95,7 +107,13 @@ final class ChaiClassicsV020UITests: XCTestCase {
         // Native confirmation popovers can expose the same action more than
         // once on iPad. Resolve one element before reading its frame or tapping.
         let button = app.buttons.matching(identifier: id).firstMatch
-        show(button, app: app); button.tap()
+        show(button, app: app)
+        if !button.isEnabled {
+            let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in button.exists && button.isEnabled }, object: nil)
+            XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 10), .completed,
+                           "The real transition must finish before the next input: " + id)
+        }
+        button.tap()
     }
 
     private func choose(_ id: String, option: String, app: XCUIApplication) {
@@ -167,13 +185,18 @@ final class ChaiClassicsV020UITests: XCTestCase {
             for card in cards.allElementsBoundByIndex where card.exists && area.contains(CGPoint(x: card.frame.midX, y: card.frame.midY)) {
                 XCTAssertTrue(homeIDs.contains(card.identifier), "Unexpected Home card: " + card.identifier)
                 assertNoHomeProgress(card)
-                XCTAssertTrue(card.label.contains(language == "en" ? (card.identifier.hasPrefix("game.") ? "Playable" : "Coming soon") : (card.identifier.hasPrefix("game.") ? "可遊玩" : "尚未推出")))
+                if card.identifier == "catalog.boardgames" {
+                    XCTAssertTrue(card.label.contains(language == "en" ? "2 playable · 6 coming soon" : "2 款可遊玩 · 6 款尚未推出"))
+                } else {
+                    XCTAssertTrue(card.label.contains(language == "en" ? (card.identifier.hasPrefix("game.") ? "Playable" : "Coming soon") : (card.identifier.hasPrefix("game.") ? "可遊玩" : "尚未推出")))
+                }
                 seen.insert(card.identifier)
             }
             if seen == homeIDs { break }
             scroll(app, down: false)
         }
-        XCTAssertEqual(seen, homeIDs, "Every one of the 17 cards must be reachable by scrolling.")
+        XCTAssertEqual(homeIDs.count, 14)
+        XCTAssertEqual(seen, homeIDs, "Every one of the 14 Home cards must be reachable by scrolling.")
         capture(app, "v020-catalog-bottom-" + language)
         // Return to the beginning once; previews are then visited in catalog order.
         for _ in 0..<10 {
@@ -183,10 +206,12 @@ final class ChaiClassicsV020UITests: XCTestCase {
         let names: [String: (String, String)] = [
             "nonogram": ("Nonogram", "數織"), "kakuro": ("Kakuro", "數和"), "klotski": ("Klotski", "華容道"),
             "gomoku": ("Gomoku", "五子棋"), "reversi": ("Reversi", "黑白棋"),
+            "xiangqi": ("Xiangqi", "象棋"), "banqi": ("Banqi", "暗棋"), "chess": ("Chess", "西洋棋"), "shogi": ("Shogi", "將棋"),
             "klondike": ("Klondike Solitaire", "經典接龍"), "spider": ("Spider Solitaire", "蜘蛛接龍"),
             "freecell": ("FreeCell", "新接龍"), "pyramid": ("Pyramid Solitaire", "金字塔接龍"), "tripeaks": ("TriPeaks Solitaire", "三峰接龍"),
             "snake": ("Snake", "貪吃蛇"), "fallingblocks": ("Falling Blocks", "落塊拼圖"), "brickbreaker": ("Brick Breaker", "打磚塊")
         ]
+        var visitedPreviews: Set<String> = []
         func visit(_ id: String) {
             tap("catalog." + id, app: app)
             let title = app.staticTexts["comingSoon.title"]
@@ -196,9 +221,29 @@ final class ChaiClassicsV020UITests: XCTestCase {
             XCTAssertTrue(status.waitForExistence(timeout: 5))
             XCTAssertTrue(status.label.contains(language == "en" ? "Coming soon" : "尚未推出"))
             XCTAssertFalse(app.buttons["menu.start"].exists)
+            visitedPreviews.insert(id)
             app.buttons["comingSoon.back"].tap()
         }
-        for id in singlePreviews.prefix(5) { visit(id) }
+        for id in singlePreviews.prefix(3) { visit(id) }
+        tap("catalog.boardgames", app: app)
+        XCTAssertTrue(app.navigationBars[language == "en" ? "Board Games" : "棋類遊戲"].waitForExistence(timeout: 10))
+        assertThreeColumns(app, prefix: "", ids: ["game.tictactoe", "game.connectfour", "catalog.gomoku"])
+        let availability = app.staticTexts.matching(identifier: "catalog.folder.availability").firstMatch
+        XCTAssertEqual(availability.label, language == "en" ? "2 playable · 6 coming soon" : "2 款可遊玩 · 6 款尚未推出")
+        let boardIDs = Set(boardPlayable.map { "game." + $0 } + boardPreviews.map { "catalog." + $0 })
+        var seenBoard: Set<String> = []
+        for id in boardPlayable.map({ "game." + $0 }) + boardPreviews.map({ "catalog." + $0 }) {
+            let card = app.buttons[id]
+            show(card, app: app)
+            XCTAssertTrue(card.isHittable)
+            assertNoHomeProgress(card)
+            seenBoard.insert(card.identifier)
+        }
+        XCTAssertEqual(seenBoard, boardIDs)
+        XCTAssertEqual(seenBoard.count, 8)
+        for id in boardPreviews { visit(id) }
+        capture(app, "v021-boardgames-" + language)
+        back(app)
         tap("catalog.solitaire", app: app)
         assertThreeColumns(app, prefix: "catalog.", ids: Array(solitaire.prefix(3)))
         var children: Set<String> = []
@@ -212,6 +257,8 @@ final class ChaiClassicsV020UITests: XCTestCase {
         capture(app, "v020-solitaire-" + language)
         back(app)
         for id in singlePreviews.suffix(3) { visit(id) }
+        XCTAssertEqual(visitedPreviews, Set(singlePreviews + solitaire + boardPreviews))
+        XCTAssertEqual(visitedPreviews.count, 17)
     }
 
     func testCompleteCatalogAndThirteenComingSoonPagesInEnglish() { inspectCatalog(language: "en") }
@@ -294,6 +341,25 @@ final class ChaiClassicsV020UITests: XCTestCase {
                        "The actual AI reply must return control to the human player.")
     }
 
+    private func expectUI(_ message: String, timeout: TimeInterval = 10, _ condition: @escaping () -> Bool) {
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in condition() }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: timeout), .completed, message)
+    }
+
+    private func expectBoardInputReady(_ game: String, app: XCUIApplication) {
+        let prefix = game == "tictactoe" ? "tictactoe.cell." : "connectfour.column."
+        let controls = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix))
+        expectUI("The visible player turn must accept input after the actual animation settles.") {
+            controls.allElementsBoundByIndex.contains { $0.exists && $0.isEnabled }
+        }
+    }
+
+    private func point(on button: XCUIElement, app: XCUIApplication) -> XCUICoordinate {
+        show(button, app: app)
+        let frame = button.frame
+        return app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: frame.midX, dy: frame.midY))
+    }
+
     private func assertMovesStay(_ count: Int, game: String, app: XCUIApplication) {
         let metric = app.staticTexts.matching(identifier: game + ".moves").firstMatch
         let unexpected = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
@@ -341,6 +407,7 @@ final class ChaiClassicsV020UITests: XCTestCase {
                 let replyMoves = computerFirst ? 3 : 2
                 expectMoves(replyMoves, game: game, app: app)
                 expectHumanTurn(game, computerFirst: computerFirst, app: app)
+                expectBoardInputReady(game, app: app)
                 XCTAssertFalse(app.staticTexts[game + ".result"].exists)
                 let board = (0..<cellCount).map { app.buttons[cellPrefix + String($0)].label }
                 pauseResume(game, app: app)
@@ -372,6 +439,186 @@ final class ChaiClassicsV020UITests: XCTestCase {
         inspectSinglePlayerAI("connectfour")
     }
 
+    func testBoardGameThinkingAndDropGatesRejectExtraInput() {
+        for game in boardPlayable {
+            let app = launch("v021-" + game)
+            open(game, app: app)
+            choose(game + ".mode", option: "Play the computer", app: app)
+            choose(game + ".difficulty", option: "Hard", app: app)
+            choose(game + ".first", option: game == "tictactoe" ? "You first (X)" : "You first · star", app: app)
+            tap(game + ".start", app: app)
+            expectBoardInputReady(game, app: app)
+            let prefix = game == "tictactoe" ? "tictactoe.cell." : "connectfour.column."
+            let first = point(on: app.buttons[prefix + "0"], app: app)
+            let extra = point(on: app.buttons[prefix + "1"], app: app)
+            // Send real touches without waiting for a disabled control to become
+            // enabled: an extra touch during thinking/falling must be ignored.
+            first.tap(); extra.tap()
+            let thinking = app.staticTexts[game + ".thinking"]
+            let falling = app.staticTexts["connectfour.dropping"]
+            XCTAssertTrue(thinking.exists || (game == "connectfour" && falling.exists),
+                          "The computer's actual pending reply must have a visible status.")
+            XCTAssertFalse(app.buttons[prefix + "1"].isEnabled)
+            expectMoves(2, game: game, app: app)
+            expectHumanTurn(game, computerFirst: false, app: app)
+            expectBoardInputReady(game, app: app)
+            assertMovesStay(2, game: game, app: app)
+            pauseResume(game, app: app)
+            restore(game, app: app)
+            expectMoves(2, game: game, app: app)
+            expectBoardInputReady(game, app: app)
+            assertMovesStay(2, game: game, app: app)
+            capture(app, "v021-" + game + "-thinking-input-gate")
+            app.terminate()
+        }
+    }
+
+    func testMemoryFlipMismatchGatesAndReducedMotionPreserveNativeCards() {
+        for reducedMotion in [false, true] {
+            let app = launch("v021-memory", fixture: "memory-fresh",
+                             extra: reducedMotion ? ["--ui-reduce-motion"] : [])
+            open("memory", app: app); tap("memory.continue", app: app)
+            requireMemoryButtons(16, app: app)
+            let cards = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'memory.card.'"))
+            XCTAssertTrue(cards.allElementsBoundByIndex.allSatisfy { $0.isEnabled && $0.label.contains("face down") })
+            // Legal seed24: index0 Flame, index1 Sun, index2 Moon; Sun's pair is3.
+            // Resolve all coordinates first so the touches themselves are rapid.
+            let first = point(on: app.buttons["memory.card.0"], app: app)
+            let second = point(on: app.buttons["memory.card.1"], app: app)
+            let third = point(on: app.buttons["memory.card.2"], app: app)
+            first.tap(); second.tap(); third.tap()
+            XCTAssertTrue(app.buttons["memory.card.2"].label.contains("face down"), "A third touch must not reveal a card during the real mismatch turn.")
+            expectUI("The completed reveal, hold, and close must restore both unmatched cards.") {
+                app.buttons["memory.card.0"].label.contains("face down") && app.buttons["memory.card.1"].label.contains("face down") && app.buttons["memory.card.2"].isEnabled
+            }
+            XCTAssertEqual(app.staticTexts["memory.moves"].label, "Moves 1")
+            XCTAssertEqual(app.staticTexts["memory.pairs"].label, "Pairs 0/8")
+            tap("memory.card.1", app: app); tap("memory.card.3", app: app)
+            expectUI("A real matching flip must leave two native disabled cards.") {
+                !app.buttons["memory.card.1"].isEnabled && !app.buttons["memory.card.3"].isEnabled && app.buttons["memory.card.0"].isEnabled
+            }
+            XCTAssertTrue(app.buttons["memory.card.1"].label.contains("Sun, matched"))
+            XCTAssertEqual(app.staticTexts["memory.moves"].label, "Moves 2")
+            XCTAssertEqual(app.staticTexts["memory.pairs"].label, "Pairs 1/8")
+            tap("memory.card.0", app: app)
+            pauseResume("memory", app: app)
+            XCTAssertTrue(app.buttons["memory.card.0"].label.contains("face down"))
+            restore("memory", app: app)
+            requireMemoryButtons(16, app: app)
+            XCTAssertEqual(app.staticTexts["memory.moves"].label, "Moves 2")
+            XCTAssertEqual(cards.allElementsBoundByIndex.filter(\.isEnabled).count, 14)
+            XCTAssertTrue(app.buttons["memory.card.2"].label.contains("face down"))
+            capture(app, "v021-memory-flip-" + (reducedMotion ? "reduced" : "normal"))
+            app.terminate()
+        }
+    }
+
+    func testMazeJoystickMovesContinuouslyStopsAndRestoresCell() {
+        for reducedMotion in [false, true] {
+            let app = launch("v021-maze", fixture: "maze-joystick",
+                             extra: reducedMotion ? ["--ui-reduce-motion"] : [])
+            open("maze", app: app); tap("maze.continue", app: app)
+            let joystick = app.descendants(matching: .any).matching(identifier: "maze.joystick").firstMatch
+            XCTAssertTrue(joystick.waitForExistence(timeout: 10))
+            show(joystick, app: app)
+            XCTAssertEqual(joystick.frame.width, 120, accuracy: 1)
+            XCTAssertEqual(joystick.frame.height, 120, accuracy: 1)
+            let center = joystick.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            let blockedDiagonal = joystick.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.15))
+            center.press(forDuration: 0.02, thenDragTo: blockedDiagonal, withVelocity: .fast, thenHoldForDuration: 0.3)
+            expectMoves(0, game: "maze", app: app)
+            let down = joystick.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9))
+            center.press(forDuration: 0.02, thenDragTo: down, withVelocity: .fast, thenHoldForDuration: 0.9)
+            // Seed42 has exactly two open cells below the start, then a wall.
+            expectMoves(2, game: "maze", app: app)
+            XCTAssertTrue(app.staticTexts["maze.position"].label.contains("Row 3, column 1"))
+            XCTAssertEqual(joystick.value as? String, "Stopped")
+            assertMovesStay(2, game: "maze", app: app)
+            center.press(forDuration: 0.02, thenDragTo: down, withVelocity: .fast, thenHoldForDuration: 0.4)
+            expectMoves(2, game: "maze", app: app)
+            pauseResume("maze", app: app)
+            restore("maze", app: app); tap("game.resume", app: app)
+            expectMoves(2, game: "maze", app: app)
+            XCTAssertTrue(app.staticTexts["maze.position"].label.contains("Row 3, column 1"))
+            show(joystick, app: app)
+            let returnCenter = joystick.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            let up = joystick.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1))
+            returnCenter.press(forDuration: 0.02, thenDragTo: up, withVelocity: .fast, thenHoldForDuration: 0.9)
+            expectMoves(4, game: "maze", app: app)
+            XCTAssertTrue(app.staticTexts["maze.position"].label.contains("Row 1, column 1"))
+            XCTAssertEqual(joystick.value as? String, "Stopped")
+            assertMovesStay(4, game: "maze", app: app)
+            capture(app, "v021-maze-joystick-" + (reducedMotion ? "reduced" : "normal"))
+            app.terminate()
+        }
+    }
+
+    func testTwentyFourOrderedInputHistoryAndZeroDivision() {
+        let app = launch("v021-twentyfour", fixture: "twentyfour-fresh")
+        open("twentyfour", app: app); tap("twentyfour.continue", app: app)
+        for operation in ["add", "subtract", "multiply", "divide"] {
+            XCTAssertFalse(app.buttons["twentyfour.operator." + operation].isEnabled)
+            XCTAssertFalse(app.buttons["twentyfour.operator." + operation].isSelected)
+        }
+        XCTAssertFalse(app.buttons["twentyfour.apply"].isEnabled)
+        tap("twentyfour.card.0", app: app)
+        XCTAssertEqual(app.staticTexts["twentyfour.stage"].label, "2 · Choose an operator")
+        tap("twentyfour.card.1", app: app)
+        XCTAssertEqual(app.buttons["twentyfour.card.1"].value as? String, "First number")
+        XCTAssertEqual(app.buttons["twentyfour.card.0"].value as? String, "Not selected")
+        tap("twentyfour.operator.add", app: app)
+        XCTAssertEqual(app.staticTexts["twentyfour.stage"].label, "3 · Choose your second number")
+        tap("twentyfour.card.0", app: app)
+        XCTAssertEqual(app.buttons["twentyfour.card.0"].value as? String, "Second number")
+        let timer = app.staticTexts["twentyfour.timer"], beforeTick = app.staticTexts["twentyfour.timer"].label
+        expectUI("A real timer tick must not clear the pending input.", timeout: 4) { timer.label != beforeTick }
+        XCTAssertTrue(app.buttons["twentyfour.operator.add"].isSelected)
+        XCTAssertEqual(app.buttons["twentyfour.card.1"].value as? String, "First number")
+        XCTAssertEqual(app.buttons["twentyfour.card.0"].value as? String, "Second number")
+        tap("twentyfour.apply", app: app)
+        let result = app.buttons["twentyfour.card.4"]
+        XCTAssertTrue(result.waitForExistence(timeout: 5)); show(result, app: app)
+        XCTAssertEqual(result.frame.minY, app.buttons["twentyfour.card.2"].frame.minY, accuracy: 2)
+        XCTAssertLessThan(result.frame.minX, app.buttons["twentyfour.card.2"].frame.minX)
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'twentyfour.card.'")).count, 3)
+        let history0 = app.descendants(matching: .any).matching(identifier: "twentyfour.history.step.0").firstMatch
+        show(history0, app: app, requireHittable: false)
+        XCTAssertTrue(history0.label.contains("2 + 1 = 3"))
+        tap("twentyfour.card.4", app: app); tap("twentyfour.operator.divide", app: app)
+        tap("twentyfour.card.3", app: app); tap("twentyfour.apply", app: app)
+        XCTAssertTrue(app.buttons["twentyfour.card.5"].waitForExistence(timeout: 5))
+        let history1 = app.descendants(matching: .any).matching(identifier: "twentyfour.history.step.1").firstMatch
+        show(history1, app: app, requireHittable: false)
+        XCTAssertTrue(history1.label.contains("3 ÷ 4 = 3/4"))
+        tap("twentyfour.undo", app: app)
+        expectUI("Undo must remove the last real calculation and restore its operands.") {
+            !history1.exists && app.buttons["twentyfour.card.4"].exists && app.buttons["twentyfour.card.3"].exists
+        }
+        tap("twentyfour.card.4", app: app); tap("twentyfour.clear", app: app)
+        XCTAssertEqual(app.staticTexts["twentyfour.stage"].label, "1 · Choose your first number")
+        tap("twentyfour.reset", app: app); tapNativeConfirmation("twentyfour.confirmReset", app: app)
+        show(app.buttons["twentyfour.card.0"], app: app)
+        expectUI("Reset must restore the original four cards and clear calculation history.") {
+            !history0.exists && app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'twentyfour.card.'")).count == 4
+        }
+        capture(app, "v021-twentyfour-ordered-input-and-history")
+        app.terminate()
+
+        let zero = launch("v021-twentyfour", fixture: "twentyfour-zero")
+        open("twentyfour", app: zero); tap("twentyfour.continue", app: zero)
+        tap("twentyfour.card.3", app: zero); tap("twentyfour.operator.divide", app: zero)
+        tap("twentyfour.card.5", app: zero)
+        let explanation = zero.staticTexts["twentyfour.zeroDivision"]
+        show(explanation, app: zero, requireHittable: false)
+        XCTAssertTrue(explanation.label.contains("Cannot divide by zero"))
+        XCTAssertFalse(zero.buttons["twentyfour.apply"].isEnabled)
+        XCTAssertEqual(zero.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'twentyfour.card.'")).count, 2)
+        tap("twentyfour.swap", app: zero)
+        XCTAssertTrue(zero.buttons["twentyfour.apply"].isEnabled)
+        XCTAssertFalse(explanation.exists)
+        capture(zero, "v021-twentyfour-zero-division-order")
+    }
+
     func testTwentyFourRestoresExactCardsCompletesAndStartsNextPuzzle() {
         let app = launch("v020-twentyfour", fixture: "twentyfour")
         open("twentyfour", app: app)
@@ -381,8 +628,8 @@ final class ChaiClassicsV020UITests: XCTestCase {
         pauseResume("twentyfour", app: app)
         restore("twentyfour", app: app)
         XCTAssertEqual(labels, [3, 5].map { app.buttons["twentyfour.card.\($0)"].label })
-        tap("twentyfour.card.3", app: app); tap("twentyfour.card.5", app: app)
-        tap("twentyfour.operator.multiply", app: app); tap("twentyfour.apply", app: app)
+        tap("twentyfour.card.3", app: app); tap("twentyfour.operator.multiply", app: app)
+        tap("twentyfour.card.5", app: app); tap("twentyfour.apply", app: app)
         XCTAssertTrue(app.staticTexts["twentyfour.complete"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["twentyfour.solved"].label.contains("1"))
         show(app.staticTexts["twentyfour.complete"], app: app, requireHittable: false)
@@ -524,6 +771,10 @@ final class ChaiClassicsV020UITests: XCTestCase {
                 assertThreeColumns(app, width: CGFloat(width))
                 for id in playable.prefix(3) { assertNoHomeProgress(app.buttons["game." + id]) }
                 capture(app, "v020-viewport-\(width)-\(language)-\(appearance)-home-top")
+                tap("catalog.boardgames", app: app)
+                assertThreeColumns(app, width: CGFloat(width), prefix: "", ids: ["game.tictactoe", "game.connectfour", "catalog.gomoku"])
+                capture(app, "v021-viewport-\(width)-\(language)-\(appearance)-boardgames")
+                back(app)
                 tap("catalog.solitaire", app: app)
                 assertThreeColumns(app, width: CGFloat(width), prefix: "catalog.", ids: Array(solitaire.prefix(3)))
                 capture(app, "v020-viewport-\(width)-\(language)-\(appearance)-solitaire")

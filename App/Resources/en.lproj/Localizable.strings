@@ -224,10 +224,10 @@
 "game.tictactoe" = "Tic-tac-toe";
 "game.tripeaks" = "TriPeaks Solitaire";
 "game.twentyfour" = "24 Game";
-"maze.accessibility.hint" = "Use directional actions or the arrow buttons to move one cell. The finish is at the bottom right. A blocked move leaves you in place.";
+"maze.accessibility.hint" = "Use the joystick to move continuously through open corridors, or directional actions and arrow buttons to move one cell. The finish is at the bottom right. Walls block movement.";
 "maze.blocked" = "Wall blocks %@. Stay in the same cell.";
 "maze.board" = "Maze board";
-"maze.controls" = "Swipe on the maze or use the arrows. Each action moves one cell. The diamond marks the finish at the bottom right.";
+"maze.controls" = "Drag the joystick to move; lift to stop. Maze swipes and arrow buttons move one cell. The diamond marks the finish at the bottom right.";
 "maze.difficulty" = "Difficulty";
 "maze.difficulty.detail.easy" = "9×9 · Fewer junctions and a larger view of each cell. A gentle place to learn the controls.";
 "maze.difficulty.detail.hard" = "21×21 · The largest maze, with many more junctions and smaller cells. Take your time and use the direction buttons.";
@@ -322,11 +322,11 @@
 "tictactoe.winner" = "%@ wins";
 "tictactoe.winningCell" = "Part of the winning line";
 "tictactoe.you" = "You";
-"twentyfour.apply" = "Apply";
-"twentyfour.card.hint" = "Select two cards in calculation order. Tap a selected card to remove it from the selection.";
+"twentyfour.apply" = "Calculate";
+"twentyfour.card.hint" = "Choose your first number, then an operator, then your second number. Tap the first number again to clear the input.";
 "twentyfour.card.label" = "Card %d, value %@, expression %@";
 "twentyfour.chooseTwo" = "Choose two cards in order";
-"twentyfour.controls" = "Select the first card, then the second. Choose an operator and apply. The order matters for − and ÷; swap to reverse it.";
+"twentyfour.controls" = "Choose a number, an operator, then another number. Press = Calculate. New results appear first, ready for your next calculation.";
 "twentyfour.difficulty" = "Difficulty";
 "twentyfour.difficulty.easy" = "A solution needs only +, − and ×, with nonnegative whole numbers at every step. 1,163 different puzzles.";
 "twentyfour.difficulty.hard" = "Every solution needs a fraction or negative intermediate value. 16 different puzzles; all appear before the cycle repeats.";
@@ -354,3 +354,79 @@
 "twentyfour.won" = "You made 24!";
 "twentyfour.won.detail" = "All four cards used exactly once. Ready for the next puzzle?";
 "twentyfour.zeroDivision" = "Cannot divide by zero. Swap the order or choose another operator.";
+
+"settings.graphics" = "Visual detail";
+
+"settings.graphics.detail" = "Choose the richness of decorative effects. Animation follows the display’s supported refresh rate; Low Power Mode may limit it.";
+
+"graphics.low" = "Low";
+
+"graphics.medium" = "Medium";
+
+"graphics.high" = "High";
+
+"catalog.boardgames.title" = "Board Games";
+
+"catalog.description.boardgames" = "Classic board games, from quick rounds to deeper strategy.";
+
+"catalog.status.folderAvailable" = "%d playable · %d coming soon";
+
+"game.xiangqi" = "Xiangqi";
+
+"catalog.description.xiangqi" = "Plan each move across the river and palace.";
+
+"game.banqi" = "Banqi";
+
+"catalog.description.banqi" = "Flip hidden pieces on a half board and choose your captures.";
+
+"game.chess" = "Chess";
+
+"catalog.description.chess" = "Guide familiar pieces across the checkered board.";
+
+"game.shogi" = "Shogi";
+
+"catalog.description.shogi" = "Advance your pieces and bring captured pieces back into play.";
+
+"connectfour.thinking" = "Computer is choosing a move…";
+
+"connectfour.dropping" = "Disc is falling…";
+
+"connectfour.turn.computerMove" = "Computer's turn";
+
+"maze.joystick.title" = "Movement joystick";
+
+"maze.joystick.active" = "Direction held";
+
+"maze.joystick.stopped" = "Stopped";
+
+"maze.joystick.hint" = "Drag in any direction and hold to move along open corridors. Lift to stop immediately. Directional actions and arrow buttons move one cell.";
+
+"maze.joystick.instructions" = "Drag the joystick in any direction; lift to stop. Arrows or maze swipes move one cell. Pausing returns you to the last cell center.";
+
+"twentyfour.input.first" = "1 · Choose your first number";
+
+"twentyfour.input.operation" = "2 · Choose an operator";
+
+"twentyfour.input.second" = "3 · Choose your second number";
+
+"twentyfour.input.ready" = "Ready? Press = Calculate";
+
+"twentyfour.input.firstLabel" = "1 · First";
+
+"twentyfour.input.operatorLabel" = "2 · Operator";
+
+"twentyfour.input.secondLabel" = "3 · Second";
+
+"twentyfour.input.firstCard" = "First number";
+
+"twentyfour.input.secondCard" = "Second number";
+
+"twentyfour.input.clear" = "Clear input";
+
+"twentyfour.resultCard" = "Result";
+
+"twentyfour.history.title" = "Your calculations";
+
+"twentyfour.history.start" = "Original cards: %@";
+
+"twentyfour.history.empty" = "Each calculation will appear here. Undo removes the last step.";

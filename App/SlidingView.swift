@@ -77,9 +77,7 @@ struct SlidingPlayView: View {
                                 }
                             }
                         }.padding(12)
-                            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 24))
-                            .overlay(RoundedRectangle(cornerRadius: 24).fill(GamePalette.tint(.sliding).opacity(0.045)).allowsHitTesting(false))
-                            .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(GamePalette.tint(.sliding).opacity(0.2), lineWidth: 1).allowsHitTesting(false))
+                            .background { GameBoardSurface(game: .sliding) }
                             .shadow(color: .black.opacity(0.07), radius: 22, y: 9)
                     }
                     Text(model.t("sliding.controls")).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
@@ -167,24 +165,17 @@ private struct SlidingTile: View {
 private struct SlidingTileFace: View {
     let value: Int
     let side: CGFloat
-    @Environment(\.colorScheme) private var colorScheme
-    private var tint: Color { GamePalette.tint(.sliding) }
     private var corner: CGFloat { min(18, max(10, side * 0.16)) }
     var body: some View {
         ZStack {
             if value == 0 {
-                RoundedRectangle(cornerRadius: corner).fill(tint.opacity(colorScheme == .dark ? 0.045 : 0.055))
-                RoundedRectangle(cornerRadius: corner).strokeBorder(tint.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [3, 4]))
+                RoundedRectangle(cornerRadius: corner).fill(GameMaterial.navy.opacity(0.7))
+                RoundedRectangle(cornerRadius: corner).strokeBorder(GameMaterial.gold.opacity(0.42), style: StrokeStyle(lineWidth: 1, dash: [3, 4]))
             } else {
-                RoundedRectangle(cornerRadius: corner).fill(Color(.secondarySystemGroupedBackground))
-                RoundedRectangle(cornerRadius: corner)
-                    .fill(LinearGradient(colors: [tint.opacity(0.045), tint.opacity(0.16)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                RoundedRectangle(cornerRadius: corner).strokeBorder(tint.opacity(colorScheme == .dark ? 0.32 : 0.22), lineWidth: 1)
-                RoundedRectangle(cornerRadius: max(8, corner - 2))
-                    .strokeBorder(Color.white.opacity(colorScheme == .dark ? 0.06 : 0.75), lineWidth: 1).padding(2)
+                GameTileSurface(game: .sliding, cornerRadius: corner)
                 Text("\(value)")
                     .font(.system(size: min(42, max(24, side * 0.36)), weight: .semibold, design: .rounded))
-                    .monospacedDigit().foregroundStyle(.primary)
+                    .monospacedDigit().foregroundStyle(GameMaterial.ink)
             }
         }
     }

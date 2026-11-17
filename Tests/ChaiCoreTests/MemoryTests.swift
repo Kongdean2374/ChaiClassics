@@ -227,4 +227,148 @@ final class MemoryTests: XCTestCase {
         }
         XCTAssertLessThan(Date().timeIntervalSince(start), 5, "One thousand largest decks should generate without expensive search")
     }
+
+    func testRapidSecondSelectionIsAllowedButMismatchWaitsForActualSecondReveal() throws {
+        var board = MemoryBoard(seed: 24)
+        var presentation = MemoryTurnPresentation()
+        XCTAssertTrue(board.select(0))
+        XCTAssertTrue(presentation.acceptsSelection, "Opening the first card must not delay the second tap")
+        XCTAssertFalse(board.select(0))
+        XCTAssertTrue(board.select(1))
+        let token = try XCTUnwrap(presentation.beginPair(secondCard: 1, mismatchedCards: board.selectedIndices))
+        XCTAssertFalse(presentation.acceptsSelection)
+        XCTAssertFalse(board.select(2))
+        XCTAssertNil(presentation.remainingHold(at: 10.1))
+        XCTAssertFalse(presentation.revealCompleted(card: 0, token: token, at: 10.15))
+        XCTAssertEqual(presentation.phase, .revealing)
+        XCTAssertTrue(presentation.revealCompleted(card: 1, token: token, at: 10.4))
+        XCTAssertEqual(presentation.phase, .holding)
+        XCTAssertEqual(try XCTUnwrap(presentation.remainingHold(at: 10.4)), 0.65, accuracy: 0.000_001)
+        XCTAssertEqual(try XCTUnwrap(presentation.remainingHold(at: 10.7)), 0.35, accuracy: 0.000_001)
+        XCTAssertFalse(presentation.beginClosing(token: token, at: 10.4 + 0.65 - 0.000_001))
+        XCTAssertTrue(presentation.beginClosing(token: token, at: 10.4 + 0.65))
+        XCTAssertEqual(presentation.closingCards, [0, 1])
+        XCTAssertEqual(board.phase, .mismatch, "The persisted pair stays locked until closing really finishes")
+        XCTAssertTrue(board.isValidSave)
+        XCTAssertFalse(presentation.finishClosing(token: token))
+        XCTAssertFalse(presentation.closeCompleted(card: 0, token: token))
+        XCTAssertFalse(presentation.closeCompleted(card: 0, token: token))
+        XCTAssertFalse(presentation.acceptsSelection)
+        XCTAssertTrue(presentation.closeCompleted(card: 1, token: token))
+        XCTAssertFalse(presentation.acceptsSelection, "Saving resolution is the last step before accepting input")
+        XCTAssertTrue(board.resolveMismatch(expectedMoves: 1, expectedSelection: [0, 1]))
+        XCTAssertTrue(presentation.finishClosing(token: token))
+        XCTAssertTrue(presentation.acceptsSelection)
+        XCTAssertTrue(board.select(2), "There is no extra cooldown after the pair has closed")
+    }
+
+    func testMatchingPairOnlyBlocksUntilSecondRevealCompletes() throws {
+        var board = MemoryBoard(seed: 24)
+        var presentation = MemoryTurnPresentation()
+        XCTAssertTrue(board.select(1))
+        XCTAssertTrue(board.select(3))
+        XCTAssertEqual(board.matchedPairCount, 1)
+        let token = try XCTUnwrap(presentation.beginPair(secondCard: 3, mismatchedCards: []))
+        XCTAssertTrue(board.canSelect(2))
+        XCTAssertFalse(presentation.acceptsSelection, "Even a committed match must finish its second reveal before a third tap")
+        XCTAssertFalse(presentation.revealCompleted(card: 1, token: token, at: 0.1))
+        XCTAssertTrue(presentation.revealCompleted(card: 3, token: token, at: 0.15))
+        XCTAssertTrue(presentation.acceptsSelection)
+        XCTAssertNil(presentation.remainingHold(at: 0.15))
+        XCTAssertFalse(presentation.beginClosing(token: token, at: 100))
+        XCTAssertTrue(board.select(2))
+        XCTAssertTrue(board.isFaceUp(1))
+        XCTAssertTrue(board.isFaceUp(3))
+    }
+
+    func testPauseBackgroundRestartAndDeckReplacementInvalidateEveryCompletionPhase() throws {
+        for phase in 0..<3 {
+            var presentation = MemoryTurnPresentation()
+            let old = try XCTUnwrap(presentation.beginPair(secondCard: 1, mismatchedCards: [0, 1]))
+            if phase > 0 { XCTAssertTrue(presentation.revealCompleted(card: 1, token: old, at: 1)) }
+            if phase > 1 { XCTAssertTrue(presentation.beginClosing(token: old, at: 1.65)) }
+            presentation.cancel()
+            XCTAssertTrue(presentation.acceptsSelection)
+            XCTAssertTrue(presentation.closingCards.isEmpty)
+            XCTAssertNil(presentation.remainingHold(at: 5))
+            let next = try XCTUnwrap(presentation.beginPair(secondCard: 1, mismatchedCards: [0, 1]))
+            XCTAssertNotEqual(next, old)
+            let newTurn = presentation
+            XCTAssertFalse(presentation.revealCompleted(card: 1, token: old, at: 50))
+            XCTAssertFalse(presentation.beginClosing(token: old, at: 50))
+            XCTAssertFalse(presentation.closeCompleted(card: 0, token: old))
+            XCTAssertFalse(presentation.closeCompleted(card: 1, token: old))
+            XCTAssertFalse(presentation.finishClosing(token: old))
+            XCTAssertEqual(presentation, newTurn, "Old animation/hold callbacks cannot mutate a new turn with the same indices")
+        }
+    }
+
+    func testReducedMotionImmediateCompletionsRetainReadableHoldAndReleaseWithoutCooldown() throws {
+        var presentation = MemoryTurnPresentation()
+        let token = try XCTUnwrap(presentation.beginPair(secondCard: 9, mismatchedCards: [4, 9]))
+        // Reduced Motion supplies reveal/close callbacks immediately, rather
+        // than inserting a pretend wait for a visual rotation that did not run.
+        XCTAssertTrue(presentation.revealCompleted(card: 9, token: token, at: 20))
+        XCTAssertFalse(presentation.beginClosing(token: token, at: 20.649))
+        XCTAssertTrue(presentation.beginClosing(token: token, at: 20.65))
+        XCTAssertFalse(presentation.closeCompleted(card: 4, token: token))
+        XCTAssertTrue(presentation.closeCompleted(card: 9, token: token))
+        XCTAssertTrue(presentation.finishClosing(token: token))
+        XCTAssertNotNil(presentation.beginPair(secondCard: 3, mismatchedCards: []))
+        XCTAssertEqual(MemoryTurnPresentation.flipDuration, 0.15)
+        XCTAssertEqual(MemoryTurnPresentation.mismatchHoldDuration, 0.65)
+    }
+
+    func testInvalidAndDuplicatePresentationCallbacksDoNotAdvanceTheTurn() throws {
+        var presentation = MemoryTurnPresentation()
+        let initial = presentation
+        XCTAssertNil(presentation.beginPair(secondCard: -1, mismatchedCards: []))
+        XCTAssertNil(presentation.beginPair(secondCard: 1, mismatchedCards: [1]))
+        XCTAssertNil(presentation.beginPair(secondCard: 1, mismatchedCards: [1, 1]))
+        XCTAssertNil(presentation.beginPair(secondCard: 1, mismatchedCards: [2, 3]))
+        XCTAssertNil(presentation.beginPair(secondCard: 1, mismatchedCards: [-1, 1]))
+        XCTAssertEqual(presentation, initial)
+        let token = try XCTUnwrap(presentation.beginPair(secondCard: 1, mismatchedCards: [0, 1]))
+        XCTAssertNil(presentation.beginPair(secondCard: 2, mismatchedCards: []))
+        XCTAssertFalse(presentation.revealCompleted(card: 1, token: token, at: .nan))
+        XCTAssertFalse(presentation.revealCompleted(card: 1, token: token, at: .infinity))
+        XCTAssertFalse(presentation.closeCompleted(card: 0, token: token))
+        XCTAssertTrue(presentation.revealCompleted(card: 1, token: token, at: 2))
+        XCTAssertFalse(presentation.revealCompleted(card: 1, token: token, at: 3))
+        XCTAssertNil(presentation.remainingHold(at: .nan))
+        XCTAssertFalse(presentation.beginClosing(token: token, at: .infinity))
+        XCTAssertEqual(try XCTUnwrap(presentation.remainingHold(at: 1)), 0.65, accuracy: 0.000_001)
+        XCTAssertTrue(presentation.beginClosing(token: token, at: 2.65))
+        XCTAssertFalse(presentation.closeCompleted(card: 99, token: token))
+        XCTAssertFalse(presentation.closeCompleted(card: 0, token: token))
+        XCTAssertFalse(presentation.closeCompleted(card: 0, token: token))
+        XCTAssertFalse(presentation.finishClosing(token: token))
+        XCTAssertTrue(presentation.closeCompleted(card: 1, token: token))
+        XCTAssertTrue(presentation.finishClosing(token: token))
+        XCTAssertFalse(presentation.finishClosing(token: token))
+    }
+
+    func testAnimationPresentationDoesNotChangeSavedSchemaOrResetPendingProgress() throws {
+        var board = MemoryBoard(seed: 24)
+        board.elapsedSeconds = 27
+        board.select(0); board.select(1)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        let saved = try encoder.encode(board)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: saved) as? [String: Any])
+        XCTAssertEqual(Set(object.keys), ["mode", "seed", "cards", "matched", "selectedIndices", "moves", "elapsedSeconds"])
+        var presentation = MemoryTurnPresentation()
+        let token = try XCTUnwrap(presentation.beginPair(secondCard: 1, mismatchedCards: [0, 1]))
+        presentation.revealCompleted(card: 1, token: token, at: 0)
+        presentation.beginClosing(token: token, at: 0.65)
+        presentation.closeCompleted(card: 0, token: token)
+        presentation.closeCompleted(card: 1, token: token)
+        XCTAssertEqual(try encoder.encode(board), saved)
+        let restored = try JSONDecoder().decode(MemoryBoard.self, from: saved)
+        XCTAssertEqual(restored, board)
+        XCTAssertTrue(restored.isValidSave)
+        XCTAssertEqual(restored.moves, 1)
+        XCTAssertEqual(restored.elapsedSeconds, 27)
+        XCTAssertEqual(restored.selectedIndices, [0, 1])
+    }
 }

@@ -199,6 +199,15 @@ public struct TwentyFourCard: Equatable, Identifiable, Sendable {
     public let sourceMask: Int
 }
 
+/// One replayed calculation, including expressions that later calculations have consumed.
+public struct TwentyFourCalculation: Equatable, Identifiable, Sendable {
+    public let id: Int
+    public let first: TwentyFourCard
+    public let operation: TwentyFourOperator
+    public let second: TwentyFourCard
+    public let result: TwentyFourCard
+}
+
 /// Only source numbers and a maximum of three moves are persisted. Values, parentheses and
 /// card identities are reconstructed and validated rather than trusting saved formula strings.
 public struct TwentyFourBoard: Codable, Equatable, Sendable {
@@ -223,6 +232,13 @@ public struct TwentyFourBoard: Codable, Equatable, Sendable {
         self.numbers = numbers; self.difficulty = difficulty; self.seed = seed
     }
     public var cards: [TwentyFourCard] { reconstruct() ?? [] }
+    /// New results lead; untouched cards retain their previous relative order. This is
+    /// presentation only, so old saves and the underlying card identities stay unchanged.
+    public var displayCards: [TwentyFourCard] {
+        let active = cards
+        return active.filter { $0.id >= 4 }.sorted { $0.id > $1.id } + active.filter { $0.id < 4 }
+    }
+    public var calculationHistory: [TwentyFourCalculation] { replay()?.calculations ?? [] }
     public var isComplete: Bool {
         let active = cards
         return active.count == 1 && active[0].sourceMask == 15 && active[0].value == Rational(24)
@@ -258,11 +274,13 @@ public struct TwentyFourBoard: Codable, Equatable, Sendable {
         numbers = TwentyFourGenerator.numbers(difficulty: difficulty, seed: seed, index: puzzleIndex)
         history = []; elapsedSeconds = 0; recordedSuccess = false
     }
-    private func reconstruct() -> [TwentyFourCard]? {
+    private func reconstruct() -> [TwentyFourCard]? { replay()?.cards }
+    private func replay() -> (cards: [TwentyFourCard], calculations: [TwentyFourCalculation])? {
         guard numbers.count == 4, numbers.allSatisfy({ (1...13).contains($0) }), history.count <= 3 else { return nil }
         var active = numbers.enumerated().map { index, number in
             TwentyFourCard(id: index, value: Rational(Int64(number))!, expression: String(number), sourceMask: 1 << index)
         }
+        var calculations: [TwentyFourCalculation] = []
         for (index, move) in history.enumerated() {
             guard move.firstID != move.secondID,
                   let first = active.first(where: { $0.id == move.firstID }),
@@ -270,11 +288,14 @@ public struct TwentyFourBoard: Codable, Equatable, Sendable {
                   first.sourceMask & second.sourceMask == 0,
                   let result = first.value.applying(move.operation, to: second.value) else { return nil }
             active.removeAll { $0.id == move.firstID || $0.id == move.secondID }
-            active.append(TwentyFourCard(id: 4 + index, value: result,
-                                        expression: "(\(first.expression) \(move.operation.symbol) \(second.expression))",
-                                        sourceMask: first.sourceMask | second.sourceMask))
+            let combined = TwentyFourCard(id: 4 + index, value: result,
+                                          expression: "(\(first.expression) \(move.operation.symbol) \(second.expression))",
+                                          sourceMask: first.sourceMask | second.sourceMask)
+            active.append(combined)
+            calculations.append(TwentyFourCalculation(id: index, first: first, operation: move.operation,
+                                                      second: second, result: combined))
         }
-        return active
+        return (active, calculations)
     }
     public var isValidSave: Bool {
         guard (0...315_360_000).contains(elapsedSeconds), (0...1_000_000_000).contains(puzzleIndex),

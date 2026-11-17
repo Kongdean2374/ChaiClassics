@@ -346,6 +346,8 @@ final class ChaiClassicsUITests: XCTestCase {
         app.segmentedControls["settings.appearance"].buttons["深色"].tap()
         app.segmentedControls["settings.language"].buttons["English"].tap()
         XCTAssertTrue(app.navigationBars["Settings"].exists)
+        scrollFullyIntoView(app.segmentedControls["settings.graphics"], app: app)
+        selectNativeSegment("settings.graphics", label: "Low", index: 0, app: app)
         let haptics = app.switches["settings.haptics"], awake = app.switches["settings.awake"]
         XCTAssertEqual(haptics.value as? String, "1"); XCTAssertEqual(awake.value as? String, "0")
         // iOS 26 exposes the whole Form row as the Switch's AX frame. A row-
@@ -377,6 +379,29 @@ final class ChaiClassicsUITests: XCTestCase {
         XCTAssertTrue(app.segmentedControls["settings.language"].buttons["English"].isSelected)
         XCTAssertEqual(app.switches["settings.haptics"].value as? String,"0")
         XCTAssertEqual(app.switches["settings.awake"].value as? String,"1")
+        scrollFullyIntoView(app.segmentedControls["settings.graphics"], app: app)
+        XCTAssertTrue(app.segmentedControls["settings.graphics"].buttons["Low"].isSelected)
+        selectNativeSegment("settings.graphics", label: "High", index: 2, app: app)
+        back(app)
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.buttons["settings.open"].waitForExistence(timeout: 10))
+        app.buttons["settings.open"].tap()
+        scrollFullyIntoView(app.segmentedControls["settings.graphics"], app: app)
+        XCTAssertTrue(app.segmentedControls["settings.graphics"].buttons["High"].isSelected)
+        back(app)
+        for game in ["sudoku", "minesweeper", "sliding", "twentyfour", "memory", "maze"] {
+            let card = app.buttons["game." + game]
+            scrollFullyIntoView(card, app: app)
+            XCTAssertTrue(card.isEnabled, "Graphics quality must preserve every playable entry.")
+        }
+        let boardGames = app.buttons["catalog.boardgames"]
+        scrollFullyIntoView(boardGames, app: app); boardGames.tap()
+        XCTAssertTrue(app.navigationBars["Board Games"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["game.tictactoe"].isEnabled)
+        XCTAssertTrue(app.buttons["game.connectfour"].isEnabled)
+        back(app)
+        scrollFullyIntoView(app.buttons["game.sliding"], app: app); app.buttons["game.sliding"].tap()
+        XCTAssertTrue(app.buttons["sliding.continue"].label.contains("35 moves"))
     }
     func testEnglishIsAppliedToAllGamesAndAccessibility() {
         let app = launch("settings",legacy: true)
@@ -417,7 +442,7 @@ final class ChaiClassicsUITests: XCTestCase {
                 let page = app.descendants(matching: .any).matching(identifier: "document." + document).firstMatch
                 XCTAssertTrue(page.waitForExistence(timeout: 5))
                 if document != "support" {
-                    XCTAssertTrue(app.staticTexts.matching(NSPredicate(format:"label CONTAINS %@",english ? "Document version: 0.2.0" : "文件版本：0.2.0")).firstMatch.exists)
+                    XCTAssertTrue(app.staticTexts.matching(NSPredicate(format:"label CONTAINS %@",english ? "Document version: 0.2.1" : "文件版本：0.2.1")).firstMatch.exists)
                 }
                 let online = externalLink("legal.online." + document, app: app)
                 scrollFullyIntoView(online, app: app)

@@ -67,6 +67,14 @@ struct SettingsView: View {
     }
     private var gameSection: some View {
         Section {
+            VStack(alignment: .leading, spacing: 10) {
+                Label(model.t("settings.graphics"), systemImage: "sparkles").font(.subheadline)
+                Picker(model.t("settings.graphics"), selection: Binding(get: { model.preferences.graphicsQuality }, set: { value in model.updatePreferences { $0.graphicsQuality = value } })) {
+                    ForEach(GraphicsQuality.allCases, id: \.self) { value in Text(model.t("graphics." + value.rawValue)).tag(value) }
+                }.pickerStyle(.segmented).labelsHidden().accessibilityIdentifier("settings.graphics")
+                Text(model.t("settings.graphics.detail")).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }.padding(.vertical, 4)
             Toggle(isOn: Binding(get: { model.preferences.haptics }, set: { value in model.updatePreferences { $0.haptics = value }; if value { model.feedback() } })) {
                 preferenceLabel("settings.haptics", detail: "settings.haptics.detail")
             }.accessibilityIdentifier("settings.haptics")

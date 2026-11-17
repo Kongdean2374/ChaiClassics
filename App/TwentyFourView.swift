@@ -56,14 +56,16 @@ struct TwentyFourMenuView: View {
 struct TwentyFourPlayView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var paused = false
     @State private var confirmReset = false
     @State private var confirmNext = false
-    @State private var selected: [Int] = []
-    @State private var operation = TwentyFourOperator.add
+    @State private var input = TwentyFourInput()
+    @Namespace private var cardPositions
     private var tint: Color { GamePalette.tint(.twentyFour) }
     private var inactive: Bool { paused || scenePhase != .active || confirmReset || confirmNext }
-    private func clearSelection() { selected = [] }
+    private var moveAnimation: Animation? { reduceMotion ? nil : .easeInOut(duration: 0.2) }
+    private func clearSelection() { input.clear() }
     private func next() {
         if model.editTwentyFour({ $0.nextPuzzle() }) { clearSelection(); paused = false }
     }
@@ -89,7 +91,8 @@ struct TwentyFourPlayView: View {
             }
             .confirmationDialog(model.t("twentyfour.reset.confirm"), isPresented: $confirmReset, titleVisibility: .visible) {
                 Button(model.t("twentyfour.reset"), role: .destructive) {
-                    if model.editTwentyFour({ $0.reset() }) { clearSelection(); paused = false }
+                    model.editTwentyFour { $0.reset() }
+                    clearSelection(); paused = false
                 }.accessibilityIdentifier("twentyfour.confirmReset")
                 Button(model.t("common.cancel"), role: .cancel) {}
             }
@@ -103,6 +106,10 @@ struct TwentyFourPlayView: View {
                 model.editTwentyFour { $0.elapsedSeconds += 1 }
             }))
             .onChange(of: scenePhase) { _, phase in if phase != .active { clearSelection() } }
+            // Observe puzzle changes only: timer publishes must leave the pending expression intact.
+            .onChange(of: model.twentyFour?.history) { _, _ in clearSelection() }
+            .onChange(of: model.twentyFour?.numbers) { _, _ in clearSelection() }
+            .onDisappear { clearSelection() }
     }
     private func header(_ board: TwentyFourBoard) -> some View {
         VStack(spacing: 14) {
@@ -133,59 +140,93 @@ struct TwentyFourPlayView: View {
     }
     private func puzzle(_ board: TwentyFourBoard) -> some View {
         VStack(spacing: 16) {
-            Text(model.t("twentyfour.target")).font(.system(.title2, design: .rounded, weight: .bold))
+            Text(model.t("twentyfour.target")).font(.system(.title2, design: .serif, weight: .bold))
+                .foregroundStyle(GameMaterial.gold)
+                .padding(.horizontal, 24).padding(.vertical, 12)
+                .background(GameBoardSurface(game: .twentyFour, cornerRadius: 18))
             Text(model.t("twentyfour.controls")).font(.subheadline).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+            if !board.isEnded { pendingExpression(board) }
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                ForEach(board.cards) { card in cardButton(card) }
-            }.accessibilityIdentifier("twentyfour.cards")
+                ForEach(board.displayCards) { card in
+                    cardButton(card, board: board)
+                        .matchedGeometryEffect(id: card.id, in: cardPositions)
+                        .transition(reduceMotion ? .opacity : .scale(scale: 0.96).combined(with: .opacity))
+                }
+            }.padding(12).frame(minHeight: 250, alignment: .top)
+                .background(GameBoardSurface(game: .twentyFour))
+                .animation(moveAnimation, value: board.history)
+                .animation(moveAnimation, value: input)
+                .accessibilityIdentifier("twentyfour.cards")
             if !board.isEnded { calculation(board) }
             if board.isEnded && !board.isComplete {
                 Text(model.t("twentyfour.tryAgain")).font(.headline).multilineTextAlignment(.center)
                     .accessibilityIdentifier("twentyfour.incorrect")
             }
-            HStack(spacing: 12) {
-                Button {
-                    if model.editTwentyFour({ $0.undo() }) { clearSelection(); model.feedback() }
-                } label: {
-                    Label(model.t("twentyfour.undo"), systemImage: "arrow.uturn.backward")
-                        .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
-                }.buttonStyle(.bordered).disabled(!board.canUndo || inactive).accessibilityIdentifier("twentyfour.undo")
-                Button {
-                    if board.isComplete { next() } else { confirmNext = true }
-                } label: {
-                    Label(model.t("twentyfour.next"), systemImage: "arrow.right")
-                        .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
-                }.buttonStyle(.borderedProminent).disabled(inactive).accessibilityIdentifier("twentyfour.next")
-            }
+            puzzleActions(board)
+            history(board)
             Text(model.t("twentyfour.difficulty." + board.difficulty.rawValue))
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }.padding(16)
             .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 24))
             .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(tint.opacity(0.18), lineWidth: 1).allowsHitTesting(false))
     }
-    private func cardButton(_ card: TwentyFourCard) -> some View {
-        let position = selected.firstIndex(of: card.id)
+    private func pendingExpression(_ board: TwentyFourBoard) -> some View {
+        VStack(spacing: 10) {
+            Text(model.t("twentyfour.input." + input.stage.rawValue))
+                .font(.subheadline.weight(.semibold)).multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity, minHeight: 36)
+                .accessibilityIdentifier("twentyfour.stage")
+            HStack(spacing: 8) {
+                operandSlot(board.cards.first { $0.id == input.firstID }, role: 1)
+                VStack(spacing: 5) {
+                    Text(model.t("twentyfour.input.operatorLabel")).font(.caption2).foregroundStyle(.secondary)
+                    Text(input.operation?.symbol ?? "?").font(.system(.title2, design: .rounded, weight: .bold))
+                        .frame(minHeight: 36)
+                }.frame(maxWidth: .infinity).padding(.vertical, 8)
+                    .background(tint.opacity(input.operation == nil ? 0.035 : 0.12), in: RoundedRectangle(cornerRadius: 14))
+                operandSlot(board.cards.first { $0.id == input.secondID }, role: 2)
+            }.accessibilityElement(children: .ignore)
+                .accessibilityLabel(preview(board)).accessibilityIdentifier("twentyfour.preview")
+        }.animation(moveAnimation, value: input)
+    }
+    private func operandSlot(_ card: TwentyFourCard?, role: Int) -> some View {
+        let color: Color = role == 1 ? tint : .teal
+        return VStack(spacing: 5) {
+            Text(model.t(role == 1 ? "twentyfour.input.firstLabel" : "twentyfour.input.secondLabel"))
+                .font(.caption2).foregroundStyle(.secondary)
+            Text(card?.value.description ?? "—").font(.system(.title2, design: .rounded, weight: .bold))
+                .lineLimit(1).minimumScaleFactor(0.65).monospacedDigit().frame(minHeight: 36)
+        }.frame(maxWidth: .infinity).padding(.vertical, 8)
+            .background(color.opacity(card == nil ? 0.035 : 0.14), in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(color.opacity(card == nil ? 0.12 : 0.55), lineWidth: 1).allowsHitTesting(false))
+    }
+    private func cardButton(_ card: TwentyFourCard, board: TwentyFourBoard) -> some View {
+        let role = input.firstID == card.id ? 1 : (input.secondID == card.id ? 2 : 0)
+        let color: Color = role == 2 ? .teal : tint
+        let caption = role == 1 ? "twentyfour.input.firstCard" : role == 2 ? "twentyfour.input.secondCard" : card.id >= 4 ? "twentyfour.resultCard" : "twentyfour.select"
         return Button {
-            if let index = selected.firstIndex(of: card.id) { selected.remove(at: index) }
-            else if selected.count < 2 { selected.append(card.id) }
-            model.feedback()
+            if input.selectCard(card.id, in: board) { model.feedback() }
         } label: {
             VStack(spacing: 6) {
-                Text(card.value.description).font(.system(.title, design: .rounded, weight: .semibold)).monospacedDigit()
-                    .minimumScaleFactor(0.7).lineLimit(1)
-                if card.sourceMask.nonzeroBitCount > 1 {
-                    Text(card.expression).font(.caption).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 5) {
+                    if role != 0 { Image(systemName: role == 1 ? "1.circle.fill" : "2.circle.fill").font(.caption).foregroundStyle(color) }
+                    Text(model.t(caption)).font(.caption).foregroundStyle(GameMaterial.ink.opacity(0.75))
                 }
-                Text(position.map { model.t("twentyfour.selected", $0 + 1) } ?? model.t("twentyfour.select"))
-                    .font(.caption).foregroundStyle(.secondary)
-            }.frame(maxWidth: .infinity, minHeight: 108).padding(8)
-                .background(tint.opacity(position == nil ? 0.055 : 0.19), in: RoundedRectangle(cornerRadius: 18))
-                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(tint.opacity(position == nil ? 0.18 : 0.8), lineWidth: position == nil ? 1 : 2).allowsHitTesting(false))
+                Text(card.value.description).font(.system(.title, design: .serif, weight: .semibold)).monospacedDigit()
+                    .foregroundStyle(GameMaterial.ink)
+                    .minimumScaleFactor(0.65).lineLimit(1)
+                Text(card.sourceMask.nonzeroBitCount > 1 ? card.expression : " ")
+                    .font(.caption).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(GameMaterial.ink.opacity(0.8))
+            }.frame(maxWidth: .infinity, minHeight: 90).padding(10)
+                .background(GameTileSurface(game: .twentyFour, selected: role != 0, cornerRadius: 18))
+                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(color.opacity(role == 0 ? 0.18 : 0.8), lineWidth: role == 0 ? 1 : 2).allowsHitTesting(false))
                 .contentShape(Rectangle())
-        }.buttonStyle(QuietPressStyle()).disabled(inactive || model.twentyFour?.isEnded == true)
+        }.buttonStyle(QuietPressStyle()).disabled(inactive || board.isEnded)
             .accessibilityLabel(model.t("twentyfour.card.label", card.id + 1, card.value.description, card.expression))
-            .accessibilityValue(position.map { model.t("twentyfour.selected", $0 + 1) } ?? model.t("twentyfour.unselected"))
+            .accessibilityValue(model.t(role == 1 ? "twentyfour.input.firstCard" : role == 2 ? "twentyfour.input.secondCard" : "twentyfour.unselected"))
+            .accessibilityAddTraits(role == 0 ? [] : .isSelected)
             .accessibilityHint(model.t("twentyfour.card.hint"))
             .accessibilityIdentifier("twentyfour.card.\(card.id)")
     }
@@ -193,45 +234,100 @@ struct TwentyFourPlayView: View {
         VStack(spacing: 12) {
             HStack(spacing: 8) {
                 ForEach(TwentyFourOperator.allCases, id: \.self) { item in
-                    Button { operation = item } label: {
+                    Button {
+                        if input.selectOperator(item) { model.feedback() }
+                    } label: {
                         Text(item.symbol).font(.title2.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48)
-                            .background(tint.opacity(operation == item ? 0.2 : 0.07), in: RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(tint.opacity(operation == item ? 0.8 : 0.12), lineWidth: 1).allowsHitTesting(false))
+                            .background(tint.opacity(input.operation == item ? 0.2 : 0.055), in: RoundedRectangle(cornerRadius: 12))
+                            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(tint.opacity(input.operation == item ? 0.8 : 0.12), lineWidth: 1).allowsHitTesting(false))
                             .contentShape(Rectangle())
-                    }.buttonStyle(QuietPressStyle()).disabled(inactive)
+                    }.buttonStyle(QuietPressStyle()).disabled(inactive || input.firstID == nil)
                         .accessibilityLabel(model.t("twentyfour.operator." + item.rawValue))
-                        .accessibilityAddTraits(operation == item ? .isSelected : [])
+                        .accessibilityAddTraits(input.operation == item ? .isSelected : [])
                         .accessibilityIdentifier("twentyfour.operator." + item.rawValue)
                 }
-            }
-            Text(preview(board)).font(.system(.headline, design: .rounded)).multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("twentyfour.preview")
+            }.animation(moveAnimation, value: input.operation)
             HStack(spacing: 12) {
-                Button { selected.reverse() } label: {
+                Button { clearSelection(); model.feedback() } label: {
+                    Label(model.t("twentyfour.input.clear"), systemImage: "xmark.circle")
+                        .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+                }.buttonStyle(.bordered).disabled(input.isEmpty || inactive).accessibilityIdentifier("twentyfour.clear")
+                Button { if input.swap() { model.feedback() } } label: {
                     Label(model.t("twentyfour.swap"), systemImage: "arrow.left.arrow.right")
                         .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
-                }.buttonStyle(.bordered).disabled(selected.count != 2 || inactive).accessibilityIdentifier("twentyfour.swap")
-                Button {
-                    guard selected.count == 2 else { return }
-                    if model.editTwentyFour({ $0.combine(firstID: selected[0], secondID: selected[1], operation: operation) }) {
-                        clearSelection(); model.feedback()
-                    }
-                } label: {
-                    Text(model.t("twentyfour.apply")).frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
-                }.buttonStyle(.borderedProminent)
-                    .disabled(selected.count != 2 || inactive || !board.canCombine(firstID: selected.first ?? -1, secondID: selected.last ?? -1, operation: operation))
-                    .accessibilityIdentifier("twentyfour.apply")
+                }.buttonStyle(.bordered).disabled(input.secondID == nil || inactive).accessibilityIdentifier("twentyfour.swap")
             }
-            if selected.count == 2, operation == .divide,
-               board.cards.first(where: { $0.id == selected[1] })?.value.isZero == true {
+            Button {
+                guard let first = input.firstID, let second = input.secondID, let operation = input.operation else { return }
+                if model.editTwentyFour({ $0.combine(firstID: first, secondID: second, operation: operation) }) {
+                    clearSelection(); model.feedback()
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Text("=").font(.system(.title2, design: .rounded, weight: .bold))
+                    Text(model.t("twentyfour.apply")).font(.headline)
+                }.frame(maxWidth: .infinity, minHeight: 52).contentShape(Rectangle())
+            }.buttonStyle(.borderedProminent).disabled(inactive || !input.canApply(to: board))
+                .accessibilityIdentifier("twentyfour.apply")
+            if input.stage == .ready && input.operation == .divide,
+               board.cards.first(where: { $0.id == input.secondID })?.value.isZero == true {
                 Text(model.t("twentyfour.zeroDivision")).font(.caption).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("twentyfour.zeroDivision")
             }
         }
     }
+    private func puzzleActions(_ board: TwentyFourBoard) -> some View {
+        HStack(spacing: 12) {
+            Button {
+                let changed = model.editTwentyFour { $0.undo() }
+                clearSelection()
+                if changed { model.feedback() }
+            } label: {
+                Label(model.t("twentyfour.undo"), systemImage: "arrow.uturn.backward")
+                    .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+            }.buttonStyle(.bordered).disabled(!board.canUndo || inactive).accessibilityIdentifier("twentyfour.undo")
+            Button {
+                if board.isComplete { next() } else { confirmNext = true }
+            } label: {
+                Label(model.t("twentyfour.next"), systemImage: "arrow.right")
+                    .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+            }.buttonStyle(.borderedProminent).disabled(inactive).accessibilityIdentifier("twentyfour.next")
+        }
+    }
+    private func history(_ board: TwentyFourBoard) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(model.t("twentyfour.history.title"), systemImage: "list.number")
+                .font(.headline)
+            Text(model.t("twentyfour.history.start", board.numbers.map(String.init).joined(separator: " · ")))
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if board.calculationHistory.isEmpty {
+                Text(model.t("twentyfour.history.empty")).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            ForEach(board.calculationHistory) { step in
+                HStack(alignment: .top, spacing: 10) {
+                    Text("\(step.id + 1)").font(.caption.weight(.semibold))
+                        .frame(width: 26, height: 26).background(tint.opacity(0.13), in: Circle())
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\(step.first.value.description) \(step.operation.symbol) \(step.second.value.description) = \(step.result.value.description)")
+                            .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                        Text(step.result.expression).font(.caption).foregroundStyle(.secondary)
+                    }.fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }.padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(tint.opacity(0.045), in: RoundedRectangle(cornerRadius: 12))
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("twentyfour.history.step.\(step.id)")
+            }
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(.top, 6)
+            .accessibilityIdentifier("twentyfour.history")
+    }
     private func preview(_ board: TwentyFourBoard) -> String {
-        guard selected.count == 2,
-              let first = board.cards.first(where: { $0.id == selected[0] }),
-              let second = board.cards.first(where: { $0.id == selected[1] }) else { return model.t("twentyfour.chooseTwo") }
+        guard let first = board.cards.first(where: { $0.id == input.firstID }) else { return model.t("twentyfour.input.first") }
+        guard let operation = input.operation else { return first.value.description + ", " + model.t("twentyfour.input.operation") }
+        guard let second = board.cards.first(where: { $0.id == input.secondID }) else {
+            return first.value.description + " " + operation.symbol + ", " + model.t("twentyfour.input.second")
+        }
         return model.t("twentyfour.preview.format", first.value.description, operation.symbol, second.value.description)
     }
 }

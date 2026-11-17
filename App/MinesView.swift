@@ -178,9 +178,9 @@ private struct MinesPlaySurface: View {
         } else {
             ZoomBoard(size: naturalSize) {
                 MinesGrid(board: board, tap: tap, flag: flag).environmentObject(model)
-            }.background(Color(.secondarySystemGroupedBackground))
+            }.background { GameBoardSurface(game: .minesweeper, cornerRadius: 12) }
                 .clipShape(RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(tint.opacity(0.18), lineWidth: 1).allowsHitTesting(false))
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(GameMaterial.gold.opacity(0.8), lineWidth: 1.2).allowsHitTesting(false))
                 .shadow(color: .black.opacity(0.06), radius: 18, y: 8)
         }
     }
@@ -213,47 +213,40 @@ private struct MinesGrid: View {
                     }
                 }
             }
-        }
+        }.background(GameMaterial.navy)
     }
 }
 
 private struct MinesCellFace: View {
     let board: MinesweeperBoard
     let index: Int
-    @Environment(\.colorScheme) private var colorScheme
     private var open: Bool { board.revealed.contains(index) }
-    private var tint: Color { GamePalette.tint(.minesweeper) }
     private var exploded: Bool { board.status == .lost && board.exploded == index }
     private var clueColor: Color {
         switch board.adjacentMines(index) {
-        case 1: return .blue
-        case 2: return colorScheme == .dark ? .mint : Color(red: 0.13, green: 0.45, blue: 0.33)
-        case 3: return .red
-        case 4: return .indigo
-        case 5: return colorScheme == .dark ? .orange : Color(red: 0.58, green: 0.29, blue: 0.16)
-        case 6: return colorScheme == .dark ? .cyan : Color(red: 0.08, green: 0.43, blue: 0.49)
-        default: return .primary
+        case 1: return Color(red: 0.08, green: 0.30, blue: 0.75)
+        case 2: return Color(red: 0.13, green: 0.45, blue: 0.33)
+        case 3: return Color(red: 0.75, green: 0.17, blue: 0.13)
+        case 4: return Color(red: 0.33, green: 0.26, blue: 0.69)
+        case 5: return Color(red: 0.58, green: 0.29, blue: 0.16)
+        case 6: return Color(red: 0.08, green: 0.43, blue: 0.49)
+        default: return GameMaterial.ink
         }
     }
     var body: some View {
         ZStack {
             if open {
-                Rectangle().fill(exploded ? Color.red.opacity(0.16) : Color(.systemGray6))
-                Rectangle().strokeBorder(tint.opacity(0.12), lineWidth: 0.5)
+                Rectangle().fill(GameMaterial.ivory)
+                Rectangle().fill(exploded ? GameMaterial.coral.opacity(0.24) : GameMaterial.teal.opacity(0.10))
+                Rectangle().strokeBorder(GameMaterial.teal.opacity(0.38), lineWidth: 0.6)
             } else {
-                Rectangle().fill(Color(.systemGray4))
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(LinearGradient(colors: [Color(.systemGray5), Color(.systemGray4)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .overlay(RoundedRectangle(cornerRadius: 3).fill(tint.opacity(0.045)))
-                    .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.7))
-                    .overlay(alignment: .top) { Rectangle().fill(.white.opacity(colorScheme == .dark ? 0.09 : 0.6)).frame(height: 1) }
-                    .padding(1)
+                GameTileSurface(game: .minesweeper, cornerRadius: 4).padding(1)
             }
             if board.status == .lost && board.mines.contains(index) {
-                Image(systemName: "burst.fill").font(.system(size: 16, weight: .semibold)).foregroundStyle(exploded ? Color.red : Color.primary)
+                Image(systemName: "burst.fill").font(.system(size: 16, weight: .semibold)).foregroundStyle(GameMaterial.ink)
             } else if board.flags.contains(index) {
                 Image(systemName: "flag.fill").font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(colorScheme == .dark ? Color.mint : Color(red: 0.08, green: 0.39, blue: 0.35))
+                    .foregroundStyle(GameMaterial.coral)
             } else if open && board.adjacentMines(index) > 0 {
                 Text("\(board.adjacentMines(index))").font(.system(size: 18, weight: .bold, design: .rounded)).foregroundStyle(clueColor)
             }

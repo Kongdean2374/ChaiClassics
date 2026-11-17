@@ -175,7 +175,7 @@ final class V020UpgradeTests: XCTestCase {
             XCTAssertEqual(try JSONDecoder().decode(GameID.self, from: JSONEncoder().encode(namespace)).rawValue, namespace)
         }
         let previewsAndFolders = GameCatalog.items.filter { $0.gameID == nil }
-        XCTAssertEqual(previewsAndFolders.count, 14)
+        XCTAssertEqual(previewsAndFolders.count, 19)
         for item in previewsAndFolders {
             XCTAssertNil(GameID(rawValue: item.id.rawValue))
             XCTAssertThrowsError(try JSONDecoder().decode(GameID.self, from: JSONEncoder().encode(item.id.rawValue)))

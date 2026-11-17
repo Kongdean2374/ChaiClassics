@@ -114,3 +114,88 @@ public struct MemoryBoard: Codable, Equatable, Sendable {
         return true
     }
 }
+
+/// Ephemeral animation coordination, deliberately excluded from the saved board.
+/// Native animation completions drive reveal/close; the readable hold uses an
+/// injected monotonic clock so a slow reveal never shortens the viewing time.
+public struct MemoryTurnPresentation: Equatable, Sendable {
+    public enum Phase: Equatable, Sendable { case accepting, revealing, holding, closing }
+    public static let flipDuration: TimeInterval = 0.15
+    public static let mismatchHoldDuration: TimeInterval = 0.65
+
+    public private(set) var phase = Phase.accepting
+    public private(set) var token: UInt64 = 0
+    public private(set) var secondCard: Int?
+    public private(set) var mismatchedCards: [Int] = []
+    public private(set) var closedCards: Set<Int> = []
+    private var holdStartedAt: TimeInterval?
+
+    public init() {}
+    public var acceptsSelection: Bool { phase == .accepting }
+    public var closingCards: [Int] { phase == .closing ? mismatchedCards : [] }
+
+    /// Called only after accepting the second logical selection. The first
+    /// card's reveal never locks out a rapid second selection.
+    @discardableResult
+    public mutating func beginPair(secondCard: Int, mismatchedCards: [Int]) -> UInt64? {
+        guard acceptsSelection, secondCard >= 0,
+              mismatchedCards.isEmpty || (mismatchedCards.count == 2 && Set(mismatchedCards).count == 2 &&
+                  mismatchedCards.allSatisfy({ $0 >= 0 }) && mismatchedCards.contains(secondCard)) else { return nil }
+        token &+= 1
+        self.secondCard = secondCard
+        self.mismatchedCards = mismatchedCards
+        closedCards.removeAll()
+        holdStartedAt = nil
+        phase = .revealing
+        return token
+    }
+
+    /// The second card's actual animation completion starts the hold, rather
+    /// than its tap or the first card's completion.
+    @discardableResult
+    public mutating func revealCompleted(card: Int, token expected: UInt64, at now: TimeInterval) -> Bool {
+        guard expected == token, phase == .revealing, card == secondCard, now.isFinite else { return false }
+        if mismatchedCards.isEmpty { clearTurn() }
+        else { phase = .holding; holdStartedAt = now }
+        return true
+    }
+
+    public func remainingHold(at now: TimeInterval) -> TimeInterval? {
+        guard phase == .holding, let start = holdStartedAt, now.isFinite else { return nil }
+        return max(0, start + Self.mismatchHoldDuration - max(start, now))
+    }
+
+    @discardableResult
+    public mutating func beginClosing(token expected: UInt64, at now: TimeInterval) -> Bool {
+        guard expected == token, let remaining = remainingHold(at: now), remaining == 0 else { return false }
+        phase = .closing
+        return true
+    }
+
+    /// Returns true when both distinct cards have actually finished closing.
+    /// Input remains locked until the corresponding board mutation is saved.
+    @discardableResult
+    public mutating func closeCompleted(card: Int, token expected: UInt64) -> Bool {
+        guard expected == token, phase == .closing, mismatchedCards.contains(card),
+              closedCards.insert(card).inserted else { return false }
+        return closedCards.count == mismatchedCards.count
+    }
+
+    @discardableResult
+    public mutating func finishClosing(token expected: UInt64) -> Bool {
+        guard expected == token, phase == .closing, closedCards.count == mismatchedCards.count else { return false }
+        clearTurn()
+        return true
+    }
+
+    /// Invalidate every queued completion when leaving, pausing or replacing a deck.
+    public mutating func cancel() { token &+= 1; clearTurn() }
+
+    private mutating func clearTurn() {
+        phase = .accepting
+        secondCard = nil
+        mismatchedCards.removeAll()
+        closedCards.removeAll()
+        holdStartedAt = nil
+    }
+}

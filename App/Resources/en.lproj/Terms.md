@@ -1,6 +1,6 @@
 # Terms of Use
 
-Document version: 0.2.0
+Document version: 0.2.1
 
 ## Use of the app
 

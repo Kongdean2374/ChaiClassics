@@ -3,6 +3,7 @@ import ChaiCore
 
 private struct CompletionCelebration: ViewModifier {
     let completed: Bool
+    @EnvironmentObject private var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
@@ -31,7 +32,7 @@ private struct CompletionCelebration: ViewModifier {
     func body(content: Content) -> some View {
         content.overlay {
             if let startedAt {
-                CelebrationBurst(startedAt: startedAt)
+                CelebrationBurst(startedAt: startedAt, quality: model.preferences.graphicsQuality)
                     .allowsHitTesting(false).accessibilityHidden(true)
             }
         }.overlay(alignment: .bottomLeading) {
@@ -79,16 +80,19 @@ private struct CompletionCelebration: ViewModifier {
     private func stop() { startedAt = nil; event = nil }
 }
 
-/// 36 paper pieces at at most 30 fps for 2.2 seconds. The entire timeline is
-/// removed afterwards; there are no particle views, images or perpetual timers.
+/// One canvas with bounded, deterministic particles. The display clock exists
+/// only for this burst; quality changes detail without lowering frame cadence.
 private struct CelebrationBurst: View {
     let startedAt: Date
-    private let colors: [Color] = [.indigo, .teal, .orange, .pink, .yellow]
+    let quality: GraphicsQuality
+    @StateObject private var clock = AnimationFrameClock()
+    @State private var firstTimestamp: TimeInterval?
+    private let colors: [Color] = [.indigo, .teal, .orange, .pink, .yellow, .cyan]
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
-            Canvas { context, size in
-                let progress = max(0, min(1, timeline.date.timeIntervalSince(startedAt) / 2.2))
-                for index in 0..<36 {
+        Canvas { context, size in
+                let elapsed = firstTimestamp.map { max(0, clock.frame.timestamp - $0) } ?? 0
+                let progress = max(0, min(1, elapsed / 2.2))
+                for index in 0..<quality.celebrationParticleCount {
                     let side = index.isMultiple(of: 2) ? 1.0 : -1.0
                     let seed = Double((index * 37 + 11) % 101) / 100
                     let spread = Double((index * 19 + 7) % 97) / 96
@@ -101,9 +105,17 @@ private struct CelebrationBurst: View {
                     piece.rotate(by: .degrees(Double(index * 41) + side * progress * 420))
                     let rect = CGRect(x: -3, y: -5, width: 4 + seed * 3, height: 7 + spread * 5)
                     piece.fill(Path(roundedRect: rect, cornerRadius: 1), with: .color(colors[index % colors.count]))
+                    if quality == .high && index.isMultiple(of: 6) {
+                        piece.opacity *= 0.45
+                        piece.fill(Path(ellipseIn: rect.insetBy(dx: -2, dy: -2)), with: .color(.white))
+                    }
                 }
-            }
         }
+        .onAppear { clock.start() }
+        .onReceive(clock.$frame) { frame in
+            if firstTimestamp == nil && frame.timestamp > 0 { firstTimestamp = frame.timestamp }
+        }
+        .onDisappear { clock.stop() }
     }
 }
 

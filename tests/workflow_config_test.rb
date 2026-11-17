@@ -98,7 +98,7 @@ check(ci_triggers.dig('workflow_call','inputs','full_ui','default') == false, 'r
 ui_steps = test_job.fetch('steps').select { |step| step['run'] == 'bash scripts/ci.sh ui' }
 check(ui_steps.length == 2 && ui_steps.map { |step| step['if'] } == ["inputs.full_ui == true && env.CHAI_UI_SCOPE == 'full'", "inputs.full_ui == true && env.CHAI_UI_SCOPE != 'full'"], 'full and targeted UI are explicit mutually exclusive modes')
 test_job.fetch('steps').select { |step| %w[verify unit build].any? { |phase| step['run'] == 'bash scripts/ci.sh ' + phase } }.each do |step|
-  check(step['if'] == "env.CHAI_UI_SCOPE == 'full'", 'ordinary/full CI retain all checks; targeted mode compiles its selected UI without repeating unrelated unit suites')
+  check(!step.key?('if'), 'every App scope actually reruns current verification, Core tests and Simulator build')
 end
 check(test_job.dig('env', 'CHAI_UI_SCOPE') == "${{ inputs.ui_scope || 'full' }}", 'ordinary push, PR and release CI default to full checks')
 check(ci_workflow['permissions'] == {'contents' => 'read', 'actions' => 'read'}, 'baseline reads receive only read permission')
@@ -113,7 +113,7 @@ puts 'PASS: visible ordered CI phases, bounded UI/total runtimes and rejected un
 check(flight.fetch('jobs').keys.sort == %w[preflight upload], 'TestFlight has only fast preflight and real signed upload')
 preflight = flight.fetch('jobs').fetch('preflight')
 check(preflight['runs-on'] == 'ubuntu-24.04' && !preflight.key?('env') && !preflight.key?('environment') && !preflight.key?('secrets'), 'preflight runs without Apple/signing credentials')
-candidate_steps = preflight['steps'].reject { |step| ['Require complete exact-SHA candidate verification before 0.2.0 signing', 'Preserve verified release candidate proof'].include?(step['name']) }
+candidate_steps = preflight['steps'].reject { |step| ['Require complete exact-SHA candidate verification before 0.2.x signing', 'Preserve verified release candidate proof'].include?(step['name']) }
 check(candidate_steps.first.dig('with', 'fetch-depth') == 0, 'release proof can independently compare complete git trees')
 normalized_steps = candidate_steps.map do |step|
   copy = Marshal.load(Marshal.dump(step))
@@ -125,7 +125,7 @@ check(flight.dig('jobs','upload','needs') == 'preflight', 'real signed archive/u
 flight.fetch('jobs').each_value do |entry|
   check(entry.fetch('if').include?("github.ref == 'refs/heads/main'") && entry.fetch('if').include?("github.event_name == 'workflow_dispatch'"), 'both release jobs remain trusted main/manual only')
 end
-check((flight['on'] || flight[true]).dig('workflow_dispatch','inputs','version','default') == '0.2.0', 'manual upload defaults to the current app version')
+check((flight['on'] || flight[true]).dig('workflow_dispatch','inputs','version','default') == '0.2.1', 'manual upload defaults to the current app version')
 puts 'PASS: fast credential-free preflight, trusted manual/main upload, current version default and opt-in full UI.'
 check(!extraction_job.key?('environment') && !extraction_job.key?('env'), 'extraction regression receives no signing environment or secrets')
 extraction_runs = extraction_job.fetch('steps').map { |step| step.fetch('run', '') }.join("\n")
@@ -207,14 +207,15 @@ check(invalid_ipad_phase.exitstatus == 64, 'invalid iPad phase fails before invo
 puts 'PASS: independent iPad screenshot workflow is manual, unsigned, standard-hosted, credential-free and retains partial results.'
 
 # v0.2.0 remains an explicit candidate release, never an ordinary-push upload.
-check(ci_triggers.dig('push', 'branches') == %w[main develop/0.2.0], 'isolated development pushes receive ordinary credential-free CI')
+check(ci_triggers.dig('push', 'branches') == %w[main develop/0.2.0 develop/0.2.1], 'isolated development pushes receive ordinary credential-free CI')
 check(!ci_script.include?('-only-testing:'), 'the complete CI UI phase cannot silently become a subset')
 check(ci_script.include?('Pro Max') && ci_script.include?('Plus'), 'full UI prefers a real phone window wide enough for 430pt coverage')
 [visual_job, ipad_job].each do |entry|
   check(entry.fetch('if').include?("github.ref == 'refs/heads/develop/0.2.0'") && entry.fetch('if').include?("github.ref == 'refs/heads/main'"), 'only trusted main/development refs may run manual unsigned validation')
+  check(entry.fetch('if').include?("github.ref == 'refs/heads/develop/0.2.1'"), '0.2.1 supports exact-SHA unsigned visual/iPad evidence')
 end
-candidate_gate = preflight.fetch('steps').find { |step| step['name'] == 'Require complete exact-SHA candidate verification before 0.2.0 signing' }
-check(candidate_gate && candidate_gate['if'] == "inputs.version == '0.2.0'", '0.2.0 signing requires a candidate gate')
+candidate_gate = preflight.fetch('steps').find { |step| step['name'] == 'Require complete exact-SHA candidate verification before 0.2.x signing' }
+check(candidate_gate && candidate_gate['if'] == "startsWith(inputs.version, '0.2.')", '0.2.0 signing requires a candidate gate')
 check(flight.fetch('permissions') == {'contents' => 'read', 'actions' => 'read'}, 'candidate reads receive no repository or Actions write permission')
 check(candidate_gate.dig('env', 'GH_TOKEN') == '${{ github.token }}', 'candidate metadata reads use the short-lived read-only workflow token')
 check(candidate_gate.fetch('run').include?('scripts/verify_candidate.py verify') && candidate_gate.fetch('run').include?('--sha "$GITHUB_SHA"'), 'candidate gate validates the actual immutable dispatch SHA')

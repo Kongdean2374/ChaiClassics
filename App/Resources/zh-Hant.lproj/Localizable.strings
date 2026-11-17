@@ -224,10 +224,10 @@
 "game.tictactoe" = "井字棋";
 "game.tripeaks" = "三峰接龍";
 "game.twentyfour" = "24 點";
-"maze.accessibility.hint" = "使用方向動作或方向鍵，每次移動一格。終點在右下角。遇到牆壁時會留在原地。";
+"maze.accessibility.hint" = "使用搖桿沿暢通走廊連續移動，或使用方向動作和方向鍵每次移動一格。終點在右下角。牆壁會阻擋移動。";
 "maze.blocked" = "往「%@」有牆壁，仍停在原來的格子。";
 "maze.board" = "迷宮棋盤";
-"maze.controls" = "在迷宮上滑動或按方向鍵，每次移動一格。右下角的菱形是終點。";
+"maze.controls" = "拖曳搖桿移動，放手即停。在迷宮上滑動或按方向鍵，每次移動一格。右下角的菱形是終點。";
 "maze.difficulty" = "難度";
 "maze.difficulty.detail.easy" = "9×9・岔路較少、格子較大，適合熟悉操作。";
 "maze.difficulty.detail.hard" = "21×21・最大的迷宮，岔路更多、格子較小。慢慢探索，也可使用方向鍵移動。";
@@ -323,10 +323,10 @@
 "tictactoe.winningCell" = "獲勝連線的一格";
 "tictactoe.you" = "玩家";
 "twentyfour.apply" = "計算";
-"twentyfour.card.hint" = "依運算順序選取兩張牌。再點一下已選取的牌即可取消選取。";
+"twentyfour.card.hint" = "先選第一個數字，再選運算符號，最後選第二個數字。再點第一個數字可清除輸入。";
 "twentyfour.card.label" = "第 %d 張牌，數值 %@，算式 %@";
 "twentyfour.chooseTwo" = "依序選取兩張牌";
-"twentyfour.controls" = "依序選第一張及第二張牌，再選運算符號並計算。減法及除法有先後順序，可按交換改變順序。";
+"twentyfour.controls" = "依序選數字、運算符號、另一個數字，再按＝計算。結果會排在最前方，可接著用來運算。";
 "twentyfour.difficulty" = "難度";
 "twentyfour.difficulty.easy" = "至少有一解只需＋、－、×，且每一步都是非負整數，共 1,163 種題目。";
 "twentyfour.difficulty.hard" = "所有解法都需要分數或負數的中間值，共 16 種題目；全數出現後才會重複。";
@@ -354,3 +354,79 @@
 "twentyfour.won" = "成功算出 24！";
 "twentyfour.won.detail" = "四張牌都恰好使用一次。準備好挑戰下一題了嗎？";
 "twentyfour.zeroDivision" = "不能除以零。請交換順序或選擇其他運算符號。";
+
+"settings.graphics" = "圖形強度";
+
+"settings.graphics.detail" = "調整裝飾與粒子效果的多寡。動畫依螢幕支援的更新率呈現；省電模式可能限制更新率。";
+
+"graphics.low" = "低";
+
+"graphics.medium" = "中";
+
+"graphics.high" = "高";
+
+"catalog.boardgames.title" = "棋類遊戲";
+
+"catalog.description.boardgames" = "從輕鬆短局到步步思考，一起探索經典棋類。";
+
+"catalog.status.folderAvailable" = "%d 款可遊玩 · %d 款尚未推出";
+
+"game.xiangqi" = "象棋";
+
+"catalog.description.xiangqi" = "楚河漢界，步步為營。";
+
+"game.banqi" = "暗棋";
+
+"catalog.description.banqi" = "在半盤棋局中翻開暗子，掌握吃子時機。";
+
+"game.chess" = "西洋棋";
+
+"catalog.description.chess" = "在黑白棋盤上運用各種棋子的走法。";
+
+"game.shogi" = "將棋";
+
+"catalog.description.shogi" = "運用升變與持駒打入，思考每一步。";
+
+"connectfour.thinking" = "電腦思考中⋯";
+
+"connectfour.dropping" = "棋子落下中⋯";
+
+"connectfour.turn.computerMove" = "輪到電腦落子";
+
+"maze.joystick.title" = "移動搖桿";
+
+"maze.joystick.active" = "方向輸入中";
+
+"maze.joystick.stopped" = "已停止";
+
+"maze.joystick.hint" = "向任意方向拖曳並按住，沿暢通走廊移動。放手立即停止。方向動作和方向鍵每次移動一格。";
+
+"maze.joystick.instructions" = "向任意方向拖曳搖桿，放手即停。方向鍵或在迷宮上滑動，每次移動一格。暫停時會回到上一個格子中心。";
+
+"twentyfour.input.first" = "1・選擇第一個數字";
+
+"twentyfour.input.operation" = "2・選擇運算符號";
+
+"twentyfour.input.second" = "3・選擇第二個數字";
+
+"twentyfour.input.ready" = "準備好了嗎？按＝計算";
+
+"twentyfour.input.firstLabel" = "1・第一個數";
+
+"twentyfour.input.operatorLabel" = "2・運算符號";
+
+"twentyfour.input.secondLabel" = "3・第二個數";
+
+"twentyfour.input.firstCard" = "第一個數字";
+
+"twentyfour.input.secondCard" = "第二個數字";
+
+"twentyfour.input.clear" = "清除輸入";
+
+"twentyfour.resultCard" = "運算結果";
+
+"twentyfour.history.title" = "運算紀錄";
+
+"twentyfour.history.start" = "原始四張牌：%@";
+
+"twentyfour.history.empty" = "每一步計算都會記錄在這裡；撤銷可移除最後一步。";

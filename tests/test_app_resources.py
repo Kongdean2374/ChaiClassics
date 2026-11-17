@@ -32,7 +32,7 @@ class AppResourceTests(unittest.TestCase):
         for language in ['zh-Hant','en']:
             for name in ['Privacy','Terms','Support']:
                 text=(ROOT/'App/Resources'/f'{language}.lproj/{name}.md').read_text()
-                self.assertGreater(len(text),400);self.assertIn('0.2.0',text)
+                self.assertGreater(len(text),400);self.assertIn('0.2.1',text)
                 self.assertIn('a090825159@icloud.com',text)
                 expected_path=('/en' if language=='en' else '')+'/'+name.lower()
                 routes={(urlsplit(url).scheme,urlsplit(url).netloc,urlsplit(url).path.rstrip('/'))
@@ -70,12 +70,22 @@ class AppResourceTests(unittest.TestCase):
             for file in ['Localizable.strings','InfoPlist.strings','Privacy.md','Terms.md','Support.md']:
                 self.assertIn(f'App/Resources/{language}.lproj/{file}',project)
         for file in (ROOT/'App').glob('*.swift'):self.assertIn('App/'+file.name,project)
-        self.assertIn('MARKETING_VERSION = 0.2.0',project)
-        self.assertIn('CHAI_RELEASE_VERSION = 0.2.0',project)
+        self.assertIn('MARKETING_VERSION = 0.2.1',project)
+        self.assertIn('CHAI_RELEASE_VERSION = 0.2.1',project)
         info=plistlib.loads((ROOT/'App/Info.plist').read_bytes())
         self.assertEqual(info['CFBundleLocalizations'],['zh-Hant','en'])
         self.assertEqual(info['CFBundleIdentifier'],'$(PRODUCT_BUNDLE_IDENTIFIER)')
+        self.assertIs(info['CADisableMinimumFrameDurationOnPhone'], True)
         ET.parse(ROOT/'ChaiClassics.xcodeproj/xcshareddata/xcschemes/ChaiClassics.xcscheme')
+    def test_app_icon_is_native_opaque_1024_square(self):
+        import struct
+        path=ROOT/'App/Assets.xcassets/AppIcon.appiconset/AppIcon.png'
+        data=path.read_bytes()
+        self.assertEqual(data[:8], b'\x89PNG\r\n\x1a\n')
+        width,height,depth,color=struct.unpack('>IIBB',data[16:26])
+        self.assertEqual((width,height),(1024,1024))
+        self.assertEqual(depth,8)
+        self.assertEqual(color,2, 'App Store icon must be opaque RGB')
     def test_privacy_manifest_matches_local_preferences_and_no_collection(self):
         manifest=plistlib.loads((ROOT/'App/Resources/PrivacyInfo.xcprivacy').read_bytes())
         self.assertIs(manifest['NSPrivacyTracking'],False)
@@ -107,11 +117,11 @@ class AppResourceTests(unittest.TestCase):
     def test_testflight_preserves_manual_header_and_signing_job(self):
         actual=(ROOT/'.github/workflows/testflight.yml').read_bytes()
         header=actual.split(b'jobs:\n',1)[0]
-        self.assertEqual(header.count(b"'Version (e.g. 0.2.0)'"),1)
-        self.assertEqual(header.count(b"        default: '0.2.0'\n"),1)
-        # v0.2.0 adds a read-only same-SHA candidate evidence gate. The actual
+        self.assertEqual(header.count(b"'Version (e.g. 0.2.1)'"),1)
+        self.assertEqual(header.count(b"        default: '0.2.1'\n"),1)
+        # v0.2.1 adds a read-only same-SHA candidate evidence gate. The actual
         # signing/upload job below remains byte-frozen to the released pipeline.
-        self.assertEqual(hashlib.sha256(header).hexdigest(),'429107082fd02797bec6bfdb42ac03e4bac47d81e22e686a38a2efb9a166f8b4')
+        self.assertEqual(hashlib.sha256(header).hexdigest(),'85771cd921b95f4ba50e226b2e94114413228de2d6395c305cc2e5f4fc531bd5')
         upload=b'  upload:\n'+actual.split(b'  upload:\n',1)[1]
         self.assertEqual(upload.count(b'    needs: preflight\n'),1)
         self.assertEqual(upload.count(b'    runs-on: macos-15-intel\n'),1)

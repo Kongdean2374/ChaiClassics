@@ -39,7 +39,8 @@ enum UITestBootstrap {
         guard args.contains("--ui-testing") else { return nil }
         let allowed = ["base", "sudoku", "mines", "legacy", "large", "settings", "legal", "sliding",
                        "visual-normal", "visual-reduced", "visual-lowpower", "visual-gallery",
-                       "v020-catalog", "v020-tictactoe", "v020-connectfour", "v020-twentyfour", "v020-memory", "v020-maze", "v020-layout"]
+                       "v020-catalog", "v020-tictactoe", "v020-connectfour", "v020-twentyfour", "v020-memory", "v020-maze", "v020-layout",
+                       "v021-tictactoe", "v021-connectfour", "v021-memory", "v021-twentyfour", "v021-maze"]
         let index = args.firstIndex(of: "--ui-profile")
         let requested = index.flatMap { args.indices.contains($0 + 1) ? args[$0 + 1] : nil } ?? "base"
         let profile = allowed.contains(requested) ? requested : "base"
@@ -67,7 +68,7 @@ enum UITestBootstrap {
             if let raw = argument("--ui-appearance"), let appearance = AppAppearance(rawValue: raw) { value.appearance = appearance }
             preferences.save(value)
             if let fixture = argument("--ui-near-win") {
-                do { try seedNearWin(fixture, directory: configuration.directory) }
+                do { try seedScenario(fixture, directory: configuration.directory) }
                 catch { fatalError("Invalid simulator UI fixture: \(fixture): \(error)") }
             }
         }
@@ -75,9 +76,18 @@ enum UITestBootstrap {
 
     /// These are legal game operations in a separate test save directory. No
     /// production game or release UI exposes a solution or deterministic deck.
-    private static func seedNearWin(_ game: String, directory: URL) throws {
+    private static func seedScenario(_ game: String, directory: URL) throws {
         let store = try SaveStore(directory: directory)
         switch game {
+        case "twentyfour-fresh", "twentyfour-zero":
+            var board = try TwentyFourBoard(numbers: [1, 2, 3, 4], seed: 24)
+            if game == "twentyfour-zero" {
+                precondition(board.combine(firstID: 0, secondID: 1, operation: .add))
+                precondition(board.combine(firstID: 2, secondID: 4, operation: .subtract))
+            }
+            board.elapsedSeconds = 12
+            precondition(board.isValidSave && !board.isComplete)
+            try store.save(board, namespace: GameID.twentyFour.rawValue)
         case "twentyfour":
             var board = try TwentyFourBoard(numbers: [1, 2, 3, 4], seed: 24)
             precondition(board.combine(firstID: 0, secondID: 1, operation: .add))
@@ -95,6 +105,14 @@ enum UITestBootstrap {
             board.elapsedSeconds = 12
             precondition(board.isValidSave && board.matchedPairCount == 7)
             try store.save(board, namespace: GameID.memory.rawValue)
+        case "memory-fresh":
+            let board = MemoryBoard(mode: .easy, seed: 24)
+            precondition(board.isValidSave && board.matchedPairCount == 0)
+            try store.save(board, namespace: GameID.memory.rawValue)
+        case "maze-joystick":
+            let board = MazeBoard(difficulty: .easy, seed: 42)
+            precondition(board.isValidSave && board.moves == 0)
+            try store.save(board, namespace: GameID.maze.rawValue)
         case "maze":
             var board = MazeBoard(difficulty: .easy, seed: 42)
             var queue = [board.start]

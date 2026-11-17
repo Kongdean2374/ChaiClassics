@@ -195,7 +195,7 @@ struct SudokuPlayView: View {
                                 Text("\(digit)").font(.system(.title3, design: .rounded, weight: .medium).monospacedDigit())
                                     .lineLimit(1).minimumScaleFactor(0.6)
                                     .foregroundStyle(Color.blue).frame(maxWidth: .infinity).frame(height: 48)
-                                    .background(tint.opacity(0.075), in: RoundedRectangle(cornerRadius: 12))
+                                    .background(GameTileSurface(game: .sudoku, cornerRadius: 12))
                             }.buttonStyle(QuietPressStyle()).accessibilityIdentifier("sudoku.digit.\(digit)")
                         }
                         Button {
@@ -254,10 +254,10 @@ struct SudokuGrid: View {
                                 let i = row * 9 + col
                                 Button { select(i) } label: {
                                     ZStack {
-                                        Rectangle().fill(board.selected == i ? tint.opacity(0.12) : Color(.secondarySystemGroupedBackground))
+                                        Rectangle().fill(board.selected == i ? Color(red: 0.83, green: 0.91, blue: 0.98) : GameMaterial.ivory)
                                         if board.cells[i] != 0 {
                                             Text("\(board.cells[i])").font(.system(size: size * 0.56, weight: puzzle.givens[i] == 0 ? .regular : .semibold, design: .serif))
-                                                .foregroundStyle(puzzle.givens[i] == 0 ? Color.blue : Color.primary)
+                                                .foregroundStyle(puzzle.givens[i] == 0 ? Color.blue : GameMaterial.ink)
                                         } else {
                                             VStack(spacing: 0) {
                                                 ForEach(0..<3, id: \.self) { nr in
@@ -289,20 +289,19 @@ struct SudokuGrid: View {
                         path.move(to: CGPoint(x: offset, y: 0)); path.addLine(to: CGPoint(x: offset, y: geo.size.width))
                         path.move(to: CGPoint(x: 0, y: offset)); path.addLine(to: CGPoint(x: geo.size.width, y: offset))
                     }
-                }.stroke(.primary.opacity(0.16), lineWidth: 0.5).allowsHitTesting(false)
+                }.stroke(GameMaterial.ink.opacity(0.22), lineWidth: 0.5).allowsHitTesting(false)
                 Path { path in
                     for n in stride(from: 3, through: 6, by: 3) {
                         let offset = CGFloat(n) * size
                         path.move(to: CGPoint(x: offset, y: 0)); path.addLine(to: CGPoint(x: offset, y: geo.size.width))
                         path.move(to: CGPoint(x: 0, y: offset)); path.addLine(to: CGPoint(x: geo.size.width, y: offset))
                     }
-                }.stroke(.primary.opacity(0.65), lineWidth: 1.4).allowsHitTesting(false)
-            }.background(Color(.secondarySystemGroupedBackground))
+                }.stroke(GameMaterial.ink.opacity(0.7), lineWidth: 1.4).allowsHitTesting(false)
+            }.background(GameMaterial.ivory)
                 .clipShape(RoundedRectangle(cornerRadius: 7))
-                .overlay { RoundedRectangle(cornerRadius: 7).strokeBorder(.primary.opacity(0.75), lineWidth: 1.8).allowsHitTesting(false) }
+                .overlay { RoundedRectangle(cornerRadius: 7).strokeBorder(GameMaterial.gold, lineWidth: 1.8).allowsHitTesting(false) }
         }.aspectRatio(1, contentMode: .fit).padding(8)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 15))
-            .overlay { RoundedRectangle(cornerRadius: 15).strokeBorder(tint.opacity(0.09), lineWidth: 1) }
+            .background(GameBoardSurface(game: .sudoku, cornerRadius: 15))
             .shadow(color: .black.opacity(0.035), radius: 12, y: 4)
     }
 }

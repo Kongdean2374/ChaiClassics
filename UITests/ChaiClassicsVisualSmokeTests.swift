@@ -329,21 +329,26 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         screenshot(app, name: "01_iPad_Home")
         try attachIPadLayout(app, page: "Home", grid: cards, controls: [app.buttons["settings.open"]])
 
-        let expected = Set(["sudoku", "minesweeper", "sliding", "tictactoe", "connectfour", "twentyfour", "memory", "maze"].map { "game." + $0 }
-            + ["nonogram", "kakuro", "klotski", "gomoku", "reversi", "solitaire", "snake", "fallingblocks", "brickbreaker"].map { "catalog." + $0 })
+        let expected = Set(["sudoku", "minesweeper", "sliding", "twentyfour", "memory", "maze"].map { "game." + $0 }
+            + ["nonogram", "kakuro", "klotski", "boardgames", "solitaire", "snake", "fallingblocks", "brickbreaker"].map { "catalog." + $0 })
         var seen: Set<String> = []
         for _ in 0..<8 {
             let visible = app.frame.insetBy(dx: 0, dy: 50)
             let entries = app.buttons.matching(NSPredicate(format: "identifier IN %@", Array(expected)))
             for entry in entries.allElementsBoundByIndex where visible.contains(CGPoint(x: entry.frame.midX, y: entry.frame.midY)) {
                 XCTAssertFalse(entry.label.contains("進行中"))
-                XCTAssertTrue(entry.label.contains(entry.identifier.hasPrefix("game.") ? "可遊玩" : "尚未推出"))
+                if entry.identifier == "catalog.boardgames" {
+                    XCTAssertTrue(entry.label.contains("2 款可遊玩 · 6 款尚未推出"))
+                } else {
+                    XCTAssertTrue(entry.label.contains(entry.identifier.hasPrefix("game.") ? "可遊玩" : "尚未推出"))
+                }
                 seen.insert(entry.identifier)
             }
             if seen == expected { break }
             app.swipeUp()
         }
-        XCTAssertEqual(seen, expected, "All 17 iPad Home cards must be reachable by scrolling.")
+        XCTAssertEqual(expected.count, 14)
+        XCTAssertEqual(seen, expected, "All 14 iPad Home cards must be reachable by scrolling.")
         screenshot(app, name: "v020-iPad-home-bottom")
         let folder = app.buttons["catalog.solitaire"]
         scrollFullyIntoView(folder, app: app); folder.tap()
@@ -371,6 +376,30 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         XCTAssertTrue(status.label.contains("尚未推出"))
         screenshot(app, name: "v020-iPad-coming-soon")
         app.buttons["comingSoon.back"].tap(); back(app)
+
+        let boardFolder = app.buttons["catalog.boardgames"]
+        scrollFullyIntoView(boardFolder, app: app); boardFolder.tap()
+        XCTAssertTrue(app.navigationBars["棋類遊戲"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "catalog.folder.boardgames").firstMatch.waitForExistence(timeout: 5))
+        let boardIDs = ["game.tictactoe", "game.connectfour", "catalog.gomoku", "catalog.reversi", "catalog.xiangqi", "catalog.banqi", "catalog.chess", "catalog.shogi"]
+        var boardEntries: Set<String> = []
+        for id in boardIDs {
+            let card = app.buttons[id]
+            scrollFullyIntoView(card, app: app)
+            assertIPadVisible(card, app: app)
+            XCTAssertTrue(card.label.contains(id.hasPrefix("game.") ? "可遊玩" : "尚未推出"))
+            XCTAssertFalse(card.label.contains("進行中"))
+            boardEntries.insert(card.identifier)
+        }
+        XCTAssertEqual(boardEntries, Set(boardIDs))
+        XCTAssertEqual(boardEntries.count, 8)
+        XCTAssertEqual(app.staticTexts.matching(identifier: "catalog.folder.availability").firstMatch.label, "2 款可遊玩 · 6 款尚未推出")
+        let boardFirstRow = Array(boardIDs.prefix(3)).map { app.buttons[$0] }
+        for card in boardFirstRow { scrollFullyIntoView(card, app: app) }
+        XCTAssertEqual(boardFirstRow[0].frame.minY, boardFirstRow[1].frame.minY, accuracy: 2)
+        XCTAssertEqual(boardFirstRow[1].frame.minY, boardFirstRow[2].frame.minY, accuracy: 2)
+        screenshot(app, name: "v021-iPad-boardgames")
+        back(app)
     }
 
     func testIPadSudokuScreenshot() throws {

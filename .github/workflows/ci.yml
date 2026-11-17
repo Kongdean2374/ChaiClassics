@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches: [main, develop/0.2.0]
+    branches: [main, develop/0.2.0, develop/0.2.1]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -13,10 +13,10 @@ on:
       ui_scope:
         description: Full integration, or only the affected game UI
         type: choice
-        options: [full, sliding, memory, tictactoe, connectfour, twentyfour, maze, catalog, legacy]
+        options: [full, affected, sliding, memory, tictactoe, connectfour, twentyfour, maze, catalog, legacy]
         default: full
       baseline_run:
-        description: Optional full CI evidence for a test-helper-only repair (otherwise scoped results only)
+        description: Optional prior CI run IDs, comma-separated; only matching actual passes carry forward
         type: string
         default: ''
   workflow_call:
@@ -57,14 +57,17 @@ jobs:
           Path('ui-selection.json').write_text(json.dumps({'scope': os.environ['CHAI_UI_SCOPE'], 'source_commit': os.environ['GITHUB_SHA']}) + '\n')
           PY
       - name: Verify puzzles, save compatibility and generated project
-        if: env.CHAI_UI_SCOPE == 'full'
         run: bash scripts/ci.sh verify
       - name: Run Swift game and save tests
-        if: env.CHAI_UI_SCOPE == 'full'
         run: bash scripts/ci.sh unit
       - name: Build iOS Simulator app
-        if: env.CHAI_UI_SCOPE == 'full'
         run: bash scripts/ci.sh build
+      - name: Plan affected UI cases from verified source evidence
+        if: inputs.full_ui == true && env.CHAI_UI_SCOPE == 'affected'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHAI_BASELINE_RUN: ${{ inputs.baseline_run }}
+        run: python3 scripts/verify_scoped_ci.py plan --source-runs "$CHAI_BASELINE_RUN" --output build/ui-scope-plan.json
       - name: Run all iOS UI tests
         if: inputs.full_ui == true && env.CHAI_UI_SCOPE == 'full'
         run: bash scripts/ci.sh ui
@@ -75,13 +78,13 @@ jobs:
         if: inputs.full_ui == true && env.CHAI_UI_SCOPE == 'full'
         run: python3 scripts/verify_candidate.py capture --kind ci --summary build/UITests-summary.json --log build/UITests.log --output build/candidate-ci-evidence.json
       - name: Validate incremental candidate XCTest evidence
-        if: inputs.full_ui == true && env.CHAI_UI_SCOPE != 'full' && inputs.baseline_run != ''
+        if: inputs.full_ui == true && env.CHAI_UI_SCOPE != 'full'
         env:
           GH_TOKEN: ${{ github.token }}
           CHAI_BASELINE_RUN: ${{ inputs.baseline_run }}
-        run: python3 scripts/verify_incremental_ci.py --baseline-run "$CHAI_BASELINE_RUN" --summary build/UITests-summary.json --log build/UITests.log --output build/candidate-ci-evidence.json
+        run: python3 scripts/verify_scoped_ci.py capture --source-runs "$CHAI_BASELINE_RUN" --scope "$CHAI_UI_SCOPE" --summary build/UITests-summary.json --log build/UITests.log --output build/candidate-ci-evidence.json
       - name: Preserve bounded candidate CI evidence
-        if: inputs.full_ui == true && (env.CHAI_UI_SCOPE == 'full' || inputs.baseline_run != '')
+        if: inputs.full_ui == true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: candidate-ci-evidence
@@ -108,6 +111,7 @@ jobs:
             sudoku-verification.json
             build/UITests.xcresult
             build/UITests-summary.json
+            build/ui-scope-plan.json
             build/UITests.log
             build/ui-screenshots/*.png
             build/ui-screenshots/*.json

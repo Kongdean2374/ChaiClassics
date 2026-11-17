@@ -122,7 +122,7 @@ private struct CatalogGrid: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(QuietPressStyle())
-                .accessibilityLabel([model.t(item.titleKey), model.t(item.descriptionKey), model.t(item.availabilityKey)].joined(separator: ", "))
+                .accessibilityLabel([model.t(item.titleKey), model.t(item.descriptionKey), item.availabilityText(using: model)].joined(separator: ", "))
                 .accessibilityIdentifier(item.gameID.map { "game." + $0.rawValue } ?? "catalog." + item.id.rawValue)
             }
         }
@@ -153,7 +153,7 @@ private struct CatalogCard: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, minHeight: titleMinimumHeight)
 
-            Text(model.t(item.availabilityKey))
+            Text(item.availabilityText(using: model))
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
@@ -199,6 +199,12 @@ private struct CatalogFolderView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if GameCatalog.children(of: folder.id).contains(where: { $0.gameID != nil }) {
+                    Text(folder.availabilityText(using: model))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(GamePalette.tint(folder.accent))
+                        .accessibilityIdentifier("catalog.folder.availability")
+                }
                 CatalogGrid(items: GameCatalog.children(of: folder.id), identifier: folder.id.rawValue)
             }
             .padding(.horizontal, 16)
@@ -211,6 +217,16 @@ private struct CatalogFolderView: View {
         .navigationBarTitleDisplayMode(.inline)
         .localizedNavigation()
         .accessibilityIdentifier("catalog.folder." + folder.id.rawValue)
+    }
+}
+
+private extension CatalogItem {
+    func availabilityText(using model: AppModel) -> String {
+        guard kind == .folder else { return model.t(availabilityKey) }
+        let children = GameCatalog.children(of: id)
+        let playable = children.filter { $0.gameID != nil }.count
+        guard playable > 0 else { return model.t(availabilityKey) }
+        return model.t(availabilityKey, playable, children.filter { $0.kind == .comingSoon }.count)
     }
 }
 

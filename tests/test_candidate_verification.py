@@ -5,10 +5,12 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 import verify_candidate as candidate
+import verify_scoped_ci as scoped
 
 
 class CandidateVerificationTests(unittest.TestCase):
@@ -77,6 +79,40 @@ class CandidateVerificationTests(unittest.TestCase):
     def verify(self, **kwargs):
         return candidate.verify(self.repo, self.sha, '0.2.0', self.tag, self.runs, read=self.read, root=self.root, **kwargs)
 
+    def prepare_scoped_evidence(self, scope='affected'):
+        source = {str(path.relative_to(self.root)): ('100644', path.read_bytes()) for path in self.root.rglob('*.swift')}
+        tests = scoped.planned_tests(scoped.fingerprints(source), []) if scope == 'affected' else scoped.scopes.resolve(scope, scoped.fingerprints(source))
+        actual = {test: 'skipped' if test.split('/')[-1] in candidate.IPAD_TESTS else 'passed' for test in tests}
+        counts = {'totalTestCount': len(actual), 'passedTests': sum(value == 'passed' for value in actual.values()),
+                  'failedTests': 0, 'skippedTests': sum(value == 'skipped' for value in actual.values()), 'result': 'Passed'}
+        evidence = scoped.make_evidence(self.sha, self.runs['ci'], scope, counts, actual, source, [])
+        prefix = f'repos/{self.repo}/actions/runs/{self.runs["ci"]}'
+        self.responses[prefix]['id'] = self.runs['ci']
+        entries = self.responses[prefix + '/jobs?per_page=100&filter=latest']['jobs']
+        test = next(job for job in entries if job['name'] == 'test')
+        test['steps'] = [{'name': name, 'conclusion': 'success'} for name in [
+            'Verify puzzles, save compatibility and generated project', 'Run Swift game and save tests',
+            'Build iOS Simulator app', 'Run selected iOS UI tests', 'Validate incremental candidate XCTest evidence']]
+        self.responses[f'repos/{self.repo}/actions/artifacts/{self.runs["ci"] * 10}/zip'] = self.archive('ci', evidence=evidence)
+        return source, counts, actual
+
+    def test_schema_three_candidate_rebuilds_real_scope_and_keeps_visual_ipad_exact_sha(self):
+        source, counts, actual = self.prepare_scoped_evidence()
+        with mock.patch.object(scoped.historical, 'git_tree', return_value=source), mock.patch.object(scoped.historical, 'load_results', return_value=(counts, actual)):
+            proof = self.verify()
+            self.assertEqual(proof['schema'], 3)
+            self.assertEqual(proof['verification'], 'dependency-scoped')
+            self.assertTrue(proof['release_eligible'])
+            self.assertEqual(proof['workflows']['ci']['source_runs'], [self.runs['ci']])
+            self.responses[f'repos/{self.repo}/actions/runs/{self.runs["visual"]}']['head_sha'] = 'b' * 40
+            with self.assertRaises(candidate.CandidateError): self.verify()
+
+    def test_schema_three_partial_actual_pass_cannot_authorize_candidate(self):
+        source, counts, actual = self.prepare_scoped_evidence('legacy')
+        self.assertEqual(len(actual), 1)
+        with mock.patch.object(scoped.historical, 'git_tree', return_value=source), mock.patch.object(scoped.historical, 'load_results', return_value=(counts, actual)):
+            with self.assertRaisesRegex(candidate.CandidateError, 'partial'): self.verify()
+
     def test_exact_candidate_requires_all_three_runs_and_full_test_counts(self):
         proof = self.verify()
         self.assertEqual(proof['status'], 'verified')
@@ -88,6 +124,20 @@ class CandidateVerificationTests(unittest.TestCase):
         self.assertEqual(proof['workflows']['ci']['summary']['totalTestCount'], 12)
         self.assertEqual(proof['workflows']['ipad']['summary']['passedTests'], 4)
         self.assertEqual(proof['workflows']['ipad']['games_summary']['passedTests'], 5)
+
+    def test_v021_development_proof_retains_exact_sha_and_never_authorizes_release(self):
+        version = '0.2.1'; tag = 'v0.2.1-rc.1'; branch = 'develop/0.2.1'
+        self.responses[f'repos/{self.repo}/git/ref/heads/{branch}'] = {'object': {'sha': self.sha}}
+        self.responses[f'repos/{self.repo}/git/ref/tags/{tag}'] = {'ref': 'refs/tags/' + tag, 'object': {'sha': self.sha, 'type': 'commit'}}
+        for run_id in self.runs.values():
+            self.responses[f'repos/{self.repo}/actions/runs/{run_id}']['head_branch'] = branch
+        proof = candidate.verify(self.repo, self.sha, version, tag, self.runs, read=self.read, root=self.root, branch=branch)
+        self.assertFalse(proof['release_eligible'])
+        self.assertEqual(proof['version'], version)
+        self.assertEqual(proof['evidence_branch'], branch)
+        self.responses[f'repos/{self.repo}/actions/runs/{self.runs["visual"]}']['head_sha'] = 'b' * 40
+        with self.assertRaises(candidate.CandidateError):
+            candidate.verify(self.repo, self.sha, version, tag, self.runs, read=self.read, root=self.root, branch=branch)
 
     def test_development_proof_never_authorizes_release(self):
         self.responses[f'repos/{self.repo}/git/ref/heads/develop/0.2.0'] = {'object': {'sha': self.sha}}

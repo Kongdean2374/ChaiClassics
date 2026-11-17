@@ -3,23 +3,23 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version (e.g. 0.2.0)'
+        description: 'Version (e.g. 0.2.1)'
         required: true
-        default: '0.2.0'
+        default: '0.2.1'
       candidate_tag:
-        description: 'Required for 0.2.0: explicit v0.2.0-rc.N tag at this main SHA'
+        description: 'Required for 0.2.x: explicit vVERSION-rc.N tag at this main SHA'
         required: false
         type: string
       ci_run:
-        description: 'Required for 0.2.0: verified full or test-helper-only incremental CI run ID'
+        description: 'Required for 0.2.x: verified full or complete dependency-scoped CI run ID'
         required: false
         type: string
       visual_run:
-        description: 'Required for 0.2.0: successful iPhone Visual Smoke run ID'
+        description: 'Required for 0.2.x: successful iPhone Visual Smoke run ID'
         required: false
         type: string
       ipad_run:
-        description: 'Required for 0.2.0: successful four-gallery iPad Screenshots run ID'
+        description: 'Required for 0.2.x: successful four-gallery iPad Screenshots run ID'
         required: false
         type: string
       apple_team_id:
@@ -45,8 +45,8 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Require complete exact-SHA candidate verification before 0.2.0 signing
-        if: inputs.version == '0.2.0'
+      - name: Require complete exact-SHA candidate verification before 0.2.x signing
+        if: startsWith(inputs.version, '0.2.')
         env:
           GH_TOKEN: ${{ github.token }}
           CHAI_CANDIDATE_TAG: ${{ inputs.candidate_tag }}
@@ -60,7 +60,7 @@ jobs:
             --ci-run "$CHAI_CANDIDATE_CI_RUN" --visual-run "$CHAI_CANDIDATE_VISUAL_RUN" \
             --ipad-run "$CHAI_CANDIDATE_IPAD_RUN" --output build/candidate-proof.json
       - name: Preserve verified release candidate proof
-        if: inputs.version == '0.2.0'
+        if: startsWith(inputs.version, '0.2.')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: candidate-release-proof

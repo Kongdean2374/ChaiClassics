@@ -33,23 +33,85 @@ enum GamePalette {
     }
 }
 
+/// Shared enamel/paper materials tie real boards to the bundled illustrations.
+/// All detailing is static and input-transparent, with no image of a fake board.
+enum GameMaterial {
+    static let navy = Color(red: 0.035, green: 0.09, blue: 0.15)
+    static let teal = Color(red: 0.035, green: 0.24, blue: 0.26)
+    static let gold = Color(red: 0.87, green: 0.65, blue: 0.29)
+    static let ivory = Color(red: 0.98, green: 0.93, blue: 0.81)
+    static let ink = Color(red: 0.10, green: 0.18, blue: 0.22)
+    static let coral = Color(red: 0.93, green: 0.34, blue: 0.27)
+}
+
+struct GameBoardSurface: View {
+    let game: GameID
+    var cornerRadius: CGFloat = 24
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(LinearGradient(colors: [GameMaterial.teal, GameMaterial.navy], startPoint: .topLeading, endPoint: .bottomTrailing))
+            .overlay {
+                RoundedRectangle(cornerRadius: max(0, cornerRadius - 4))
+                    .strokeBorder(LinearGradient(colors: [GameMaterial.ivory.opacity(0.8), GameMaterial.gold, GameMaterial.gold.opacity(0.4)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1.5)
+                    .padding(3)
+            }
+            .overlay(alignment: .top) {
+                RoundedRectangle(cornerRadius: 1).fill(GameMaterial.ivory.opacity(0.18))
+                    .frame(height: 1).padding(.horizontal, cornerRadius).padding(.top, 8)
+            }
+            .shadow(color: GameMaterial.navy.opacity(0.15), radius: 5, y: 3)
+            .allowsHitTesting(false).accessibilityHidden(true)
+    }
+}
+
+struct GameTileSurface: View {
+    let game: GameID
+    var selected = false
+    var cornerRadius: CGFloat = 14
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(LinearGradient(colors: [GameMaterial.ivory, Color(red: 0.90, green: 0.80, blue: 0.60)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            .overlay {
+                RoundedRectangle(cornerRadius: max(0, cornerRadius - 2))
+                    .strokeBorder(selected ? Color.blue : GameMaterial.gold, lineWidth: selected ? 2.5 : 1.2)
+                    .padding(2)
+            }
+            .overlay(alignment: .top) {
+                RoundedRectangle(cornerRadius: 1).fill(.white.opacity(0.6)).frame(height: 1)
+                    .padding(.horizontal, cornerRadius).padding(.top, 5)
+            }
+            .shadow(color: .black.opacity(0.16), radius: 1.5, y: 2)
+            .allowsHitTesting(false).accessibilityHidden(true)
+    }
+}
+
 /// A static backdrop: no blur, moving gradients or recurring rendering work.
 struct GameCanvas: View {
     var body: some View {
         Color(.systemGroupedBackground)
             .overlay(alignment: .top) {
-                LinearGradient(colors: [.indigo.opacity(0.045), .teal.opacity(0.02), .clear], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    .frame(height: 420)
+                LinearGradient(colors: [.indigo.opacity(0.12), .teal.opacity(0.07), .orange.opacity(0.025), .clear], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    .frame(height: 560)
             }.ignoresSafeArea()
     }
 }
 
-/// Original, vector-drawn game artwork. Decorative cells never expose live answers.
+/// Bundled illustrations are decorative artwork, never live boards or answers.
 struct GameArtwork: View {
     let game: GameID
     var size: CGFloat = 72
     private var tint: Color { GamePalette.tint(game) }
-    var body: some View {
+    private var illustration: UIImage? { GameIllustration.image(for: game) }
+    @ViewBuilder var body: some View {
+        if let illustration {
+            Image(uiImage: illustration).resizable().scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: size * 0.25))
+                .overlay(RoundedRectangle(cornerRadius: size * 0.25).strokeBorder(.white.opacity(0.14), lineWidth: 1))
+                .accessibilityHidden(true)
+        } else { vectorArtwork }
+    }
+    private var vectorArtwork: some View {
         Canvas { context, bounds in
             if game != .sudoku && game != .minesweeper && game != .sliding {
                 var symbol = context.resolve(Image(systemName: GameCatalog.item(for: game)?.symbol ?? "square.grid.3x3"))
@@ -89,6 +151,24 @@ struct GameArtwork: View {
         let text = Text(value).font(.system(size: size, weight: .semibold, design: .rounded)).foregroundColor(tint)
         context.draw(text, at: CGPoint(x: rect.midX, y: rect.midY))
     }
+}
+
+/// Decode/crop the bundled contact sheet once, not during scrolling or frames.
+/// A single source keeps the artwork consistent and avoids eight large textures.
+private enum GameIllustration {
+    static let images: [GameID: UIImage] = {
+        let sheets: [(String, [GameID])] = [("ClassicIllustrations", [.ticTacToe, .connectFour, .twentyFour, .memory]), ("PuzzleIllustrations", [.sudoku, .minesweeper, .sliding, .maze])]
+        return Dictionary(uniqueKeysWithValues: sheets.flatMap { name, games -> [(GameID, UIImage)] in
+            guard let source = UIImage(named: name)?.cgImage else { return [] }
+            let width = source.width / 2, height = source.height / 2
+            return games.enumerated().compactMap { index, game in
+            let rect = CGRect(x: CGFloat((index % 2) * width), y: CGFloat((index / 2) * height), width: CGFloat(width), height: CGFloat(height))
+            guard let cropped = source.cropping(to: rect) else { return nil }
+            return (game, UIImage(cgImage: cropped))
+            }
+        })
+    }()
+    static func image(for game: GameID) -> UIImage? { images[game] }
 }
 
 /// Catalog previews use the same rounded vector-art tiles as playable games.

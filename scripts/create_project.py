@@ -45,7 +45,7 @@ a_sources=phase('asources','PBXSourcesBuildPhase',a_build); a_resources=phase('a
 u_sources=phase('usources','PBXSourcesBuildPhase',u_build); u_frameworks=phase('uframeworks','PBXFrameworksBuildPhase',[])
 u_resources=phase('uresources','PBXResourcesBuildPhase',fixture_builds)
 base={'IPHONEOS_DEPLOYMENT_TARGET':'17.0','SWIFT_VERSION':'5.0','TARGETED_DEVICE_FAMILY':'"1,2"','SDKROOT':'iphoneos','CLANG_ENABLE_MODULES':'YES','CLANG_ENABLE_OBJC_ARC':'YES','ENABLE_USER_SCRIPT_SANDBOXING':'YES'}
-app={**base,'PRODUCT_BUNDLE_IDENTIFIER':'cc.chaihome.chaiclassics','PRODUCT_NAME':'"$(TARGET_NAME)"','INFOPLIST_FILE':'App/Info.plist','GENERATE_INFOPLIST_FILE':'NO','ASSETCATALOG_COMPILER_APPICON_NAME':'AppIcon','MARKETING_VERSION':'0.2.0','CURRENT_PROJECT_VERSION':'1','CODE_SIGN_STYLE':'Manual','SWIFT_EMIT_LOC_STRINGS':'YES','SUPPORTED_PLATFORMS':'"iphoneos iphonesimulator"'}
+app={**base,'PRODUCT_BUNDLE_IDENTIFIER':'cc.chaihome.chaiclassics','PRODUCT_NAME':'"$(TARGET_NAME)"','INFOPLIST_FILE':'App/Info.plist','GENERATE_INFOPLIST_FILE':'NO','ASSETCATALOG_COMPILER_APPICON_NAME':'AppIcon','MARKETING_VERSION':'0.2.1','CURRENT_PROJECT_VERSION':'1','CODE_SIGN_STYLE':'Manual','SWIFT_EMIT_LOC_STRINGS':'YES','SUPPORTED_PLATFORMS':'"iphoneos iphonesimulator"'}
 ui={**base,'PRODUCT_BUNDLE_IDENTIFIER':'cc.chaihome.chaiclassics.uitests','PRODUCT_NAME':'"$(TARGET_NAME)"','GENERATE_INFOPLIST_FILE':'YES','TEST_TARGET_NAME':'ChaiClassics','CODE_SIGN_STYLE':'Automatic'}
 def configs(name,settings):
     cs=[]
@@ -58,7 +58,7 @@ def configs(name,settings):
                       'CODE_SIGN_IDENTITY[sdk=iphoneos*]':q('$(CHAI_SIGNING_IDENTITY)'),
                       'PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]':q('$(CHAI_SIGNING_PROFILE)'),
                       'OTHER_CODE_SIGN_FLAGS[sdk=iphoneos*]':q('$(inherited) $(CHAI_SIGNING_FLAGS)'),
-                      'CHAI_RELEASE_VERSION':'0.2.0','CHAI_BUILD_NUMBER':'1',
+                      'CHAI_RELEASE_VERSION':'0.2.1','CHAI_BUILD_NUMBER':'1',
                       'MARKETING_VERSION':q('$(CHAI_RELEASE_VERSION)'),
                       'CURRENT_PROJECT_VERSION':q('$(CHAI_BUILD_NUMBER)')})
         if mode=='Debug': s['SWIFT_ACTIVE_COMPILATION_CONDITIONS']='DEBUG'; s['ENABLE_TESTABILITY']='YES'

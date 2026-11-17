@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Document version: 0.2.0
+Document version: 0.2.1
 
 ## Data the app actually handles
 

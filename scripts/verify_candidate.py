@@ -32,6 +32,7 @@ IPAD_GAME_TESTS = {
 WORKFLOWS = {'ci': 'ci.yml', 'visual': 'visual-smoke.yml', 'ipad': 'ipad-screenshots.yml'}
 JOBS = {'ci': {'test', 'codesign-extraction', 'release-tooling'}, 'visual': {'visual-smoke'}, 'ipad': {'ipad-screenshots'}}
 MAX_EVIDENCE_BYTES = 2 * 1024 * 1024
+TRUSTED_BRANCHES = ('main', 'develop/0.2.0', 'develop/0.2.1')
 
 
 class CandidateError(ValueError):
@@ -207,7 +208,7 @@ def verify(repo, sha, version, tag, runs, read=github, root=ROOT, branch='main')
     require(re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', repo) is not None, 'Invalid repository name.')
     require(re.fullmatch(r'[0-9a-f]{40}', sha) is not None and re.fullmatch(r'\d+\.\d+\.\d+', version) is not None, 'Full SHA and numeric release version are required.')
     require(re.fullmatch(re.escape('v' + version) + r'-rc\.[1-9]\d*', tag) is not None, 'An explicit vVERSION-rc.N candidate tag is required.')
-    require(branch in ('main', 'develop/0.2.0'), 'Only main and the isolated 0.2.0 development branch are trusted.')
+    require(branch in TRUSTED_BRANCHES, 'Only main and isolated supported development branches are trusted.')
     require(len(set(runs.values())) == 3 and all(type(value) is int and value > 0 for value in runs.values()), 'Three distinct positive workflow run IDs are required.')
     head = read('repos/' + repo + '/git/ref/heads/' + branch)
     require(head.get('object', {}).get('sha') == sha, 'Branch has advanced or does not match the tested candidate SHA.')
@@ -222,11 +223,12 @@ def verify(repo, sha, version, tag, runs, read=github, root=ROOT, branch='main')
     require(obj.get('type') == 'commit' and obj.get('sha') == sha, 'Candidate tag does not resolve to the tested SHA.')
     results = {}
     incremental = None
+    scoped = None
     evidence_branch = None
     for kind in WORKFLOWS:
         prefix = 'repos/' + repo + '/actions/runs/' + str(runs[kind])
         run = read(prefix)
-        require(isinstance(run, dict) and run.get('head_branch') in ('main', 'develop/0.2.0'),
+        require(isinstance(run, dict) and run.get('head_branch') in TRUSTED_BRANCHES,
                 'Candidate evidence must come from a trusted main or development branch.')
         if evidence_branch is None:
             evidence_branch = run['head_branch']
@@ -240,6 +242,16 @@ def verify(repo, sha, version, tag, runs, read=github, root=ROOT, branch='main')
         artifacts['_repo'] = repo
         raw_evidence = artifact_evidence(artifacts, kind, read)
         jobs = read(prefix + '/jobs?per_page=100&filter=latest')
+        if kind == 'ci' and raw_evidence.get('schema') == 3:
+            from verify_scoped_ci import validate_evidence as validate_scoped_evidence
+            scoped = validate_scoped_evidence(raw_evidence, repo, sha, runs['ci'], read=read, root=root)
+            results[kind] = {'run_id': runs[kind], 'run_url': f'https://github.com/{repo}/actions/runs/{runs[kind]}',
+                             'actor': run['actor']['login'], 'triggering_actor': run['triggering_actor']['login'],
+                             'verification': scoped['verification'], 'source_commit': sha,
+                             'summary': scoped['current_summary'], 'executed_tests': scoped['executed_current_tests'],
+                             'source_runs': scoped['source_runs'], 'coverage': scoped['coverage'],
+                             'fingerprints': scoped['fingerprints']}
+            continue
         if kind == 'ci' and raw_evidence.get('schema') == 2:
             from verify_incremental_ci import validate_incremental_evidence
             validate_run(run, jobs, kind, repo, sha, evidence_branch, ui_step='Run selected iOS UI tests')
@@ -272,10 +284,12 @@ def verify(repo, sha, version, tag, runs, read=github, root=ROOT, branch='main')
             results[kind]['device'] = evidence['ipad_report']['device']
             results[kind]['games_summary'] = evidence['games_summary']
             results[kind]['executed_game_tests'] = evidence['executed_game_tests']
-    proof = {'schema': 2 if incremental else 1, 'status': 'verified', 'version': version, 'source_commit': sha,
+    proof = {'schema': 3 if scoped else 2 if incremental else 1, 'status': 'verified', 'version': version, 'source_commit': sha,
             'candidate_tag': tag, 'branch': branch, 'evidence_branch': evidence_branch,
             'release_eligible': branch == 'main', 'workflows': results,
             'apple_upload': 'not_performed', 'apple_processing': 'not_checked'}
+    if scoped:
+        proof.update(verification='dependency-scoped', source_runs=scoped['source_runs'])
     if incremental:
         proof.update(verification='test-helper-only-incremental', app_source_digest=incremental['app_source_digest'],
                      test_methods_digest=incremental['test_methods_digest'], baseline_commit=incremental['baseline_commit'])
@@ -298,7 +312,7 @@ def main(argv=None):
     gate.add_argument('--sha', required=True)
     gate.add_argument('--version', required=True)
     gate.add_argument('--tag', required=True)
-    gate.add_argument('--branch', choices=('main', 'develop/0.2.0'), default='main')
+    gate.add_argument('--branch', choices=TRUSTED_BRANCHES, default='main')
     for kind in WORKFLOWS:
         gate.add_argument('--' + kind + '-run', type=int, required=True)
     gate.add_argument('--output', type=Path, required=True)
