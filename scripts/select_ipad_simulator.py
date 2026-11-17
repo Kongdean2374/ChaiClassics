@@ -237,6 +237,33 @@ def _metadata(runner, root):
     return {'host_arch': platform.machine(), 'xcode_version': xcode, 'source_commit': sha}
 
 
+def load_inventory(fixture, runner):
+    if fixture:
+        try:
+            raw = fixture.read_text(encoding='utf-8')
+        except OSError:
+            raise SelectionError('IPAD13_INVENTORY_READ_FAILED', 'Cannot read the offline simulator inventory fixture.') from None
+    else:
+        # A fresh hosted Mac may still be starting CoreSimulatorService after
+        # the first command times out. Reissue the read only, without sleeping,
+        # downloading a runtime or extending any individual command beyond 60s.
+        for attempt in range(1, 4):
+            try:
+                raw = runner(['xcrun', 'simctl', 'list', '--json'], timeout=60)
+                break
+            except subprocess.TimeoutExpired:
+                if attempt == 3:
+                    raise SelectionError('IPAD13_INVENTORY_TIMEOUT', 'Local simulator inventory timed out after three bounded 60-second attempts; installed models and runtimes remain unknown.') from None
+                print('IPAD13_INVENTORY_RETRY: Local simulator inventory timed out; retry '
+                      + str(attempt + 1) + ' of 3 (60 seconds maximum).', flush=True)
+            except (OSError, subprocess.SubprocessError):
+                raise SelectionError('IPAD13_INVENTORY_COMMAND_FAILED', 'The local simulator inventory command failed; installed models and runtimes remain unknown.') from None
+    try:
+        return json.loads(raw)
+    except (ValueError, TypeError):
+        raise SelectionError('IPAD13_INVENTORY_JSON_INVALID', 'The simulator inventory response is malformed JSON; installed models and runtimes remain unknown.') from None
+
+
 def main(argv=None, runner=run_command, root=ROOT):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
@@ -246,15 +273,13 @@ def main(argv=None, runner=run_command, root=ROOT):
     report = {'schema_version': 1, 'status': 'error', 'device_name': None, 'device_udid': None,
               'device_type_identifier': None, 'runtime_identifier': None, 'runtime_version': None,
               'runtime_build': None, 'deployment_target': None, 'created': False,
-              **_metadata(runner, root), 'available_ipads': [], 'errors': [], 'diagnostics': {}}
+              **_metadata(runner, root), 'available_ipads': [], 'errors': [],
+              'diagnostics': {'inventory_available': False}}
     try:
         report['deployment_target'] = deployment_target(root)
-        try:
-            raw = args.inventory.read_text(encoding='utf-8') if args.inventory else runner(['xcrun', 'simctl', 'list', '--json'], timeout=60)
-            inventory = json.loads(raw)
-        except (OSError, ValueError, subprocess.SubprocessError):
-            raise SelectionError('IPAD13_INVENTORY_UNAVAILABLE', 'Cannot read the installed local simulator inventory.') from None
+        inventory = load_inventory(args.inventory, runner)
         validate_inventory(inventory)
+        report['diagnostics']['inventory_available'] = True
         diagnostics = inventory_diagnostics(inventory)
         report['available_ipads'] = diagnostics.pop('available_ipads')
         report['diagnostics'].update(diagnostics)
@@ -289,6 +314,16 @@ def main(argv=None, runner=run_command, root=ROOT):
         print('IPAD13_OUTPUT_WRITE_FAILED: Cannot write simulator selection diagnostics.', file=sys.stderr)
         return 1
     print(report['diagnostics']['code'] + ': ' + report['diagnostics']['message'])
+    if not report['diagnostics']['inventory_available']:
+        print('Simulator inventory: unavailable; installed iPad models and iOS runtimes are unknown.')
+        return 1
+    available = [item for item in report['available_ipads'] if item['is_available']]
+    print('Available iPads:' + ('' if available else ' none'))
+    for item in sorted(available, key=lambda row: (str(row['device_name']), str(row['runtime_version']))):
+        # Names are public local simulator metadata. JSON quoting keeps even a
+        # custom name on one line; paths, UUIDs and command output are omitted.
+        print('  ' + json.dumps(item['device_name'], ensure_ascii=False)
+              + ' | iOS ' + str(item['runtime_version']) + ' | Build ' + str(item['runtime_build']))
     if report['status'] != 'ready':
         models = sorted({str(item.get('name')) for item in report['diagnostics'].get('installed_ipad_types', [])})
         runtimes = [str(item.get('name')) + ' ' + str(item.get('version'))
@@ -296,6 +331,10 @@ def main(argv=None, runner=run_command, root=ROOT):
         print('Installed iPad models: ' + (', '.join(models) or 'none'))
         print('Installed iOS runtimes: ' + (', '.join(runtimes) or 'none'))
         return 1
+    print('Selected iPad: ' + json.dumps(report['device_name'], ensure_ascii=False)
+          + ' | iOS ' + report['runtime_version'] + ' | Build ' + report['runtime_build'])
+    print('Selected Xcode: ' + (report['xcode_version'].replace('\n', ' | ')
+                                if report['xcode_version'] else 'unavailable'))
     return 0
 
 

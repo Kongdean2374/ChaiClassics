@@ -200,9 +200,31 @@ class CliTests(unittest.TestCase):
 
     def invoke(self, value, extra=(), runner=None):
         self.value = value
-        with redirect_stdout(io.StringIO()), patch.dict(os.environ, {'GITHUB_SHA': SHA}):
+        console = io.StringIO()
+        with redirect_stdout(console), patch.dict(os.environ, {'GITHUB_SHA': SHA}):
             status = selector.main(['--output', str(self.output), *extra], runner or self.runner, self.root)
+        self.console_output = console.getvalue()
         return status, json.loads(self.output.read_text())
+
+    def test_success_lists_available_ipads_and_selected_public_provenance(self):
+        value = inventory(kinds=[kind(), kind(OLD, 'iPad Pro 12.9-inch')],
+                          devices={runtime()['identifier']: [device(), device(OLD, 'iPad Pro 12.9-inch', UDID5)]})
+        status, _ = self.invoke(value)
+        self.assertEqual(status, 0)
+        self.assertIn('Available iPads:\n', self.console_output)
+        self.assertIn('"iPad Pro 12.9-inch" | iOS 26.2 | Build 23C54', self.console_output)
+        self.assertIn('Selected iPad: "iPad Pro 13-inch (M4)" | iOS 26.2 | Build 23C54', self.console_output)
+        self.assertIn('Selected Xcode: Xcode 26.3 | Build version 17C529', self.console_output)
+        self.assertNotIn(UDID4, self.console_output)
+        self.assertNotIn(str(self.root), self.console_output)
+
+    def test_failure_also_lists_available_ipads_without_claiming_selection(self):
+        value = inventory(kinds=[kind(OLD, 'iPad Pro 12.9-inch')],
+                          devices={runtime()['identifier']: [device(OLD, 'iPad Pro 12.9-inch')]})
+        status, _ = self.invoke(value)
+        self.assertEqual(status, 1)
+        self.assertIn('Available iPads:\n  "iPad Pro 12.9-inch" | iOS 26.2 | Build 23C54', self.console_output)
+        self.assertNotIn('Selected iPad:', self.console_output)
 
     def test_live_existing_writes_complete_ready_provenance_without_creation(self):
         status, result = self.invoke(inventory())
@@ -279,8 +301,61 @@ class CliTests(unittest.TestCase):
             return self.runner(arguments, timeout)
         status, result = self.invoke(None, runner=command)
         self.assertEqual(status, 1)
-        self.assertEqual(result['diagnostics']['code'], 'IPAD13_INVENTORY_UNAVAILABLE')
+        self.assertEqual(result['diagnostics']['code'], 'IPAD13_INVENTORY_COMMAND_FAILED')
         self.assertNotIn('PRIVATE', json.dumps(result))
+        self.assertNotIn('PRIVATE', self.console_output)
+        self.assertFalse(result['diagnostics']['inventory_available'])
+        self.assertNotIn('models: none', self.console_output)
+        self.assertNotIn('Available iPads: none', self.console_output)
+
+    def test_inventory_timeout_then_success_retries_read_only_with_60_second_bound(self):
+        attempts = []
+        def command(arguments, timeout=60):
+            if arguments[1:3] == ['simctl', 'list']:
+                attempts.append((arguments, timeout))
+                if len(attempts) == 1:
+                    raise subprocess.TimeoutExpired(arguments, timeout, output='PRIVATE_PARTIAL_OUTPUT')
+            return self.runner(arguments, timeout)
+        status, result = self.invoke(inventory(), runner=command)
+        self.assertEqual(status, 0)
+        self.assertEqual(result['status'], 'ready')
+        self.assertEqual(attempts, [(['xcrun', 'simctl', 'list', '--json'], 60)] * 2)
+        self.assertEqual(self.console_output.count('IPAD13_INVENTORY_RETRY:'), 1)
+        self.assertIn('Available iPads:', self.console_output)
+        self.assertNotIn('PRIVATE', self.console_output + json.dumps(result))
+
+    def test_inventory_timeout_exhaustion_is_distinct_and_does_not_claim_missing_model(self):
+        attempts = []
+        def command(arguments, timeout=60):
+            if arguments[1:3] == ['simctl', 'list']:
+                attempts.append(timeout)
+                raise subprocess.TimeoutExpired(arguments, timeout, stderr='PRIVATE_TIMEOUT_ERROR')
+            return self.runner(arguments, timeout)
+        status, result = self.invoke(None, runner=command)
+        self.assertEqual(status, 1)
+        self.assertEqual(attempts, [60, 60, 60])
+        self.assertEqual(result['diagnostics']['code'], 'IPAD13_INVENTORY_TIMEOUT')
+        self.assertFalse(result['diagnostics']['inventory_available'])
+        self.assertEqual(self.console_output.count('IPAD13_INVENTORY_RETRY:'), 2)
+        self.assertIn('models and iOS runtimes are unknown', self.console_output)
+        self.assertNotIn('models: none', self.console_output)
+        self.assertNotIn('IPAD13_MODEL_NOT_INSTALLED', self.console_output)
+        self.assertNotIn('PRIVATE', self.console_output + json.dumps(result))
+
+    def test_inventory_malformed_json_has_distinct_code_without_retries_or_raw_output(self):
+        attempts = []
+        def command(arguments, timeout=60):
+            if arguments[1:3] == ['simctl', 'list']:
+                attempts.append(timeout)
+                return 'PRIVATE_MALFORMED_JSON'
+            return self.runner(arguments, timeout)
+        status, result = self.invoke(None, runner=command)
+        self.assertEqual(status, 1)
+        self.assertEqual(attempts, [60])
+        self.assertEqual(result['diagnostics']['code'], 'IPAD13_INVENTORY_JSON_INVALID')
+        self.assertFalse(result['diagnostics']['inventory_available'])
+        self.assertNotIn('IPAD13_INVENTORY_RETRY:', self.console_output)
+        self.assertNotIn('PRIVATE', self.console_output + json.dumps(result))
 
     def test_deployment_target_reads_project_first_and_generator_fallback(self):
         self.assertEqual(selector.deployment_target(self.root), '17.0')
