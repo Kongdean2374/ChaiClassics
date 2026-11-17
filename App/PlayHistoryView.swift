@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import ChaiCore
 
 struct PlayHistoryView: View {
@@ -10,7 +11,7 @@ struct PlayHistoryView: View {
     @State private var dateWindow = HistoryDateWindow.all
     @State private var sort = HistorySort.newest
     @State private var presentation: HistoryPresentation?
-    @State private var searchFrame = CGRect.zero
+    @State private var dismissKeyboardOnOutsideTap = false
     @FocusState private var searching: Bool
 
     init(game: GameID? = nil) { _selectedGame = State(initialValue: game) }
@@ -77,9 +78,10 @@ struct PlayHistoryView: View {
                             .accessibilityIdentifier("history.search.clear")
                     }
                 }
-                .background(GeometryReader { geometry in
-                    Color.clear.preference(key: HistorySearchFrame.self, value: geometry.frame(in: .named("playHistory")))
-                })
+                .background {
+                    HistoryOutsideSearchTap(isActive: dismissKeyboardOnOutsideTap) { searching = false }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity).allowsHitTesting(false)
+                }
                 Text(filterDescription).font(.caption).foregroundStyle(.secondary)
                     .accessibilityIdentifier("history.filters.summary")
             }
@@ -105,13 +107,9 @@ struct PlayHistoryView: View {
             }.listRowBackground(Color.clear)
         }
         .scrollDismissesKeyboard(.interactively)
-        .coordinateSpace(name: "playHistory")
-        .onPreferenceChange(HistorySearchFrame.self) { searchFrame = $0 }
-        .simultaneousGesture(SpatialTapGesture(coordinateSpace: .named("playHistory")).onEnded { tap in
-            // A simultaneous gesture dismisses the keyboard without consuming a
-            // record/filter action, and leaves taps inside the search field alone.
-            if !searchFrame.contains(tap.location) { searching = false }
-        })
+        .accessibilityIdentifier("history.list")
+        .onAppear { dismissKeyboardOnOutsideTap = true }
+        .onDisappear { dismissKeyboardOnOutsideTap = false }
         .localizedNavigation().navigationTitle(model.t("history.title"))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) { filterMenu }
@@ -175,9 +173,76 @@ struct PlayHistoryView: View {
     }
 }
 
-private struct HistorySearchFrame: PreferenceKey {
-    static var defaultValue = CGRect.zero
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
+/// List rows can move independently of SwiftUI preference delivery when the
+/// keyboard appears. Read the live native search-row bounds at touch time,
+/// rather than comparing a cached frame with another gesture's coordinates.
+private struct HistoryOutsideSearchTap: UIViewRepresentable {
+    let isActive: Bool
+    let dismissKeyboard: () -> Void
+    func makeUIView(context: Context) -> HistoryOutsideSearchTapView {
+        let view = HistoryOutsideSearchTapView()
+        view.configure(isActive: isActive, dismissKeyboard: dismissKeyboard)
+        return view
+    }
+    func updateUIView(_ view: HistoryOutsideSearchTapView, context: Context) {
+        view.configure(isActive: isActive, dismissKeyboard: dismissKeyboard)
+    }
+    static func dismantleUIView(_ view: HistoryOutsideSearchTapView, coordinator: ()) { view.detach() }
+}
+
+private final class HistoryOutsideSearchTapView: UIView, UIGestureRecognizerDelegate {
+    private weak var installedWindow: UIWindow?
+    private var active = false
+    private var dismissKeyboard: (() -> Void)?
+    private lazy var outsideTap = UITapGestureRecognizer(target: self, action: #selector(tappedOutside))
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .clear
+        isUserInteractionEnabled = false
+        isAccessibilityElement = false
+        accessibilityElementsHidden = true
+        outsideTap.cancelsTouchesInView = false
+        outsideTap.delaysTouchesBegan = false
+        outsideTap.delaysTouchesEnded = false
+        outsideTap.delegate = self
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        updateRegistration()
+    }
+    func configure(isActive: Bool, dismissKeyboard: @escaping () -> Void) {
+        active = isActive
+        self.dismissKeyboard = dismissKeyboard
+        updateRegistration()
+    }
+    func detach() {
+        installedWindow?.removeGestureRecognizer(outsideTap)
+        installedWindow = nil
+    }
+    private func updateRegistration() {
+        guard active, let window else { detach(); return }
+        guard installedWindow !== window else { return }
+        detach()
+        window.addGestureRecognizer(outsideTap)
+        installedWindow = window
+    }
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        guard active, window != nil, !isHidden else { return false }
+        // This native view fills the search row, including its clear button.
+        // UIKit converts the live touch directly, including any scroll offset.
+        guard !bounds.contains(touch.location(in: self)) else { return false }
+        var target = touch.view
+        while let view = target {
+            if view is UITextField || view is UITextView || view is UIInputView { return false }
+            target = view.superview
+        }
+        return true
+    }
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                           shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool { true }
+    @objc private func tappedOutside() { dismissKeyboard?() }
 }
 
 private enum HistoryDateWindow: String, CaseIterable, Identifiable {

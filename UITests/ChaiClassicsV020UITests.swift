@@ -150,7 +150,7 @@ final class ChaiClassicsV020UITests: XCTestCase {
             .allElementsBoundByIndex.map { element in
                 // Unmatched Memory reveals are deliberately cleared by pause;
                 // matched identities and every real card Button must persist.
-                let label = game == "memory" && element.isEnabled ? "unmatched" : element.label
+                let label = game == "memory" && !element.label.hasSuffix(", matched") ? "unmatched" : element.label
                 return element.identifier + ":" + label
             }.sorted()
     }

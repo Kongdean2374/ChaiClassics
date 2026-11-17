@@ -38,6 +38,14 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: timeout), .completed, message)
     }
 
+    private func clockSeconds(_ value: String) -> Int? {
+        let components = value.split(separator: ":", omittingEmptySubsequences: false)
+        guard components.count == 3, let hours = Int(components[0]), let minutes = Int(components[1]),
+              let seconds = Int(components[2]), hours >= 0, (0..<60).contains(minutes),
+              (0..<60).contains(seconds) else { return nil }
+        return hours * 3600 + minutes * 60 + seconds
+    }
+
     private func tap(_ id: String, app: XCUIApplication) {
         let button = app.buttons.matching(identifier: id).firstMatch
         if id == "history.filters" || id == "history.keyboard.done" || id == "gameSettings.done" || id.hasSuffix(".menu.settings") || id.hasSuffix(".session.settings") {
@@ -56,7 +64,10 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
     }
 
     private func openMenu(_ game: String, app: XCUIApplication) {
-        if ["tictactoe", "connectfour"].contains(game) { tap("catalog.boardgames", app: app) }
+        if ["tictactoe", "connectfour"].contains(game) {
+            tap("catalog.boardgames", app: app)
+            XCTAssertTrue(node("catalog.folder.boardgames", app: app).waitForExistence(timeout: 10))
+        }
         tap("game." + game, app: app)
         XCTAssertTrue(app.buttons[game + ".menu.settings"].waitForExistence(timeout: 10))
     }
@@ -147,19 +158,42 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
     private func back(_ app: XCUIApplication) { app.buttons["navigation.back"].tap() }
 
     private func scrollFullyIntoView(_ element: XCUIElement, app: XCUIApplication) {
-        for _ in 0..<5 {
+        for attempt in 0..<18 {
             // Navigation can finish changing from a large Home title to an
             // inline destination title during this search. Never cache its frame.
             let window = app.frame
             let navigation = app.navigationBars.firstMatch
             let top = navigation.exists ? navigation.frame.maxY : window.minY
-            let usable = CGRect(x: window.minX + 10, y: top, width: window.width - 20, height: window.maxY - 20 - top)
+            var usable = CGRect(x: window.minX + 10, y: top, width: window.width - 20, height: window.maxY - 20 - top)
+            let scrollView = app.scrollViews.firstMatch
+            let list = app.tables.firstMatch
+            let container = scrollView.exists ? scrollView.frame : (list.exists ? list.frame : window)
+            usable = usable.intersection(container)
+            var distance = usable.height * 0.3
+            var towardTop = attempt >= 9
             if element.exists {
                 let frame = element.frame
-                if frame.width > 0 && frame.height > 0 && usable.contains(frame) { return }
-                if frame.height > 0 && frame.minY < usable.minY { app.swipeDown(); continue }
+                if frame.width > 0 && frame.height > 0 && usable.contains(frame) {
+                    XCTAssertTrue(element.isHittable, "Fully visible control must be tappable: " + element.identifier)
+                    return
+                }
+                if frame.height > 0 {
+                    towardTop = frame.minY < usable.minY
+                    let overhang = towardTop ? usable.minY - frame.minY : frame.maxY - usable.maxY
+                    distance = min(usable.height * 0.3, max(28, overhang + 12))
+                }
             }
-            app.swipeUp()
+            guard !usable.isNull, usable.height > 80 else { break }
+            // Full-screen swipes jumped past a 283-point Home card, then jumped
+            // back past it in the opposite direction. Move only its overhang,
+            // using the scroll viewport's gutter to avoid gameplay gestures.
+            let x = max(window.minX + 4, container.minX + 4)
+            let startY = towardTop ? usable.minY + 32 : usable.maxY - 32
+            let endY = startY + (towardTop ? distance : -distance)
+            let origin = app.coordinate(withNormalizedOffset: .zero)
+            let start = origin.withOffset(CGVector(dx: x - window.minX, dy: startY - window.minY))
+            let end = origin.withOffset(CGVector(dx: x - window.minX, dy: endY - window.minY))
+            start.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.2)
         }
         let identifier = element.exists ? element.identifier : "missing-control"
         attachUIEvidence(app, name: "scroll-visibility-failure-" + identifier)
@@ -668,8 +702,14 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
             XCTAssertEqual(cards.allElementsBoundByIndex.filter(\.isEnabled).count, 2)
         }
         let beforePause = boardSnapshot(game, app: app)
-        let clock = node(game + ".timer", app: app), firstTime = node(game + ".timer", app: app).label
-        waitUI("The shared clock must advance during actual play.", timeout: 10) { clock.label != firstTime }
+        let clock = node(game + ".timer", app: app)
+        let firstTime = try XCTUnwrap(clock.value as? String, "The shared clock must expose its displayed duration as an accessibility value.")
+        let firstSeconds = try XCTUnwrap(clockSeconds(firstTime), "The shared clock must provide a valid H:MM:SS duration.")
+        waitUI("The shared clock value must advance during actual play.", timeout: 10) {
+            guard clock.exists, let current = clock.value as? String,
+                  let seconds = self.clockSeconds(current) else { return false }
+            return seconds > firstSeconds
+        }
         tap(game + ".session.pause", app: app)
         let pausedClock = node(game + ".session.paused.elapsed", app: app)
         XCTAssertTrue(pausedClock.waitForExistence(timeout: 10))
@@ -761,6 +801,23 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         XCTAssertEqual(records.count, 1)
         search.tap()
         XCTAssertTrue(app.keyboards.firstMatch.exists, "Tapping inside the search field must keep the keyboard.")
+        let historyList = node("history.list", app: app)
+        XCTAssertTrue(historyList.waitForExistence(timeout: 10))
+        let blankPoint = CGPoint(x: app.frame.maxX - 6, y: search.frame.maxY + 30)
+        XCTAssertTrue(historyList.frame.contains(blankPoint), "The dismissal tap must land inside the actual history list.")
+        XCTAssertFalse(search.frame.contains(blankPoint))
+        XCTAssertLessThan(blankPoint.y, app.keyboards.firstMatch.frame.minY)
+        XCTAssertTrue(records.allElementsBoundByIndex.allSatisfy { !$0.frame.contains(blankPoint) },
+                      "The blank-gutter tap must not target a record action.")
+        app.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: blankPoint.x - app.frame.minX, dy: blankPoint.y - app.frame.minY)).tap()
+        waitUI("Tapping the list's blank gutter must dismiss the keyboard.") { app.keyboards.count == 0 }
+        XCTAssertEqual(search.value as? String, "sliding")
+        XCTAssertEqual(records.count, 1)
+        XCTAssertFalse(app.navigationBars["Record details"].exists)
+        screenshot(app, name: "v022-history-blank-area-dismissed-keyboard")
+        search.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
         tap("history.filters", app: app)
         waitUI("Opening filters must dismiss the keyboard without swallowing the filter action.") { app.keyboards.count == 0 }
         tap("history.filter.sort", app: app)

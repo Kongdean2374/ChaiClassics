@@ -96,7 +96,7 @@ PURE_EVIDENCE_SCRIPTS = {'scripts/verify_scoped_ci.py', 'scripts/verify_candidat
 
 # Reviewed v0.2.2 Visual flows: a case body AND all shared helpers must match.
 # The previous helper digest retains genuine pre-migration source provenance.
-VISUAL_SCAFFOLD_DIGEST = 'b3311e67557a522645a3aadad01717cb16fa4e1d5b3d41a0581090e1c6bfd2c5'
+VISUAL_SCAFFOLD_DIGEST = 'f17e3f5ab1195307ea6212a99b1d1d16397fe22d93d54a7bf4faaa293e89cab5'
 PREVIOUS_VISUAL_SCAFFOLD_DIGEST = '40dfb0eaa2ebcf7f8e10b2b438ea41d25517d46af3a59128d65b3e2c0c5e397d'
 SESSION_BODY_PROFILES = {
     'ChaiClassicsVisualSmokeTests/testConnectFourCommonSessionLifecycleAndContinueDeletion': (
@@ -120,7 +120,7 @@ SESSION_BODY_PROFILES = {
     'ChaiClassicsVisualSmokeTests/testMinesweeperCommonSessionLifecycleAndContinueDeletion': (
         '2e34e2eec5daa7d288a7531b68195f58015fdf8d0dbfba13854debadb523f41c', ('mines', 'sliding')),
     'ChaiClassicsVisualSmokeTests/testPlayHistorySearchDismissesKeyboardWithoutSwallowingActions': (
-        '1309d2241746601de4fc3ba35222760a3c1ffdd0dc292b9c77e7dddc84e5a790', ('sliding',)),
+        'c12db3a72d500c643758def28e29614d425050bac605b0343d7ea624495c51b6', ('sliding',)),
     'ChaiClassicsVisualSmokeTests/testReducedMotionSuppressesCelebrationButStillCompletesGame': (
         '70c41d41386e486704ba65b90e4d642b01d43d6cd44c0dd9a7606b29296139eb', ('sliding',)),
     'ChaiClassicsVisualSmokeTests/testScreenshotGallery': (

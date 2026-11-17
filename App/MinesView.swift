@@ -133,7 +133,10 @@ private struct MinesPlaySurface: View {
     let tap: (Int) -> Void
     let flag: (Int) -> Void
     @EnvironmentObject var model: AppModel
+    @Environment(\.isEnabled) private var shellInputEnabled
     private var tint: Color { GamePalette.tint(.minesweeper) }
+    private var sessionPlaying: Bool { model.sessionIsPlaying(.minesweeper) }
+    private var inputEnabled: Bool { sessionPlaying && shellInputEnabled && !board.isFinished }
     var body: some View {
         VStack(spacing: 14) {
             HStack(spacing: 11) {
@@ -157,8 +160,8 @@ private struct MinesPlaySurface: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
     private var boardViewport: some View {
-        ZoomBoard(size: naturalSize) {
-            MinesGrid(board: board, enabled: model.sessionIsPlaying(.minesweeper) && !board.isFinished, tap: tap, flag: flag)
+        ZoomBoard(size: naturalSize, inputEnabled: inputEnabled, accessibilityHidden: !sessionPlaying) {
+            MinesGrid(board: board, enabled: inputEnabled, tap: tap, flag: flag)
                 .environmentObject(model)
         }.background { GameBoardSurface(game: .minesweeper, cornerRadius: 12) }
             .clipShape(RoundedRectangle(cornerRadius: 12))

@@ -261,6 +261,9 @@ private struct GameSessionScreen: ViewModifier {
     private var timerBar: some View {
         HStack(spacing: 12) {
             Label(GameRecordText.duration(snapshot.elapsedSeconds), systemImage: "timer").monospacedDigit()
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(model.t("history.elapsed"))
+                .accessibilityValue(GameRecordText.duration(snapshot.elapsedSeconds))
                 .accessibilityIdentifier(game.rawValue + ".timer")
             Spacer()
             Button { model.pauseSession(game) } label: { Image(systemName: "pause.fill").frame(width: 44, height: 44) }

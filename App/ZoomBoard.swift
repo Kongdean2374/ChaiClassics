@@ -5,9 +5,26 @@ import ChaiCore
 /// Native zoom transforms preserve the hosted grid's hit-test coordinates.
 struct ZoomBoard<Content: View>: UIViewRepresentable {
     let size: CGSize
-    @ViewBuilder let content: () -> Content
+    let inputEnabled: Bool
+    let accessibilityHidden: Bool
+    let content: () -> Content
     @Environment(\.colorScheme) private var colorScheme
-    func makeCoordinator() -> Coordinator { Coordinator(content: content()) }
+    @Environment(\.isEnabled) private var inheritedInputEnabled
+
+    init(size: CGSize, inputEnabled: Bool = true, accessibilityHidden: Bool = false,
+         @ViewBuilder content: @escaping () -> Content) {
+        self.size = size
+        self.inputEnabled = inputEnabled
+        self.accessibilityHidden = accessibilityHidden
+        self.content = content
+    }
+
+    private var acceptsInput: Bool { inputEnabled && inheritedInputEnabled }
+    private var hostedContent: HostedContent {
+        HostedContent(content: content(), inputEnabled: acceptsInput, accessibilityHidden: accessibilityHidden)
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(content: hostedContent) }
     func makeUIView(context: Context) -> CenteredBoardScrollView {
         let scroll = CenteredBoardScrollView()
         scroll.delegate = context.coordinator
@@ -24,16 +41,49 @@ struct ZoomBoard<Content: View>: UIViewRepresentable {
         scroll.addSubview(host)
         scroll.boardView = host
         scroll.configure(size: size)
+        updateAccessState(scroll, host: host)
         return scroll
     }
     func updateUIView(_ scroll: CenteredBoardScrollView, context: Context) {
-        context.coordinator.host.rootView = content()
+        context.coordinator.host.rootView = hostedContent
         context.coordinator.host.overrideUserInterfaceStyle = colorScheme == .dark ? .dark : .light
+        updateAccessState(scroll, host: context.coordinator.host.view)
         if scroll.naturalSize != size { scroll.configure(size: size) }
     }
+
+    private func updateAccessState(_ scroll: CenteredBoardScrollView, host: UIView) {
+        // A separately hosted SwiftUI root does not inherit its caller's modal
+        // accessibility tree or disabled environment. Gate both UIKit boundaries.
+        scroll.accessibilityElementsHidden = accessibilityHidden
+        host.accessibilityElementsHidden = accessibilityHidden
+        scroll.isUserInteractionEnabled = acceptsInput
+        host.isUserInteractionEnabled = acceptsInput
+        scroll.isScrollEnabled = acceptsInput
+        scroll.pinchGestureRecognizer?.isEnabled = acceptsInput
+    }
+
+    static func dismantleUIView(_ scroll: CenteredBoardScrollView, coordinator: Coordinator) {
+        scroll.accessibilityElementsHidden = true
+        scroll.isUserInteractionEnabled = false
+        coordinator.host.viewIfLoaded?.accessibilityElementsHidden = true
+        coordinator.host.viewIfLoaded?.isUserInteractionEnabled = false
+        scroll.delegate = nil
+    }
+
+    struct HostedContent: View {
+        let content: Content
+        let inputEnabled: Bool
+        let accessibilityHidden: Bool
+        var body: some View {
+            content.environment(\.isEnabled, inputEnabled)
+                .disabled(!inputEnabled)
+                .accessibilityHidden(accessibilityHidden)
+        }
+    }
+
     final class Coordinator: NSObject, UIScrollViewDelegate {
-        let host: UIHostingController<Content>
-        init(content: Content) { host = UIHostingController(rootView: content) }
+        let host: UIHostingController<HostedContent>
+        init(content: HostedContent) { host = UIHostingController(rootView: content) }
         func viewForZooming(in scrollView: UIScrollView) -> UIView? { host.view }
         func scrollViewDidZoom(_ scrollView: UIScrollView) { (scrollView as? CenteredBoardScrollView)?.centerBoard() }
     }
