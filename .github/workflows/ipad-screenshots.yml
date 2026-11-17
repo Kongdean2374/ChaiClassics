@@ -17,10 +17,10 @@ permissions:
   contents: read
 jobs:
   ipad-screenshots:
-    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop/0.2.0') && github.event_name == 'workflow_dispatch'
     # Map inputs to standard hosted pools; arbitrary labels cannot select paid hosts.
     runs-on: ${{ inputs.runner == 'macos-15' && 'macos-15' || 'macos-15-intel' }}
-    timeout-minutes: 55
+    timeout-minutes: 100
     env:
       CHAI_IPAD_REQUESTED_RUNNER: ${{ inputs.runner }}
       CHAI_IPAD_DEVICE_NAME: ${{ inputs.device_name }}
@@ -52,6 +52,10 @@ jobs:
         id: ui
         timeout-minutes: 25
         run: bash scripts/ipad_screenshots.sh test
+      - name: Run all five new game journeys on the same iPad
+        id: games
+        timeout-minutes: 35
+        run: bash scripts/ipad_screenshots.sh games
       - name: Export XCTest screenshots and diagnostics
         id: export
         if: always()
@@ -70,6 +74,15 @@ jobs:
             --build-status "$CHAI_IPAD_BUILD_STATUS" \
             --test-status "$CHAI_IPAD_TEST_STATUS" \
             --export-status "$CHAI_IPAD_EXPORT_STATUS"
+      - name: Validate four original iPad gallery captures
+        run: python3 scripts/verify_candidate.py capture --kind ipad --summary build/ipad-screenshots/test-summary.json --log build/ipad-screenshots/tests.log --games-summary build/ipad-screenshots/games-summary.json --games-log build/ipad-screenshots/games.log --ipad-report build/ipad-screenshots/report.json --output build/candidate-ipad-evidence.json
+      - name: Preserve bounded candidate iPad evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: candidate-ipad-evidence
+          path: build/candidate-ipad-evidence.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Publish device, PNG dimensions and test summary
         if: always()
         run: |
@@ -100,5 +113,13 @@ jobs:
         with:
           name: ChaiClassics-iPad-XCTest-Results
           path: build/ipad-screenshots/IPadScreenshots.xcresult
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Preserve the five iPad game journeys separately
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ChaiClassics-iPad-Games-XCTest-Results
+          path: build/ipad-screenshots/IPadGames.xcresult
           if-no-files-found: warn
           retention-days: 14

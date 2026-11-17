@@ -5,26 +5,36 @@ permissions:
   contents: read
 jobs:
   visual-smoke:
-    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop/0.2.0') && github.event_name == 'workflow_dispatch'
     runs-on: macos-15-intel
-    timeout-minutes: 30
+    timeout-minutes: 55
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
       - run: bash scripts/select_xcode.sh
       - name: Build unsigned Simulator test bundle
-        timeout-minutes: 10
+        timeout-minutes: 15
         run: bash scripts/visual_smoke.sh build
       - name: Boot Simulator and run focused visual tests
-        timeout-minutes: 20
+        timeout-minutes: 35
         run: bash scripts/visual_smoke.sh test
       - name: Export synthetic test screenshots
         if: always()
         run: |
           if [ -d build/VisualSmoke.xcresult ]; then
             xcrun xcresulttool export attachments --path build/VisualSmoke.xcresult --output-path build/visual-screenshots
+            xcrun xcresulttool get test-results summary --path build/VisualSmoke.xcresult > build/VisualSmoke-summary.json
           fi
+      - name: Validate complete iPhone visual XCTest evidence
+        run: python3 scripts/verify_candidate.py capture --kind visual --summary build/VisualSmoke-summary.json --log build/VisualSmoke.log --output build/candidate-visual-evidence.json
+      - name: Preserve bounded candidate visual evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: candidate-visual-evidence
+          path: build/candidate-visual-evidence.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Preserve unsigned test results and screenshots
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -32,6 +42,8 @@ jobs:
           name: visual-smoke-results
           path: |
             build/VisualSmoke.xcresult
+            build/VisualSmoke-summary.json
+            build/VisualSmoke.log
             build/visual-screenshots
           if-no-files-found: warn
           retention-days: 7

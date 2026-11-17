@@ -107,11 +107,11 @@ class AppResourceTests(unittest.TestCase):
     def test_testflight_preserves_manual_header_and_signing_job(self):
         actual=(ROOT/'.github/workflows/testflight.yml').read_bytes()
         header=actual.split(b'jobs:\n',1)[0]
-        self.assertEqual(header.count(b"'Version (e.g. 0.1.3)'"),1)
-        self.assertEqual(header.count(b"        default: '0.1.3'\n"),1)
-        header=header.replace(b"'Version (e.g. 0.1.3)'",b"'Version (e.g. 0.1.0)'")
-        header=header.replace(b"        default: '0.1.3'\n",b"        default: '0.1.0'\n")
-        self.assertEqual(hashlib.sha256(header).hexdigest(),'40e3211d7c61124667744723a0b2afe6a14c896b95467e2472849253ddc8803e')
+        self.assertEqual(header.count(b"'Version (e.g. 0.2.0)'"),1)
+        self.assertEqual(header.count(b"        default: '0.2.0'\n"),1)
+        # v0.2.0 adds a read-only same-SHA candidate evidence gate. The actual
+        # signing/upload job below remains byte-frozen to the released pipeline.
+        self.assertEqual(hashlib.sha256(header).hexdigest(),'7e609289159ac613cadbece8c851ddd1c7d5815ae6540158acf59573b820bd04')
         upload=b'  upload:\n'+actual.split(b'  upload:\n',1)[1]
         self.assertEqual(upload.count(b'    needs: preflight\n'),1)
         self.assertEqual(upload.count(b'    runs-on: macos-15-intel\n'),1)

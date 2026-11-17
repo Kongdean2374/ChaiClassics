@@ -1,0 +1,47 @@
+name: TestFlight Status (read only)
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact uploaded marketing version
+        required: true
+        default: '0.2.0'
+      build_number:
+        description: Exact build number from testflight-provenance
+        required: true
+        type: string
+      source_commit:
+        description: Full source commit from testflight-provenance
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  status:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    environment: testflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+      RELEASE_VERSION: ${{ inputs.version }}
+      TESTED_BUILD_NUMBER: ${{ inputs.build_number }}
+      TESTED_COMMIT: ${{ inputs.source_commit }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@4a9ddd6f338a97768b8006bf671dfbad383215f4
+        with:
+          ruby-version: '3.3'
+      - name: Read exact Apple build and separate processing, internal and external review states
+        run: ruby scripts/testflight_status.rb
+      - name: Preserve allowlisted Apple status
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: testflight-apple-status
+          path: build/testflight-status.json
+          if-no-files-found: warn

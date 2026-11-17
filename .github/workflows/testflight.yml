@@ -3,9 +3,25 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version (e.g. 0.1.3)'
+        description: 'Version (e.g. 0.2.0)'
         required: true
-        default: '0.1.3'
+        default: '0.2.0'
+      candidate_tag:
+        description: 'Required for 0.2.0: explicit v0.2.0-rc.N tag at this main SHA'
+        required: false
+        type: string
+      ci_run:
+        description: 'Required for 0.2.0: successful full_ui CI workflow run ID'
+        required: false
+        type: string
+      visual_run:
+        description: 'Required for 0.2.0: successful iPhone Visual Smoke run ID'
+        required: false
+        type: string
+      ipad_run:
+        description: 'Required for 0.2.0: successful four-gallery iPad Screenshots run ID'
+        required: false
+        type: string
       apple_team_id:
         description: 'Optional 10-character Team ID; otherwise APPLE_TEAM_ID Variable/Secret'
         required: false
@@ -15,6 +31,7 @@ env:
   FASTLANE_SKIP_UPDATE_CHECK: '1'
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: apple-release
   cancel-in-progress: false
@@ -27,6 +44,27 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
+      - name: Require complete exact-SHA candidate verification before 0.2.0 signing
+        if: inputs.version == '0.2.0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHAI_CANDIDATE_TAG: ${{ inputs.candidate_tag }}
+          CHAI_CANDIDATE_CI_RUN: ${{ inputs.ci_run }}
+          CHAI_CANDIDATE_VISUAL_RUN: ${{ inputs.visual_run }}
+          CHAI_CANDIDATE_IPAD_RUN: ${{ inputs.ipad_run }}
+          CHAI_CANDIDATE_VERSION: ${{ inputs.version }}
+        run: |
+          python3 scripts/verify_candidate.py verify --repo "$GITHUB_REPOSITORY" \
+            --sha "$GITHUB_SHA" --version "$CHAI_CANDIDATE_VERSION" --tag "$CHAI_CANDIDATE_TAG" \
+            --ci-run "$CHAI_CANDIDATE_CI_RUN" --visual-run "$CHAI_CANDIDATE_VISUAL_RUN" \
+            --ipad-run "$CHAI_CANDIDATE_IPAD_RUN" --output build/candidate-proof.json
+      - name: Preserve verified release candidate proof
+        if: inputs.version == '0.2.0'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: candidate-release-proof
+          path: build/candidate-proof.json
+          if-no-files-found: error
       - uses: ruby/setup-ruby@4a9ddd6f338a97768b8006bf671dfbad383215f4
         with:
           ruby-version: '3.3'
@@ -45,6 +83,8 @@ jobs:
           bundle exec ruby tests/apple_api_diagnostics_test.rb
           bundle exec ruby tests/jwt_comparison_test.rb
           bundle exec ruby tests/workflow_config_test.rb
+          ruby tests/testflight_status_test.rb
+          ruby -c scripts/testflight_status.rb
           ruby -c fastlane/Fastfile
           bundle exec fastlane lanes
           cat Gemfile.lock

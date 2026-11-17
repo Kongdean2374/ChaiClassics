@@ -37,7 +37,7 @@ test() {
   xcodebuild "${CHAI_VISUAL_ARGS[@]}" -resultBundlePath build/VisualSmoke.xcresult \
     -only-testing:ChaiClassicsUITests/ChaiClassicsVisualSmokeTests \
     -parallel-testing-enabled NO -test-timeouts-enabled YES \
-    -default-test-execution-time-allowance 300 -maximum-test-execution-time-allowance 360 test-without-building
+    -default-test-execution-time-allowance 300 -maximum-test-execution-time-allowance 360 test-without-building 2>&1 | tee build/VisualSmoke.log
 }
 case "$CHAI_VISUAL_PHASE" in
   all) build; test ;;

@@ -2,12 +2,12 @@
 set -euo pipefail
 CHAI_IPAD_PHASE="${1:-}"
 if (( $# != 1 )); then
-  echo 'Usage: scripts/ipad_screenshots.sh [build|boot|test|export]' >&2
+  echo 'Usage: scripts/ipad_screenshots.sh [build|boot|test|games|export]' >&2
   exit 64
 fi
 case "$CHAI_IPAD_PHASE" in
-  build|boot|test|export) ;;
-  *) echo 'Usage: scripts/ipad_screenshots.sh [build|boot|test|export]' >&2; exit 64 ;;
+  build|boot|test|games|export) ;;
+  *) echo 'Usage: scripts/ipad_screenshots.sh [build|boot|test|games|export]' >&2; exit 64 ;;
 esac
 CHAI_IPAD_OUTPUT=build/ipad-screenshots
 CHAI_IPAD_RESULT="$CHAI_IPAD_OUTPUT/IPadScreenshots.xcresult"
@@ -27,6 +27,15 @@ if [[ "$CHAI_IPAD_PHASE" == export ]]; then
   fi
   if ! xcrun xcresulttool get test-results summary --path "$CHAI_IPAD_RESULT" \
     > "$CHAI_IPAD_OUTPUT/test-summary.json" 2> "$CHAI_IPAD_OUTPUT/test-summary-error.log"; then
+    CHAI_IPAD_EXPORT_EXIT=1
+  fi
+  if [[ -d "$CHAI_IPAD_OUTPUT/IPadGames.xcresult" ]]; then
+    if ! xcrun xcresulttool get test-results summary --path "$CHAI_IPAD_OUTPUT/IPadGames.xcresult" \
+      > "$CHAI_IPAD_OUTPUT/games-summary.json" 2> "$CHAI_IPAD_OUTPUT/games-summary-error.log"; then
+      CHAI_IPAD_EXPORT_EXIT=1
+    fi
+  else
+    echo 'The five new iPad game journeys did not produce an xcresult.' >&2
     CHAI_IPAD_EXPORT_EXIT=1
   fi
   exit "$CHAI_IPAD_EXPORT_EXIT"
@@ -56,6 +65,18 @@ CHAI_IPAD_ARGS=(-project ChaiClassics.xcodeproj -scheme ChaiClassics -sdk iphone
 
 if [[ "$CHAI_IPAD_PHASE" == build ]]; then
   xcodebuild "${CHAI_IPAD_ARGS[@]}" build-for-testing 2>&1 | tee "$CHAI_IPAD_OUTPUT/build.log"
+elif [[ "$CHAI_IPAD_PHASE" == games ]]; then
+  # Reuse the same unsigned bundle and selected physical-size Simulator. Keep
+  # these five journeys separate so the original gallery collector stays strict4.
+  xcodebuild "${CHAI_IPAD_ARGS[@]}" -resultBundlePath "$CHAI_IPAD_OUTPUT/IPadGames.xcresult" \
+    -only-testing:ChaiClassicsUITests/ChaiClassicsV020UITests/testTicTacToeLocalRoundRestoresWinsAndReplays \
+    -only-testing:ChaiClassicsUITests/ChaiClassicsV020UITests/testConnectFourLocalRoundRestoresWinsAndReplays \
+    -only-testing:ChaiClassicsUITests/ChaiClassicsV020UITests/testTwentyFourRestoresExactCardsCompletesAndStartsNextPuzzle \
+    -only-testing:ChaiClassicsUITests/ChaiClassicsV020UITests/testMemoryRestoresMatchesHidesUnturnedCardsCompletesAndReplays \
+    -only-testing:ChaiClassicsUITests/ChaiClassicsV020UITests/testMazeRestoresPositionResumesCompletesAndGeneratesNextMaze \
+    -parallel-testing-enabled NO -test-timeouts-enabled YES \
+    -default-test-execution-time-allowance 600 -maximum-test-execution-time-allowance 720 \
+    test-without-building 2>&1 | tee "$CHAI_IPAD_OUTPUT/games.log"
 else
   # Reuse the existing test target, helpers and isolated v0.1.0 seed data. Four
   # independent cases retain other screens when one game's assertions fail.

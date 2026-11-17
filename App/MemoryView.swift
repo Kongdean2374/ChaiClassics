@@ -226,7 +226,7 @@ private struct MemoryCard: View {
     let board: MemoryBoard
     let reveal: () -> Void
     @EnvironmentObject var model: AppModel
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.gameReducedMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
     private var faceUp: Bool { board.isFaceUp(index) }
     private var isMatched: Bool { board.matched[index] }

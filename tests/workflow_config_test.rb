@@ -77,13 +77,16 @@ check(!fastfile.include?('readonly: false'), 'all post-bootstrap lanes are reado
 puts 'PASS: existing-asset-only manual verification; no ASC key, certificate creation or upload.'
 
 extraction_job = workflows.fetch('ci.yml').fetch('jobs').fetch('codesign-extraction')
-intel_jobs = [workflows.fetch('ci.yml').fetch('jobs').fetch('test'), extraction_job, flight.fetch('jobs').fetch('upload')]
-intel_jobs.each do |entry|
-  check(entry['runs-on'] == 'macos-15-intel', 'CI and TestFlight use the explicit Intel pool, without paid larger-runner labels')
-  check(entry.fetch('steps').any? { |step| step['run'] == 'bash scripts/select_xcode.sh' }, 'Intel runner must explicitly select Xcode 26+ instead of its older default')
-end
-puts 'PASS: Simulator, real macOS regressions and TestFlight use explicit Intel hosts and retain Xcode 26+ selection.'
 test_job = workflows.fetch('ci.yml').fetch('jobs').fetch('test')
+check(test_job['runs-on'] == 'macos-15', 'unsigned Simulator CI uses the standard ARM pool, without paid larger-runner labels')
+intel_jobs = [extraction_job, flight.fetch('jobs').fetch('upload')]
+intel_jobs.each do |entry|
+  check(entry['runs-on'] == 'macos-15-intel', 'real codesign regression and signed TestFlight retain the explicit standard Intel pool')
+end
+([test_job] + intel_jobs).each do |entry|
+  check(entry.fetch('steps').any? { |step| step['run'] == 'bash scripts/select_xcode.sh' }, 'every macOS job explicitly selects installed Xcode 26+')
+end
+puts 'PASS: unsigned Simulator CI uses standard ARM; real codesign regression and signed TestFlight retain Intel; all select Xcode 26+.'
 phase_runs = test_job.fetch('steps').map { |step| step.fetch('run', '') }.select { |run| run.start_with?('bash scripts/ci.sh') }
 check(phase_runs == %w[verify unit build ui].map { |phase| 'bash scripts/ci.sh ' + phase }, 'all four verification phases remain available and ordered')
 ci_workflow = workflows.fetch('ci.yml')
@@ -95,21 +98,22 @@ check(ui_steps.length == 1 && ui_steps.first['if'] == 'inputs.full_ui == true', 
 test_job.fetch('steps').select { |step| %w[verify unit build].any? { |phase| step['run'] == 'bash scripts/ci.sh ' + phase } }.each do |step|
   check(!step.key?('if'), 'puzzle, Swift and Simulator build checks remain unconditional')
 end
-check(test_job['timeout-minutes'] == 45, 'Intel CI has a bounded total runtime')
+check(test_job['timeout-minutes'] == 90, 'unsigned ARM CI has a bounded total runtime')
 ci_script = File.read(File.join(root, 'scripts/ci.sh'))
-check(ci_script.include?('-test-timeouts-enabled YES') && ci_script.include?('-default-test-execution-time-allowance 180') && ci_script.include?('-maximum-test-execution-time-allowance 240'), 'Intel UI allowance stays enabled and bounded')
+check(ci_script.include?('-test-timeouts-enabled YES') && ci_script.include?('-default-test-execution-time-allowance 420') && ci_script.include?('-maximum-test-execution-time-allowance 600'), 'complete UI allowance stays enabled and bounded on ARM or Intel')
 _, _, invalid_phase = Open3.capture3('bash', File.join(root, 'scripts/ci.sh'), 'unknown-phase')
 check(invalid_phase.exitstatus == 64, 'unknown CI phase must fail instead of silently skipping verification')
-puts 'PASS: visible ordered CI phases, bounded Intel UI/total runtimes and rejected unknown phase; all tests retained.'
+puts 'PASS: visible ordered CI phases, bounded UI/total runtimes and rejected unknown phase; all tests retained.'
 check(flight.fetch('jobs').keys.sort == %w[preflight upload], 'TestFlight has only fast preflight and real signed upload')
 preflight = flight.fetch('jobs').fetch('preflight')
 check(preflight['runs-on'] == 'ubuntu-24.04' && !preflight.key?('env') && !preflight.key?('environment') && !preflight.key?('secrets'), 'preflight runs without Apple/signing credentials')
-check(preflight['steps'] == ci_workflow.fetch('jobs').fetch('release-tooling').fetch('steps'), 'TestFlight retains all fast release-tooling security checks')
+candidate_steps = preflight['steps'].reject { |step| ['Require complete exact-SHA candidate verification before 0.2.0 signing', 'Preserve verified release candidate proof'].include?(step['name']) }
+check(candidate_steps == ci_workflow.fetch('jobs').fetch('release-tooling').fetch('steps'), 'TestFlight retains all fast release-tooling security checks')
 check(flight.dig('jobs','upload','needs') == 'preflight', 'real signed archive/upload follows successful quick preflight')
 flight.fetch('jobs').each_value do |entry|
   check(entry.fetch('if').include?("github.ref == 'refs/heads/main'") && entry.fetch('if').include?("github.event_name == 'workflow_dispatch'"), 'both release jobs remain trusted main/manual only')
 end
-check((flight['on'] || flight[true]).dig('workflow_dispatch','inputs','version','default') == '0.1.3', 'manual upload defaults to the current app version')
+check((flight['on'] || flight[true]).dig('workflow_dispatch','inputs','version','default') == '0.2.0', 'manual upload defaults to the current app version')
 puts 'PASS: fast credential-free preflight, trusted manual/main upload, current version default and opt-in full UI.'
 check(!extraction_job.key?('environment') && !extraction_job.key?('env'), 'extraction regression receives no signing environment or secrets')
 extraction_runs = extraction_job.fetch('steps').map { |step| step.fetch('run', '') }.join("\n")
@@ -141,7 +145,7 @@ puts 'PASS: independent main/manual real signed archive diagnosis; readonly asse
 visual = workflows.fetch('visual-smoke.yml')
 visual_job = visual.fetch('jobs').fetch('visual-smoke')
 check((visual['on'] || visual[true]).keys == ['workflow_dispatch'], 'visual smoke is manual only')
-check(visual_job.fetch('if').include?("github.ref == 'refs/heads/main'") && visual_job.fetch('if').include?("github.event_name == 'workflow_dispatch'"), 'visual smoke only trusted manual main')
+check(visual_job.fetch('if').include?("github.ref == 'refs/heads/main'") && visual_job.fetch('if').include?("github.event_name == 'workflow_dispatch'"), 'visual smoke only trusted manual branches')
 check(visual.fetch('permissions') == {'contents' => 'read'}, 'visual smoke has read-only repository permission')
 check(!visual_job.key?('environment') && !visual_job.key?('env') && !visual_job.key?('secrets'), 'visual smoke receives no release environment or credentials')
 visual_source = File.read(File.join(root, '.github/workflows/visual-smoke.yml'))
@@ -150,14 +154,14 @@ visual_script = File.read(File.join(root, 'scripts/visual_smoke.sh'))
 check(visual_script.include?('-only-testing:ChaiClassicsUITests/ChaiClassicsVisualSmokeTests') && visual_script.include?('CODE_SIGNING_ALLOWED=NO'), 'visual smoke selects focused Simulator tests without signing')
 check(visual_job.fetch('steps').any? { |step| step['run'] == 'bash scripts/visual_smoke.sh build' } && visual_job.fetch('steps').any? { |step| step['run'] == 'bash scripts/visual_smoke.sh test' }, 'visual build and execution are independently visible')
 check(visual_script.include?('build-for-testing') && visual_script.include?('test-without-building') && visual_script.include?('simctl bootstatus'), 'visual tests reuse one build after explicit Simulator startup')
-check(visual_job['timeout-minutes'] == 30 && visual_script.include?('-default-test-execution-time-allowance 300') && visual_script.include?('-maximum-test-execution-time-allowance 360'), 'measured 207s Intel case has bounded time for assertions and result finalization')
+check(visual_job['timeout-minutes'] == 55 && visual_script.include?('-default-test-execution-time-allowance 300') && visual_script.include?('-maximum-test-execution-time-allowance 360'), 'measured 207s Intel case has bounded time for assertions and result finalization')
 puts 'PASS: focused visual smoke remains manual, unsigned, credential-free and separate from routine CI and release.'
 
 ipad = workflows.fetch('ipad-screenshots.yml')
 ipad_job = ipad.fetch('jobs').fetch('ipad-screenshots')
 ipad_triggers = ipad['on'] || ipad[true]
 check(ipad['name'] == 'iPad Screenshots' && ipad_triggers.keys == ['workflow_dispatch'], 'iPad screenshots have an independent manual entry point')
-check(ipad_job.fetch('if').include?("github.ref == 'refs/heads/main'") && ipad_job.fetch('if').include?("github.event_name == 'workflow_dispatch'"), 'iPad screenshots only trusted manual main')
+check(ipad_job.fetch('if').include?("github.ref == 'refs/heads/main'") && ipad_job.fetch('if').include?("github.event_name == 'workflow_dispatch'"), 'iPad screenshots only trusted manual branches')
 check(ipad.fetch('permissions') == {'contents' => 'read'} && !ipad_job.key?('environment') && !ipad_job.key?('secrets'), 'iPad screenshots use no signing environment or repository write permission')
 check(ipad_triggers.dig('workflow_dispatch', 'inputs', 'runner', 'options') == %w[macos-15 macos-15-intel], 'iPad runner choices contain only standard hosted pools')
 check(ipad_triggers.dig('workflow_dispatch', 'inputs', 'runner', 'default') == 'macos-15', 'iPad screenshots default to the measured faster standard ARM pool')
@@ -173,7 +177,7 @@ check(ipad_steps.index(boot_step) < ipad_steps.index(test_step), 'the selected i
 checkout = ipad_steps.find { |step| step.fetch('uses', '').start_with?('actions/checkout@') }
 check(checkout.dig('with', 'persist-credentials') == false, 'iPad checkout does not persist credentials')
 %w[export].each { |id| check(ipad_steps.find { |step| step['id'] == id }['if'] == 'always()', 'iPad diagnostics survive test failure') }
-artifact = ipad_steps.find { |step| step.fetch('uses', '').start_with?('actions/upload-artifact@') }
+artifact = ipad_steps.find { |step| step.dig('with', 'name') == 'ChaiClassics-iPad-AppStore-Screenshots' }
 check(artifact['if'] == 'always()' && artifact.dig('with', 'name') == 'ChaiClassics-iPad-AppStore-Screenshots', 'iPad artifact name and partial-failure preservation are fixed')
 artifact_paths = artifact.dig('with', 'path').lines.map(&:strip).reject(&:empty?)
 check(artifact_paths.include?('build/ipad-screenshots/*.png') && artifact_paths.include?('build/ipad-screenshots/*.json') && artifact_paths.include?('build/ipad-screenshots/*.md'), 'the mobile-download artifact includes native PNGs, device metadata and reports')
@@ -189,3 +193,42 @@ check(!ipad_script.match?(/run_signing_lane|fastlane|archivePath|exportArchive/)
 _, _, invalid_ipad_phase = Open3.capture3('bash', File.join(root, 'scripts/ipad_screenshots.sh'), 'invalid-phase')
 check(invalid_ipad_phase.exitstatus == 64, 'invalid iPad phase fails before invoking Xcode or Simulator')
 puts 'PASS: independent iPad screenshot workflow is manual, unsigned, standard-hosted, credential-free and retains partial results.'
+
+# v0.2.0 remains an explicit candidate release, never an ordinary-push upload.
+check(ci_triggers.dig('push', 'branches') == %w[main develop/0.2.0], 'isolated development pushes receive ordinary credential-free CI')
+check(!ci_script.include?('-only-testing:'), 'the complete CI UI phase cannot silently become a subset')
+check(ci_script.include?('Pro Max') && ci_script.include?('Plus'), 'full UI prefers a real phone window wide enough for 430pt coverage')
+[visual_job, ipad_job].each do |entry|
+  check(entry.fetch('if').include?("github.ref == 'refs/heads/develop/0.2.0'") && entry.fetch('if').include?("github.ref == 'refs/heads/main'"), 'only trusted main/development refs may run manual unsigned validation')
+end
+candidate_gate = preflight.fetch('steps').find { |step| step['name'] == 'Require complete exact-SHA candidate verification before 0.2.0 signing' }
+check(candidate_gate && candidate_gate['if'] == "inputs.version == '0.2.0'", '0.2.0 signing requires a candidate gate')
+check(flight.fetch('permissions') == {'contents' => 'read', 'actions' => 'read'}, 'candidate reads receive no repository or Actions write permission')
+check(candidate_gate.dig('env', 'GH_TOKEN') == '${{ github.token }}', 'candidate metadata reads use the short-lived read-only workflow token')
+check(candidate_gate.fetch('run').include?('scripts/verify_candidate.py verify') && candidate_gate.fetch('run').include?('--sha "$GITHUB_SHA"'), 'candidate gate validates the actual immutable dispatch SHA')
+%w[candidate_tag ci_run visual_run ipad_run].each do |input|
+  check((flight['on'] || flight[true]).dig('workflow_dispatch', 'inputs', input, 'type') == 'string', 'candidate evidence input is explicit: ' + input)
+end
+check(!candidate_gate.fetch('run').include?('--branch'), 'TestFlight cannot select a development-only proof')
+%w[ci visual ipad].each do |kind|
+  workflow = kind == 'ci' ? ci_workflow : kind == 'visual' ? visual : ipad
+  steps = workflow.fetch('jobs').values.flat_map { |entry| entry.fetch('steps', []) }
+  artifact = steps.find { |step| step.dig('with', 'name') == 'candidate-' + kind + '-evidence' }
+  check(artifact && artifact.dig('with', 'if-no-files-found') == 'error', 'candidate ' + kind + ' evidence cannot be missing')
+end
+games_step = ipad_steps.find { |step| step['id'] == 'games' }
+check(games_step && games_step['run'] == 'bash scripts/ipad_screenshots.sh games', 'all five new journeys run on the selected iPad')
+check(ipad_script.include?('IPadGames.xcresult') && ipad_script.include?('games-summary.json'), 'iPad game journeys retain an independent result and actual summary')
+check(ipad_script.scan('-only-testing:ChaiClassicsUITests/ChaiClassicsV020UITests/').length == 5, 'exactly five new game journeys are selected separately from four gallery tests')
+check(ipad_steps.any? { |step| step.dig('with', 'path') == 'build/ipad-screenshots/IPadGames.xcresult' }, 'all five iPad journey results remain reviewable')
+status_workflow = workflows.fetch('testflight-status.yml')
+status_job = status_workflow.fetch('jobs').fetch('status')
+check((status_workflow['on'] || status_workflow[true]).keys == ['workflow_dispatch'], 'Apple status is separately explicitly dispatched')
+check(status_job.fetch('if').include?("github.ref == 'refs/heads/main'") && status_job['environment'] == 'testflight', 'Apple status retains trusted-main and environment protection')
+check(status_workflow.fetch('permissions') == {'contents' => 'read'}, 'Apple status has no GitHub write permission')
+check(status_job.fetch('env').keys.sort == %w[ASC_API_KEY_P8 ASC_ISSUER_ID ASC_KEY_ID RELEASE_VERSION TESTED_BUILD_NUMBER TESTED_COMMIT].sort, 'status receives only Developer read credentials and the exact expected tuple')
+check(status_job.fetch('steps').any? { |step| step['run'] == 'ruby scripts/testflight_status.rb' }, 'Apple status uses its independent read-only checker')
+status_source = File.read(File.join(root, 'scripts/testflight_status.rb'))
+check(status_source.include?('Net::HTTP::Get.new') && !status_source.match?(/Net::HTTP::(?:Post|Put|Patch|Delete)|upload_to_testflight|match\(/), 'status performs GET only, with no signing or upload')
+check(tooling_runs.include?('ruby tests/testflight_status_test.rb'), 'read-only Apple state separation is tested without credentials')
+puts 'PASS: explicit exact-SHA candidate gate, complete iPhone UI and separate 4+5 iPad evidence; read-only Apple processing/internal/external status remains separate from upload.'

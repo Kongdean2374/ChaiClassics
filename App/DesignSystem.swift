@@ -115,7 +115,7 @@ struct CatalogArtwork: View {
 }
 
 struct QuietPressStyle: ButtonStyle {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.gameReducedMotion) private var reduceMotion
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .opacity(configuration.isPressed ? 0.82 : 1)

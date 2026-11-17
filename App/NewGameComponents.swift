@@ -1,6 +1,17 @@
 import SwiftUI
 import ChaiCore
 
+private struct GameReducedMotionKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var gameReducedMotion: Bool {
+        get { self[GameReducedMotionKey.self] }
+        set { self[GameReducedMotionKey.self] = newValue }
+    }
+}
+
 /// Applies real SwiftUI layout constraints only in an isolated Simulator test.
 /// 320pt has no iOS17-compatible physical Simulator device; it is a layout viewport,
 /// never presented as a native-device App Store screenshot.
@@ -11,9 +22,9 @@ struct UITestDisplayOptions: ViewModifier {
         #if DEBUG && targetEnvironment(simulator)
         content.frame(width: UITestBootstrap.viewportWidth)
             .environment(\.dynamicTypeSize, UITestBootstrap.dynamicTypeSize ?? systemDynamicType)
-            .environment(\.accessibilityReduceMotion, systemReducedMotion || UITestBootstrap.forceReducedMotion)
+            .environment(\.gameReducedMotion, systemReducedMotion || UITestBootstrap.forceReducedMotion)
         #else
-        content
+        content.environment(\.gameReducedMotion, systemReducedMotion)
         #endif
     }
 }

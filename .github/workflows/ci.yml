@@ -22,8 +22,8 @@ permissions:
   contents: read
 jobs:
   test:
-    runs-on: macos-15-intel
-    timeout-minutes: 45
+    runs-on: macos-15
+    timeout-minutes: 90
     env:
       COMPATIBILITY_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
     steps:
@@ -42,6 +42,17 @@ jobs:
       - name: Run all iOS UI tests
         if: inputs.full_ui == true
         run: bash scripts/ci.sh ui
+      - name: Validate complete candidate XCTest evidence
+        if: inputs.full_ui == true
+        run: python3 scripts/verify_candidate.py capture --kind ci --summary build/UITests-summary.json --log build/UITests.log --output build/candidate-ci-evidence.json
+      - name: Preserve bounded candidate CI evidence
+        if: inputs.full_ui == true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: candidate-ci-evidence
+          path: build/candidate-ci-evidence.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Preserve verification report and simulator results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -50,6 +61,8 @@ jobs:
           path: |
             sudoku-verification.json
             build/UITests.xcresult
+            build/UITests-summary.json
+            build/UITests.log
           if-no-files-found: warn
   codesign-extraction:
     runs-on: macos-15-intel
@@ -96,6 +109,8 @@ jobs:
           bundle exec ruby tests/apple_api_diagnostics_test.rb
           bundle exec ruby tests/jwt_comparison_test.rb
           bundle exec ruby tests/workflow_config_test.rb
+          ruby tests/testflight_status_test.rb
+          ruby -c scripts/testflight_status.rb
           ruby -c fastlane/Fastfile
           bundle exec fastlane lanes
           cat Gemfile.lock
