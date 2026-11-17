@@ -263,8 +263,6 @@ private struct MemoryCard: View {
                 }.frame(maxWidth: .infinity, maxHeight: .infinity).contentShape(Rectangle())
             }.aspectRatio(1, contentMode: .fit)
         }.buttonStyle(.plain).disabled(!board.canSelect(index))
-            .accessibilityElement(children: .ignore)
-            .accessibilityAddTraits(.isButton)
             .accessibilityLabel(spokenLabel)
             .accessibilityHint(board.canSelect(index) ? model.t("memory.card.hint") : "")
             .accessibilityIdentifier("memory.card.\(index)")
