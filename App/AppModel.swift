@@ -27,6 +27,8 @@ final class AppModel: ObservableObject {
     private var pendingNewGame: GameID?
     private var preparedNewGame: GameID?
     private var synchronizingClock = false
+    @Published private(set) var navigationTouchLocked = false
+    private var navigationTouchToken: UUID?
     private var recovery: GameSaveRecovery?
     private let preferenceStore: PreferencesStore
     private var activeGame: GameID?
@@ -589,7 +591,16 @@ extension AppModel {
     func showSessionResult(_ game: GameID) { var next = sessionData; if next.sessions[game]?.showResult() == true { _ = commitSessionData(next) } }
     @discardableResult func closeSession(_ game: GameID) -> Bool {
         var next = sessionData
-        return next.sessions[game]?.close() == true && commitSessionData(next)
+        guard next.sessions[game]?.close() == true, commitSessionData(next) else { return false }
+        protectNavigationTransition(); return true
+    }
+    func protectNavigationTransition() {
+        let token = UUID(); navigationTouchToken = token; navigationTouchLocked = true
+        Task { [weak self] in
+            do { try await Task.sleep(for: .milliseconds(280)) } catch { return }
+            guard let self, self.navigationTouchToken == token else { return }
+            self.navigationTouchLocked = false
+        }
     }
     @discardableResult func clearGameStatistics(_ game: GameID) -> Bool {
         var next = sessionData; next.clearRecords(for: game); return commitSessionData(next)

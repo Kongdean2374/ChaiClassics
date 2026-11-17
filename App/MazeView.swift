@@ -62,7 +62,7 @@ struct MazeMenuView: View {
             .gameMenuSettings(.maze)
             .navigationDestination(isPresented: $play) { MazePlayView() }
             .newGameConfirmation(.maze, isPresented: $confirm) { start() }
-            .onAppear { loadDefaultDifficulty() }
+            .loadGameDefaultsOnce { loadDefaultDifficulty() }
             .onChange(of: model.gameSettings(for: .maze).mazeDifficulty) { _, _ in loadDefaultDifficulty() }
     }
 }

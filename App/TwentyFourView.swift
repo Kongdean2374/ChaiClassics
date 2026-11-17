@@ -57,7 +57,7 @@ struct TwentyFourMenuView: View {
             .navigationDestination(isPresented: $play) { TwentyFourPlayView() }
             .gameMenuSettings(.twentyFour)
             .newGameConfirmation(.twentyFour, isPresented: $confirmNew) { start() }
-            .onAppear { applyMenuDefaults() }
+            .loadGameDefaultsOnce { applyMenuDefaults() }
             .onChange(of: model.gameSettings(for: .twentyFour).twentyFourDifficulty) { _, _ in applyMenuDefaults() }
     }
 }

@@ -58,7 +58,7 @@ struct SlidingMenuView: View {
         }.scrollContentBackground(.hidden).background(GameCanvas()).tint(GamePalette.tint(.sliding))
             .localizedNavigation().navigationTitle(model.gameTitle(.sliding)).navigationBarTitleDisplayMode(.inline)
             .gameMenuSettings(.sliding)
-            .onAppear { loadNewGameDefaults() }
+            .loadGameDefaultsOnce { loadNewGameDefaults() }
             .onChange(of: model.gameSettings(for: .sliding).slidingSize) { _, _ in loadNewGameDefaults() }
             .onChange(of: model.gameSettings(for: .sliding).slidingDifficulty) { _, _ in loadNewGameDefaults() }
             .navigationDestination(isPresented: $play) { SlidingPlayView() }

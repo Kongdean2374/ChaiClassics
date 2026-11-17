@@ -63,7 +63,7 @@ struct ConnectFourMenuView: View {
         }.scrollContentBackground(.hidden).background(GameCanvas()).tint(tint)
             .localizedNavigation().navigationTitle(model.gameTitle(.connectFour)).navigationBarTitleDisplayMode(.inline)
             .navigationDestination(isPresented: $play) { ConnectFourPlayView() }
-            .onAppear {
+            .loadGameDefaultsOnce {
                 let settings = model.gameSettings(for: .connectFour)
                 mode = DuelMode(rawValue: settings.duelMode) ?? .singlePlayer
                 difficulty = DuelDifficulty(rawValue: settings.duelDifficulty) ?? .normal

@@ -63,7 +63,7 @@ struct TicTacToeMenuView: View {
         }.scrollContentBackground(.hidden).background(GameCanvas()).tint(tint)
             .localizedNavigation().navigationTitle(model.gameTitle(.ticTacToe)).navigationBarTitleDisplayMode(.inline)
             .navigationDestination(isPresented: $play) { TicTacToePlayView() }
-            .onAppear {
+            .loadGameDefaultsOnce {
                 let settings = model.gameSettings(for: .ticTacToe)
                 mode = DuelMode(rawValue: settings.duelMode) ?? .singlePlayer
                 difficulty = DuelDifficulty(rawValue: settings.duelDifficulty) ?? .normal

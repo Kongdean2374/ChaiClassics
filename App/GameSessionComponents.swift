@@ -6,6 +6,9 @@ extension View {
         modifier(GameSessionScreen(game: game, resultReady: resultReady))
     }
     func gameMenuSettings(_ game: GameID) -> some View { modifier(GameMenuSettings(game: game)) }
+    func loadGameDefaultsOnce(_ action: @escaping () -> Void) -> some View {
+        modifier(InitialGameDefaults(action: action))
+    }
     func newGameConfirmation(_ game: GameID, isPresented: Binding<Bool>, onConfirm: @escaping () -> Void) -> some View {
         modifier(NewGameConfirmation(game: game, isPresented: isPresented, onConfirm: onConfirm))
     }
@@ -13,6 +16,19 @@ extension View {
                                 onConfirm: @escaping () -> Void, onCancel: @escaping () -> Void = {}) -> some View {
         modifier(GameActionConfirmation(title: title, message: message, isPresented: isPresented,
                                          confirmTitle: confirmTitle, prefix: "action", onConfirm: onConfirm, onCancel: onCancel))
+    }
+}
+
+/// Returning from a native confirmation must not replace the selected difficulty
+/// with defaults before its accepted callback creates the board.
+private struct InitialGameDefaults: ViewModifier {
+    let action: () -> Void
+    @State private var loaded = false
+    func body(content: Content) -> some View {
+        content.onAppear {
+            guard !loaded else { return }
+            loaded = true; action()
+        }
     }
 }
 
@@ -97,9 +113,10 @@ private struct GameMenuSettings: ViewModifier {
     @EnvironmentObject private var model: AppModel
     @State private var settings = false
     func body(content: Content) -> some View {
-        content.toolbar {
+        content.disabled(model.navigationTouchLocked).allowsHitTesting(!model.navigationTouchLocked).toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button { settings = true } label: { Image(systemName: "gearshape") }
+                Button { guard !model.navigationTouchLocked else { return }; settings = true } label: { Image(systemName: "gearshape") }
+                    .disabled(model.navigationTouchLocked)
                     .accessibilityLabel(model.t("gameSettings.title"))
                     .accessibilityIdentifier(game.rawValue + ".menu.settings")
             }
@@ -125,7 +142,7 @@ struct ContinueGameRow<Label: View>: View {
     var body: some View {
         HStack(spacing: 12) {
             Button {
-                guard !dragging, !confirmDelete else { return }
+                guard !dragging, !confirmDelete, !model.navigationTouchLocked else { return }
                 if revealed { revealed = false } else { action() }
             } label: { label.frame(maxWidth: .infinity) }
                 .buttonStyle(.plain).accessibilityIdentifier(continueID)
@@ -157,7 +174,7 @@ struct ContinueGameRow<Label: View>: View {
             }, onCancel: { deletionSession = nil }))
     }
     private func requestDeletion() {
-        guard !confirmDelete else { return }
+        guard !confirmDelete, !model.navigationTouchLocked else { return }
         model.preparePreviousSession(game)
         guard let session = model.sessionData.sessions[game] else { return }
         deletionSession = session.id; confirmDelete = true
@@ -306,6 +323,6 @@ private struct GameSessionScreen: ViewModifier {
     }
     private func exit() {
         guard !exiting else { return }
-        exiting = true; model.pauseSession(game); dismiss()
+        exiting = true; model.pauseSession(game); model.protectNavigationTransition(); dismiss()
     }
 }

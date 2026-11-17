@@ -78,7 +78,7 @@ struct MemoryMenuView: View {
             .navigationDestination(isPresented: $play) { MemoryPlayView() }
             .gameMenuSettings(.memory)
             .newGameConfirmation(.memory, isPresented: $confirm) { start() }
-            .onAppear { applyMenuDefaults() }
+            .loadGameDefaultsOnce { applyMenuDefaults() }
             .onChange(of: model.gameSettings(for: .memory).memoryMode) { _, _ in applyMenuDefaults() }
     }
 }

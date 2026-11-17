@@ -88,7 +88,7 @@ struct MinesMenuView: View {
         }.scrollContentBackground(.hidden).background(GameCanvas()).tint(GamePalette.tint(.minesweeper))
             .localizedNavigation().navigationTitle(model.gameTitle(.minesweeper)).navigationBarTitleDisplayMode(.inline)
             .gameMenuSettings(.minesweeper)
-            .onAppear { loadNewGameDefaults() }
+            .loadGameDefaultsOnce { loadNewGameDefaults() }
             .onChange(of: [model.gameSettings(for: .minesweeper).minesWidth,
                            model.gameSettings(for: .minesweeper).minesHeight,
                            model.gameSettings(for: .minesweeper).minesCount]) { _, _ in loadNewGameDefaults() }
