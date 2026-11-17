@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 import os
+import re
 from pathlib import Path
 import sys
 import tempfile
@@ -29,6 +30,19 @@ class BetaCandidateTests(unittest.TestCase):
         self.tree = {path: ('100644', (candidate.ROOT / path).read_bytes()) for path in beta.SOURCE_FILES}
         self.tree.update({str(path.relative_to(candidate.ROOT)): ('100644', path.read_bytes())
                           for path in (candidate.ROOT / 'UITests').glob('*.swift') if path.stem != 'ChaiClassicsV030UITests'})
+        # Synthetic metadata fixture for the historical 50-case 0.2.2 policy.
+        # 0.3.0 split two six-round AI methods into six bounded cases; restore
+        # only the historical identities in this in-memory fixture, never in
+        # the real UI suite or a source/results artifact accepted for release.
+        path = 'UITests/ChaiClassicsV020UITests.swift'
+        mode,data = self.tree[path]; source = data.decode()
+        for title in ('TicTacToe','ConnectFour'):
+            source = source.replace('func test'+title+'AIEasyRepliesWithEitherFirstPlayer()',
+                                    'func test'+title+'AIRepliesAtEveryDifficultyWithEitherFirstPlayer()')
+            for level in ('Normal','Hard'):
+                source,count = re.subn(r'^    func test'+title+'AI'+level+r'RepliesWithEitherFirstPlayer\(\) \{[^\n]+\}\n','',source,flags=re.MULTILINE)
+                self.assertEqual(count,1,'Historical metadata fixture must explicitly remove just one split identity.')
+        self.tree[path] = (mode,source.encode())
         # This suite preserves the released 0.2.2 Beta contract, independently of the current marketing version.
         project = 'ChaiClassics.xcodeproj/project.pbxproj'
         mode, data = self.tree[project]

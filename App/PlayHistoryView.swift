@@ -194,7 +194,7 @@ private final class HistoryOutsideSearchTapView: UIView, UIGestureRecognizerDele
     private weak var installedWindow: UIWindow?
     private var active = false
     private var dismissKeyboard: (() -> Void)?
-    private lazy var outsideTap = UITapGestureRecognizer(target: self, action: #selector(tappedOutside))
+    private lazy var outsideTap = HistoryOutsideTapRecognizer(target: self, action: #selector(tappedOutside))
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -243,6 +243,28 @@ private final class HistoryOutsideSearchTapView: UIView, UIGestureRecognizerDele
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
                            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool { true }
     @objc private func tappedOutside() { dismissKeyboard?() }
+}
+
+/// A native Menu can prevent an ordinary window UITapGestureRecognizer from
+/// ending. Observe a stationary release independently, without cancelling the
+/// Menu/record's own touch or stealing a scroll gesture.
+private final class HistoryOutsideTapRecognizer: UIGestureRecognizer {
+    private var start: CGPoint?
+    private var eligible = false
+    override func canPrevent(_ preventedGestureRecognizer: UIGestureRecognizer) -> Bool { false }
+    override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool { false }
+    override func touchesBegan(_ touches: Set<UITouch>,with event: UIEvent) {
+        guard start == nil, touches.count == 1, let touch = touches.first else { eligible = false; return }
+        start = touch.location(in:view); eligible = true
+    }
+    override func touchesMoved(_ touches: Set<UITouch>,with event: UIEvent) {
+        guard let start, let touch = touches.first else { return }
+        let point = touch.location(in:view)
+        if hypot(point.x-start.x,point.y-start.y)>=8 { eligible = false }
+    }
+    override func touchesEnded(_ touches: Set<UITouch>,with event: UIEvent) { state = eligible ? .recognized : .failed }
+    override func touchesCancelled(_ touches: Set<UITouch>,with event: UIEvent) { state = .failed }
+    override func reset() { start = nil; eligible = false; super.reset() }
 }
 
 private enum HistoryDateWindow: String, CaseIterable, Identifiable {

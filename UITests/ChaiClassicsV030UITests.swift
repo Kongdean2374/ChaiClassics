@@ -17,23 +17,55 @@ final class ChaiClassicsV030UITests: XCTestCase {
     }
     private func reach(_ element: XCUIElement,_ app: XCUIApplication) {
         for attempt in 0..<18 {
-            let safe = app.frame.insetBy(dx:0,dy:45)
+            let window = app.frame
+            let navigation = app.navigationBars.allElementsBoundByIndex.last(where: { $0.isHittable })
+            let top = max(window.minY+45,navigation?.frame.maxY ?? window.minY)
+            let safe = CGRect(x:window.minX+4,y:top,width:window.width-8,height:window.maxY-24-top)
             if element.exists, element.isHittable, safe.contains(CGPoint(x:element.frame.midX,y:element.frame.midY)) { return }
+            let game = element.exists ? element.identifier.split(separator:".").first.map(String.init) ?? "" : ""
+            let board = app.scrollViews.matching(identifier:game+".zoomBoard").firstMatch
             let origin = app.coordinate(withNormalizedOffset:.zero)
-            let low = origin.withOffset(CGVector(dx:3,dy:app.frame.maxY-95))
-            let high = origin.withOffset(CGVector(dx:3,dy:max(190,app.navigationBars.firstMatch.frame.maxY+70)))
-            let down = element.exists ? element.frame.midY<high.screenPoint.y : attempt>=9
-            if down { high.press(forDuration:0.05,thenDragTo:low) } else { low.press(forDuration:0.05,thenDragTo:high) }
+            if element.exists, board.exists {
+                let viewport = board.frame.intersection(safe).insetBy(dx:10,dy:10), target = element.frame
+                if !viewport.isNull, viewport.width>50, viewport.height>50,
+                   !viewport.contains(CGPoint(x:target.midX,y:target.midY)) {
+                    var dx: CGFloat = 0, dy: CGFloat = 0
+                    if target.midX<viewport.minX { dx = min(viewport.width*0.55,viewport.minX-target.midX+20) }
+                    if target.midX>viewport.maxX { dx = -min(viewport.width*0.55,target.midX-viewport.maxX+20) }
+                    if target.midY<viewport.minY { dy = min(viewport.height*0.4,viewport.minY-target.midY+20) }
+                    if target.midY>viewport.maxY { dy = -min(viewport.height*0.4,target.midY-viewport.maxY+20) }
+                    let start = CGPoint(x:dx<0 ? viewport.maxX-10 : dx>0 ? viewport.minX+10 : viewport.midX,
+                                        y:dy<0 ? viewport.maxY-10 : dy>0 ? viewport.minY+10 : viewport.midY)
+                    origin.withOffset(CGVector(dx:start.x-window.minX,dy:start.y-window.minY)).press(forDuration:0.1,
+                        thenDragTo:origin.withOffset(CGVector(dx:start.x+dx-window.minX,dy:start.y+dy-window.minY)),withVelocity:.slow,thenHoldForDuration:0.1)
+                    continue
+                }
+            }
+            // Form virtualizes rows: a below-screen History link need not
+            // exist in the snapshot until its actual list has been scrolled.
+            let forms = app.collectionViews.firstMatch, tables = app.tables.firstMatch
+            if forms.exists || tables.exists {
+                let list = forms.exists ? forms : tables
+                if element.exists && element.frame.midY<safe.minY || !element.exists && attempt>=9 { list.swipeDown(velocity:.slow) }
+                else { list.swipeUp(velocity:.slow) }
+            } else {
+                let low = origin.withOffset(CGVector(dx:5,dy:safe.maxY-30))
+                let high = origin.withOffset(CGVector(dx:5,dy:safe.minY+35))
+                let down = element.exists ? element.frame.midY<safe.minY : attempt>=9
+                if down { high.press(forDuration:0.1,thenDragTo:low) } else { low.press(forDuration:0.1,thenDragTo:high) }
+            }
         }
-        attach(app,"unreachable-"+element.identifier); XCTFail("Control is not visible and actionable: "+element.identifier)
+        let identifier = element.exists ? element.identifier : "missing-control"
+        attachUIEvidence(app,name:"v030-unreachable-"+identifier)
+        XCTFail("Control is not visible and actionable: "+identifier)
     }
     private func tap(_ id: String,_ app: XCUIApplication,double: Bool = false) {
         var button = app.buttons.matching(identifier:id).firstMatch
         // A promotion confirmation can export a native UIAction label instead
         // of its SwiftUI identifier. Both paths select the same real action.
         if id=="shogi.promotion.1", !button.waitForExistence(timeout:2) { button = app.buttons["Promote"].firstMatch }
-        XCTAssertTrue(button.waitForExistence(timeout:20),"Missing button: "+id)
         reach(button,app)
+        XCTAssertTrue(button.waitForExistence(timeout:5),"Missing button: "+id)
         wait("Button never became enabled: "+id,timeout:15) { button.exists && button.isEnabled }
         if double { button.doubleTap() } else { button.tap() }
     }
@@ -149,7 +181,9 @@ final class ChaiClassicsV030UITests: XCTestCase {
         let legal = app.buttons["reversi.cell.19"], occupied = app.buttons["reversi.cell.27"]
         wait("Black must initially have a legal opening") { legal.exists && legal.isEnabled }
         XCTAssertFalse(occupied.isEnabled,"An occupied Reversi disc is not a selectable chess piece.")
-        reach(occupied,app); occupied.coordinate(withNormalizedOffset:CGVector(dx:0.5,dy:0.5)).tap()
+        reach(legal,app)
+        XCTAssertTrue(app.scrollViews["reversi.zoomBoard"].frame.contains(occupied.frame))
+        occupied.coordinate(withNormalizedOffset:CGVector(dx:0.5,dy:0.5)).tap()
         XCTAssertTrue(legal.isEnabled,"An ignored occupied-disc tap must not hide legal destinations.")
         XCTAssertEqual(node("reversi.moves",app).value as? String,"0")
         tap("reversi.cell.19",app)

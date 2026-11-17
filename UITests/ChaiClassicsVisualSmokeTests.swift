@@ -230,7 +230,14 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
     }
 
-    private func back(_ app: XCUIApplication) { app.buttons["navigation.back"].tap() }
+    private func back(_ app: XCUIApplication) {
+        // A settings sheet retains the underlying game's navigation bar in
+        // the accessibility tree. Choose the frontmost actionable bar.
+        let bars = app.navigationBars.allElementsBoundByIndex
+        let navigation = bars.last(where: { $0.isHittable }) ?? app.navigationBars.firstMatch
+        let button = navigation.buttons.matching(identifier:"navigation.back").firstMatch
+        XCTAssertTrue(button.waitForExistence(timeout:10)); XCTAssertTrue(button.isHittable); button.tap()
+    }
 
     private func scrollFullyIntoView(_ element: XCUIElement, app: XCUIApplication) {
         for attempt in 0..<18 {

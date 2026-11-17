@@ -13,11 +13,12 @@ struct ExpandedArcadeView: View {
     @State private var countdown: Int?
     private var active: Bool { model.sessionIsPlaying(game) }
     var body: some View {
-        GeometryReader { proxy in
-            VStack(spacing:12) {
-                header
-                let maxHeight = max(180,proxy.size.height-180)
-                let width = game == .fallingBlocks ? min(300,maxHeight/2) : min(520,proxy.size.width-24,maxHeight)
+        VStack(spacing:12) {
+            header
+            // Reserve the controls' actual intrinsic height before sizing the
+            // field. A fixed 180pt estimate clipped Hard Drop on an iPhone.
+            GeometryReader { proxy in
+                let width = game == .fallingBlocks ? min(300,proxy.size.width,proxy.size.height/2) : min(520,proxy.size.width,proxy.size.height)
                 field.overlay {
                     if let countdown {
                         Text(String(countdown)).font(.system(size:56,weight:.bold,design:.rounded))
@@ -25,10 +26,10 @@ struct ExpandedArcadeView: View {
                             .accessibilityIdentifier(game.rawValue+".countdown").allowsHitTesting(false)
                     }
                 }.frame(width:width,height:game == .fallingBlocks ? width*2 : width)
-                    .frame(maxWidth:.infinity)
-                controls
-            }.padding(12).frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.top)
-        }
+                    .frame(maxWidth:.infinity,maxHeight:.infinity)
+            }
+            controls.fixedSize(horizontal:false,vertical:true)
+        }.padding(12).frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.top)
         .onAppear { local = model.expandedGames[game] }
         .onChange(of:active) { _,value in
             accumulated = 0; saveInterval = 0

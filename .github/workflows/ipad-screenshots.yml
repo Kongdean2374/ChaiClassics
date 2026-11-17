@@ -52,6 +52,25 @@ jobs:
         id: ui
         timeout-minutes: 25
         run: bash scripts/ipad_screenshots.sh test
+      - name: Export gallery diagnostics before the longer game journeys
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.boot.outcome == 'success' }}
+        run: |
+          xcrun xcresulttool export attachments --path build/ipad-screenshots/IPadScreenshots.xcresult --output-path build/ipad-screenshots/gallery-early-attachments
+          xcrun xcresulttool get test-results summary --path build/ipad-screenshots/IPadScreenshots.xcresult > build/ipad-screenshots/gallery-early-summary.json
+      - name: Make completed gallery failures available immediately
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.boot.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ChaiClassics-iPad-Gallery-Diagnostics
+          path: |
+            build/ipad-screenshots/device.json
+            build/ipad-screenshots/tests.log
+            build/ipad-screenshots/gallery-early-summary.json
+            build/ipad-screenshots/gallery-early-attachments/*.png
+            build/ipad-screenshots/gallery-early-attachments/*.json
+            build/ipad-screenshots/gallery-early-attachments/*.txt
+          if-no-files-found: error
+          retention-days: 14
       - name: Run all 22 game journeys on the same iPad
         id: games
         # Preserve independent game evidence after a gallery assertion fails.

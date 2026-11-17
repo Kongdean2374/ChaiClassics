@@ -14,6 +14,12 @@ class VisualCaseEquivalenceTests(unittest.TestCase):
     def setUpClass(cls):
         sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=candidate.ROOT, text=True).strip()
         cls.base = scoped.historical.git_tree(sha)
+        # Unit fixtures exercise the currently audited helper digest, including
+        # during uncommitted development. Production still reads immutable Git
+        # trees and original ZIP evidence; this is no source-equivalence proof.
+        for path in (candidate.ROOT / 'UITests').glob('*.swift'):
+            name = str(path.relative_to(candidate.ROOT))
+            cls.base[name] = ('100644',path.read_bytes())
 
     def verify_change(self, path=None, *, ancestor=True, mode=None):
         before, after = dict(self.base), dict(self.base)

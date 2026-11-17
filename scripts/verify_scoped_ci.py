@@ -73,7 +73,7 @@ BODY_PROFILES = {
     'ChaiClassicsUITests/testEnglishIsAppliedToAllGamesAndAccessibility': (
         '3bb3ee5d9d4505574d479f1731032805e3772d507318d6ecb131ea7ea47de454', ('sudoku', 'mines', 'sliding')),
     'ChaiClassicsUITests/testBundledLegalAndSupportInBothLanguages': (
-        'a0018b96c51886fcedc78981a5fb31cc67223a2c591e7d7fa7bd7a9a8e483d58', ()),
+        '09861290de9e19b9a5544e2f30d10f99218615b4eb7e3e2673fb6f2567670e7f', ()),
     'ChaiClassicsV020UITests/testCompleteCatalogAndThirteenComingSoonPagesInEnglish': (
         'efb196fb65141eb89d33a365a76e44865a680c822600206f9eec5acc601df9fe', ('nonogram', 'kakuro', 'klotski', 'gomoku', 'reversi', 'xiangqi', 'banqi', 'chess', 'shogi', 'klondike', 'spider', 'freecell', 'pyramid', 'tripeaks', 'snake', 'fallingblocks', 'brickbreaker')),
     'ChaiClassicsV020UITests/testCompleteCatalogAndThirteenComingSoonPagesInTraditionalChinese': (
@@ -118,7 +118,7 @@ PURE_EVIDENCE_SCRIPTS = {'scripts/verify_scoped_ci.py', 'scripts/verify_candidat
 
 # Reviewed v0.2.2 Visual flows: a case body AND all shared helpers must match.
 # The previous helper digest retains genuine pre-migration source provenance.
-VISUAL_SCAFFOLD_DIGEST = '81180374b9c31439659b48a1cdac1e27cec990e3d31397766c6e54f5ce877ba1'
+VISUAL_SCAFFOLD_DIGEST = 'a586522c98c7ddca791c5bb9b18b9b755d2899c9e607c4f1f1e8bb22afa9a74a'
 PREVIOUS_VISUAL_SCAFFOLD_DIGEST = '40dfb0eaa2ebcf7f8e10b2b438ea41d25517d46af3a59128d65b3e2c0c5e397d'
 SESSION_BODY_PROFILES = {
     'ChaiClassicsVisualSmokeTests/testConnectFourCommonSessionLifecycleAndContinueDeletion': (

@@ -29,12 +29,12 @@ class UIScopeTests(unittest.TestCase):
 
     def test_four_partitions_are_disjoint_source_sorted_complete_and_exact_cli_filters(self):
         declared = scope.declared_tests(ROOT)
-        self.assertEqual(len(declared), 67)
+        self.assertEqual(len(declared), 71)
         partitions = []
         for name, index in scope.PART_SCOPES.items():
             selected = scope.resolve(name, reversed(declared), include_sessions=False)
             self.assertEqual(selected, declared[index::4])
-            self.assertEqual(len(selected), 17 if index < 3 else 16)
+            self.assertEqual(len(selected), 18 if index < 3 else 17)
             result = subprocess.run(['python3', str(ROOT / 'scripts/ui_test_scope.py'), name], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout.splitlines(), ['-only-testing:ChaiClassicsUITests/' + test for test in selected])
@@ -101,6 +101,16 @@ class UIScopeTests(unittest.TestCase):
             self.assertTrue(any(item.endswith('/' + method) for item in scope.SCOPES[name]))
         for name in ('tictactoe', 'connectfour'):
             self.assertTrue(any(item.endswith('/testBoardGameThinkingAndDropGatesRejectExtraInput') for item in scope.SCOPES[name]))
+
+    def test_each_ai_difficulty_keeps_both_first_players_in_its_independent_case(self):
+        source = (ROOT / 'UITests/ChaiClassicsV020UITests.swift').read_text()
+        for game,title in [('tictactoe','TicTacToe'),('connectfour','ConnectFour')]:
+            for level in ('Easy','Normal','Hard'):
+                method = 'test'+title+'AI'+level+'RepliesWithEitherFirstPlayer'
+                self.assertIn(scope.V+method, scope.SCOPES[game])
+                self.assertIn('func '+method+'() { inspectSinglePlayerAI("'+game+'",difficulty:"'+level+'") }',source)
+        self.assertIn('for computerFirst in [false, true]',source)
+        self.assertIn('assertMovesStay(replyMoves, game: game, app: app)',source)
 
     def test_affected_plan_requires_current_sha_real_cases_and_nonempty_selection(self):
         with tempfile.TemporaryDirectory() as temporary:

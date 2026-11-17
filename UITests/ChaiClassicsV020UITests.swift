@@ -413,11 +413,11 @@ final class ChaiClassicsV020UITests: XCTestCase {
 
     /// No seeds or AI overrides are used: each configuration starts through the
     /// real single-player menu, then waits for the production background task.
-    private func inspectSinglePlayerAI(_ game: String) {
-        executionTimeAllowance = 600
+    private func inspectSinglePlayerAI(_ game: String,difficulty: String) {
+        executionTimeAllowance = 420
         let cellPrefix = game == "tictactoe" ? "tictactoe.cell." : "connectfour.column."
         let cellCount = game == "tictactoe" ? 9 : 7
-        for difficulty in ["Easy", "Normal", "Hard"] {
+        do {
             for computerFirst in [false, true] {
                 let app = launch("v020-" + game)
                 open(game, app: app)
@@ -472,16 +472,20 @@ final class ChaiClassicsV020UITests: XCTestCase {
         }
     }
 
-    func testTicTacToeAIRepliesAtEveryDifficultyWithEitherFirstPlayer() {
-        inspectSinglePlayerAI("tictactoe")
-    }
-
-    func testConnectFourAIRepliesAtEveryDifficultyWithEitherFirstPlayer() {
-        inspectSinglePlayerAI("connectfour")
-    }
+    // Each case retains both first-player choices and every pause/relaunch
+    // assertion. An Intel run needs ~140s per round; six rounds in one case
+    // exhausted XCTest's 600s cap during Hard, despite the earlier rounds passing.
+    func testTicTacToeAIEasyRepliesWithEitherFirstPlayer() { inspectSinglePlayerAI("tictactoe",difficulty:"Easy") }
+    func testTicTacToeAINormalRepliesWithEitherFirstPlayer() { inspectSinglePlayerAI("tictactoe",difficulty:"Normal") }
+    func testTicTacToeAIHardRepliesWithEitherFirstPlayer() { inspectSinglePlayerAI("tictactoe",difficulty:"Hard") }
+    func testConnectFourAIEasyRepliesWithEitherFirstPlayer() { inspectSinglePlayerAI("connectfour",difficulty:"Easy") }
+    func testConnectFourAINormalRepliesWithEitherFirstPlayer() { inspectSinglePlayerAI("connectfour",difficulty:"Normal") }
+    func testConnectFourAIHardRepliesWithEitherFirstPlayer() { inspectSinglePlayerAI("connectfour",difficulty:"Hard") }
 
     func testBoardGameThinkingAndDropGatesRejectExtraInput() {
-        for game in boardPlayable {
+        // The cells/drop assertions below are specific to these two released
+        // games. The expanded catalog also has six different board APIs.
+        for game in ["tictactoe","connectfour"] {
             let app = launch("v021-" + game)
             open(game, app: app)
             if game == "tictactoe" {
@@ -851,11 +855,11 @@ final class ChaiClassicsV020UITests: XCTestCase {
                 capture(app, "v021-viewport-\(width)-\(language)-\(appearance)-boardgames")
                 back(app)
                 tap("catalog.solitaire", app: app)
-                assertThreeColumns(app, width: CGFloat(width), prefix: "catalog.", ids: Array(solitaire.prefix(3)))
+                assertThreeColumns(app, width: CGFloat(width), prefix: "game.", ids: Array(solitaire.prefix(3)))
                 capture(app, "v020-viewport-\(width)-\(language)-\(appearance)-solitaire")
                 back(app)
-                show(app.buttons["catalog.brickbreaker"], app: app)
-                XCTAssertTrue(app.buttons["catalog.brickbreaker"].isHittable)
+                show(app.buttons["game.brickbreaker"], app: app)
+                XCTAssertTrue(app.buttons["game.brickbreaker"].isHittable)
                 capture(app, "v020-viewport-\(width)-\(language)-\(appearance)-home-bottom")
                 app.terminate()
             }

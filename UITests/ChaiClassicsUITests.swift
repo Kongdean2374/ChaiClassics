@@ -83,7 +83,9 @@ extension XCTestCase {
         XCTAssertTrue(confirm.isEnabled && confirm.isHittable, file: file, line: line)
         confirm.tap()
         let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !confirm.exists }, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 10), .completed, file: file, line: line)
+        let result = XCTWaiter.wait(for:[dismissed],timeout:20)
+        if result != .completed { attachUIEvidence(app,name:"new-game-confirmation-did-not-dismiss-"+game) }
+        XCTAssertEqual(result,.completed,file:file,line:line)
         waitForSessionInput(game, app: app, file: file, line: line)
     }
 
@@ -519,6 +521,9 @@ final class ChaiClassicsUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["sliding.moves"].label.contains("35 moves"))
     }
     func testBundledLegalAndSupportInBothLanguages() {
+        // The complete offline bilingual tour measured 457s on Intel. Keep
+        // its document/link assertions within an explicit bounded allowance.
+        executionTimeAllowance = 600
         let app = launch("legal")
         app.buttons["settings.open"].tap()
         for english in [false,true] {

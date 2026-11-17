@@ -125,13 +125,19 @@ jobs:
           path: |
             ui-selection.json
             sudoku-verification.json
-            build/UITests.xcresult
             build/UITests-summary.json
             build/ui-scope-plan.json
             build/UITests.log
             build/ui-screenshots/*.png
             build/ui-screenshots/*.json
             build/ui-screenshots/*.txt
+          if-no-files-found: warn
+      - name: Preserve the original full Simulator XCTest bundle separately
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: simulator-xctest-results
+          path: build/UITests.xcresult
           if-no-files-found: warn
   codesign-extraction:
     runs-on: macos-15-intel

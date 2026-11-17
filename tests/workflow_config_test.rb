@@ -255,6 +255,10 @@ check(ipad_script.include?('IPadGames.xcresult') && ipad_script.include?('games-
 check(ipad_script.scan('-only-testing:ChaiClassicsUITests/ChaiClassicsV020UITests/').length == 5 && ipad_script.scan('-only-testing:ChaiClassicsUITests/ChaiClassicsV030UITests').length == 1, 'five released and all seventeen expanded game journeys run separately from four gallery tests')
 check(ipad_steps.any? { |step| step.dig('with', 'path') == 'build/ipad-screenshots/IPadGames.xcresult' }, 'all five iPad journey results remain reviewable')
 check(ipad_script.include?('--output-path "$CHAI_IPAD_OUTPUT/game-attachments"'), 'new iPad game result attachments are actually exported')
+early_gallery = ipad_steps.index { |step| step.dig('with','name') == 'ChaiClassics-iPad-Gallery-Diagnostics' }
+all_games = ipad_steps.index { |step| step['id'] == 'games' }
+check(early_gallery && all_games && early_gallery<all_games, 'completed gallery diagnostics are downloadable before longer game journeys finish')
+check(ipad_steps[early_gallery].dig('with','path').include?('gallery-early-attachments/*.png'), 'early gallery artifact preserves actual original Simulator captures')
 %w[png json txt].each do |extension|
   check(artifact_paths.include?('build/ipad-screenshots/game-attachments/*.' + extension), 'iPad game ' + extension + ' files are included in the mobile review artifact')
 end
@@ -263,6 +267,9 @@ ui_export = test_job.fetch('steps').find { |step| step['name'] == 'Export full U
 check(ui_export && ui_export['if'] == 'always()' && !ui_export.key?('continue-on-error'), 'full UI export always preserves failures rather than ignoring them')
 check(ui_export.fetch('run').include?('--path build/UITests.xcresult --output-path build/ui-screenshots'), 'complete UI screenshots come from the actual full-suite result')
 ci_results = test_job.fetch('steps').find { |step| step.dig('with', 'name') == 'test-results' }
+check(!ci_results.dig('with','path').lines.map(&:strip).include?('build/UITests.xcresult'), 'bounded CI review evidence excludes the duplicate large original bundle')
+ci_original = test_job.fetch('steps').find { |step| step.dig('with','name') == 'simulator-xctest-results' }
+check(ci_original && ci_original['if'] == 'always()' && ci_original.dig('with','path') == 'build/UITests.xcresult', 'the original full XCTest bundle is still preserved separately on failures')
 %w[png json txt].each do |extension|
   check(ci_results.dig('with', 'path').lines.map(&:strip).include?('build/ui-screenshots/*.' + extension), 'full UI ' + extension + ' files remain reviewable without Xcode')
 end
