@@ -82,7 +82,12 @@ struct ExpandedStrategyView: View {
     private var board: some View {
         let cells = save?.state.strategyCells ?? []
         let legalTargets = targets
-        return ZoomBoard(size:CGSize(width:columns*unit,height:rows*unit),inputEnabled:active,accessibilityHidden:!active,
+        // A checkmate/drop search belongs to the board render, not to every
+        // cell. Shogi hands can produce hundreds of legal actions; repeating
+        // the same result search 81 times stalls input and the session clock.
+        let isActive = active, canPlay = humanTurn
+        let showTargets = model.gameSettings(for:game).expanded?.showLegalMoves ?? true
+        return ZoomBoard(size:CGSize(width:columns*unit,height:rows*unit),inputEnabled:isActive,accessibilityHidden:!isActive,
                          identifier:game.rawValue+".zoomBoard") {
             VStack(spacing:0) {
                 ForEach(0..<rows,id:\.self) { row in
@@ -91,24 +96,24 @@ struct ExpandedStrategyView: View {
                             let display = row*columns+column
                             let reversed = save?.mode == .singlePlayer && save?.humanPlayer == .second
                             let index = reversed ? cells.count-1-display : display
-                            if cells.indices.contains(index) { strategyCell(index,cells:cells,legalTargets:legalTargets) }
+                            if cells.indices.contains(index) { strategyCell(index,cells:cells,legalTargets:legalTargets,canPlay:canPlay,isActive:isActive,showTargets:showTargets) }
                         }
                     }
                 }
             }.background(GameMaterial.navy).environmentObject(model)
         }.frame(height:CGFloat(min(630,rows*unit+12))).background(GameBoardSurface(game:game,cornerRadius:18))
     }
-    private func strategyCell(_ index: Int,cells: [Int],legalTargets: Set<Int>) -> some View {
+    private func strategyCell(_ index: Int,cells: [Int],legalTargets: Set<Int>,canPlay: Bool,isActive: Bool,showTargets: Bool) -> some View {
         let hidden: Bool = { if case .banqi(let board) = save?.state { return !board.revealed[index] }; return false }()
         let piece = hidden ? 0 : cells[index]
-        let available = humanTurn && (cells[index] != 0 || legalTargets.contains(index) || game == .gomoku || hidden)
+        let available = canPlay && (cells[index] != 0 || legalTargets.contains(index) || game == .gomoku || hidden)
         return Button { choose(index) } label: {
             ZStack {
                 Rectangle().fill(squareColor(index))
                 if game == .gomoku || game == .xiangqi { intersection(index) }
                 if hidden { RoundedRectangle(cornerRadius:9).fill(GameMaterial.teal).overlay { Image(systemName:"sparkle").foregroundStyle(GameMaterial.gold) }.padding(4) }
                 else if piece != 0 { strategyPiece(piece).padding(game == .gomoku ? 4 : 3) }
-                if model.gameSettings(for:game).expanded?.showLegalMoves ?? true, legalTargets.contains(index), !hidden {
+                if showTargets, legalTargets.contains(index), !hidden {
                     if piece==0 {
                         Circle().fill(Color.blue.opacity(0.65)).frame(width:8,height:8).allowsHitTesting(false)
                     } else {
@@ -117,7 +122,7 @@ struct ExpandedStrategyView: View {
                 }
                 if selected==index { RoundedRectangle(cornerRadius:5).strokeBorder(Color.blue,lineWidth:3).padding(1) }
             }.frame(width:CGFloat(unit),height:CGFloat(unit)).contentShape(Rectangle())
-        }.buttonStyle(.plain).disabled(!available).accessibilityHidden(!active)
+        }.buttonStyle(.plain).disabled(!available).accessibilityHidden(!isActive)
             .accessibilityLabel(model.t("expanded.cell",index/columns+1,index%columns+1)+", "+(hidden ? model.t("expanded.banqi.hidden") : piece==0 ? model.t("expanded.empty") : pieceName(piece)))
             .accessibilityValue(selected==index ? model.t("expanded.selected") : "")
             .accessibilityIdentifier(game.rawValue+".cell.\(index)")
@@ -166,6 +171,7 @@ struct ExpandedStrategyView: View {
     }
     @ViewBuilder private func shogiHand(_ player: DuelPlayer) -> some View {
         if case .shogi(let board) = save?.state {
+            let canPlay = humanTurn && board.currentPlayer == player
             ScrollView(.horizontal) {
                 HStack(spacing:5) {
                 Text(model.t("expanded.hand",player.rawValue)).font(.caption)
@@ -175,7 +181,7 @@ struct ExpandedStrategyView: View {
                         Button { selected = nil; drop = drop==kind ? nil : kind } label: {
                             Text(model.t("piece.shogi.\(kind)" )+" ×\(count)").font(.caption.bold()).padding(.horizontal,8).frame(minWidth:44,minHeight:44)
                         }.buttonStyle(.bordered).tint(drop==kind ? .blue : GamePalette.tint(game))
-                            .disabled(!humanTurn || board.currentPlayer != player)
+                            .disabled(!canPlay)
                             .accessibilityIdentifier("shogi.hand.\(player.rawValue).\(kind)")
                     }
                 }
