@@ -27,8 +27,14 @@ the only intervening changes are the two pure evidence readers, documentation or
 tooling tests. The verifier checks ancestry and every other file's exact bytes and
 mode, including all App/Core/UI tests/helpers, assets, project, execution scripts,
 workflows and signing code. The proof records both original source and target SHA;
-an App or UI test edit cannot use this exception. The signed TestFlight upload job
-remains unchanged, behind the complete candidate gate.
+an App edit cannot use this exception. With an explicit protected-case list,
+unexecuted test-method bodies may differ: every selected case body must remain
+identical, and all method identities, signatures, shared helpers, setup, constants
+and fixtures remain locked. This lets a repair to a different test retain genuine
+successful screenshots. The proof records the protected cases and a separate
+runtime/scaffold/test-body digest. The repaired case still needs a real current
+CI pass. The signed TestFlight upload job remains unchanged, behind the complete
+candidate gate.
 
 Mixed-case dependency profiles are bound to their exact test-body SHA-256. An
 edited or unknown body falls back to all games. All Core files remain shared,

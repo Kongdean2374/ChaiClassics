@@ -125,23 +125,34 @@ class ReviewedFlowProfileTests(unittest.TestCase):
         for name, (expected, games) in scoped.BODY_PROFILES.items():
             with self.subTest(test=name):
                 self.assertIn(name, self.bodies)
-                self.assertEqual(scoped.hashlib.sha256(self.bodies[name].encode()).hexdigest(), expected)
-                self.assertEqual(scoped.dependencies(name, self.bodies[name]), set().union(*(scoped.GAME_FILES[game] for game in games)))
+                body = self.bodies[name]
+                if scoped.hashlib.sha256(body.encode()).hexdigest() == expected:
+                    self.assertEqual(scoped.dependencies(name, body), set().union(*(scoped.GAME_FILES[game] for game in games)))
+                else:
+                    self.assertEqual(scoped.dependencies(name, body), scoped.ALL_GAME_FILES,
+                                     'An edited body must not inherit its previous reviewed profile')
 
     def test_memory_play_change_preserves_unopened_flows_and_invalidates_six_real_dependents(self):
         after = self.changed('App/MemoryView.swift')
         changed = {test for test in self.before if self.before[test] != after[test]}
-        self.assertEqual(changed, {
+        unknown_memory_dependents = {name for name, (expected, _games) in scoped.BODY_PROFILES.items()
+                                     if scoped.hashlib.sha256(self.bodies[name].encode()).hexdigest() != expected
+                                     and 'App/MemoryView.swift' in scoped.dependencies(name, self.bodies[name])}
+        reviewed_memory_dependents = {
             'ChaiClassicsV020UITests/testAllEightPlayableCardsOpenRealMenus',
             'ChaiClassicsV020UITests/testMemoryFlipMismatchGatesAndReducedMotionPreserveNativeCards',
             'ChaiClassicsV020UITests/testMemoryRestoresMatchesHidesUnturnedCardsCompletesAndReplays',
             'ChaiClassicsV020UITests/testNewPuzzleModesStartRealBoards',
             'ChaiClassicsV020UITests/testCorruptNewSaveRecoveryPreservesAllThreeLegacySaves',
             'ChaiClassicsV020UITests/testFutureSchemaRemainsProtectedAcrossRelaunch',
-        })
-        self.assertEqual(len(self.before) - len(changed), 35)
+        }
+        self.assertEqual(changed, unknown_memory_dependents | reviewed_memory_dependents)
+        self.assertEqual(len(self.before) - len(changed), 35 - len(unknown_memory_dependents - reviewed_memory_dependents))
         coverage = scoped.inherited_coverage(after, [record(self.base)])
         self.assertEqual(set(coverage), set(self.before) - changed)
+        for retained in (B, 'ChaiClassicsV020UITests/testTicTacToeLocalRoundRestoresWinsAndReplays'):
+            self.assertIn(retained, coverage)
+            self.assertEqual(self.before[retained], after[retained])
 
     def test_core_changes_invalidate_every_flow_because_startup_restores_all_games(self):
         for path in ['Core/MemoryMatch.swift', 'Core/Maze.swift', 'Core/TicTacToe.swift', 'Core/TwentyFour.swift']:

@@ -425,8 +425,16 @@ final class ChaiClassicsUITests: XCTestCase {
         app.buttons["settings.open"].tap()
         for english in [false,true] {
             if english {
-                scrollFullyIntoView(app.segmentedControls["settings.language"], app: app)
-                app.segmentedControls["settings.language"].buttons["English"].tap()
+                let languagePicker = app.segmentedControls["settings.language"]
+                // Returning from Support preserves the lower Form position;
+                // the language picker above it may be omitted from the AX tree.
+                for _ in 0..<6 {
+                    if languagePicker.exists { break }
+                    app.swipeDown()
+                }
+                scrollFullyIntoView(languagePicker, app: app)
+                attachUIEvidence(app, name: "v021-legal-return-to-language-picker")
+                languagePicker.buttons["English"].tap()
             }
             // Verify optional external destinations are accessible without
             // opening a browser or mail app during an offline policy test.

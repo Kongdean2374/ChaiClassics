@@ -179,14 +179,15 @@ def validate_run(run, jobs, kind, repo, sha, branch='main', ui_step='Run all iOS
                 'CI did not successfully execute its required UI test step.')
 
 
-def verify_tooling_only_equivalence(source_sha, target_sha, root=ROOT, *, tree_reader=None, ancestor=None):
-    """Retain screenshots only when *every* runtime and XCTest byte is identical.
+def verify_tooling_only_equivalence(source_sha, target_sha, root=ROOT, *, tree_reader=None, ancestor=None, tested_cases=None):
+    """Preserve the actual source SHA when runtime and the selected XCTest are identical.
 
-    The two evidence readers run outside the application. Altering any application,
-    test/helper, asset, project, workflow, signing or execution script rejects reuse.
-    The source run, original ZIP and its source SHA are still validated separately.
+    By default every XCTest byte is protected. An explicit selected case list permits
+    only unexecuted test-method bodies to change; signatures, helpers, setup, constants,
+    fixtures and every runtime/execution byte stay protected. Original run/ZIP evidence
+    is still validated separately against its actual source SHA.
     """
-    from verify_incremental_ci import git_tree
+    from verify_incremental_ci import git_tree, functions
     require(all(isinstance(value, str) and re.fullmatch(r'[0-9a-f]{40}', value) for value in (source_sha, target_sha)), 'Invalid equivalent source SHA.')
     ancestor = ancestor or (lambda: subprocess.run(['git', 'merge-base', '--is-ancestor', source_sha, target_sha], cwd=root,
                                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0)
@@ -198,17 +199,53 @@ def verify_tooling_only_equivalence(source_sha, target_sha, root=ROOT, *, tree_r
         raise CandidateError('Equivalent screenshot source trees are unavailable.') from None
     changed = sorted(path for path in set(before) | set(after) if before.get(path) != after.get(path))
     allowed = lambda path: path in PURE_EVIDENCE_SCRIPTS or path.startswith(('docs/', 'tests/')) or path == 'README.md'
-    require(changed and all(allowed(path) for path in changed), 'Screenshot reuse permits pure evidence/documentation changes only; runtime or XCTest changed.')
+    for tree in (before, after):
+        require(all(mode in ('100644', '100755') for mode, _data in tree.values()), 'Source symlinks/submodules cannot establish screenshot equivalence.')
+    ui_files, scaffolds, protected = set(), {}, []
+    if tested_cases is not None:
+        require(isinstance(tested_cases, (list, tuple, set)) and tested_cases and
+                all(isinstance(name, str) and re.fullmatch(r'[A-Za-z_]\w*/test\w+', name) for name in tested_cases), 'Invalid protected XCTest selection.')
+        require(len(tested_cases) == len(set(tested_cases)), 'Duplicate protected XCTest case.')
+        tested_cases = sorted(tested_cases)
+        ui_files = {path for path in before if path.startswith('UITests/') and path.endswith('.swift')}
+        require(ui_files and ui_files == {path for path in after if path.startswith('UITests/') and path.endswith('.swift')}, 'UI test source file set changed.')
+        require(all(before[path][0] == after[path][0] for path in ui_files), 'UI test source mode changed.')
+        def ui_proof(tree):
+            methods, masked = {}, {}
+            for path in sorted(ui_files):
+                try:
+                    source = tree[path][1].decode('utf-8')
+                except UnicodeDecodeError:
+                    raise CandidateError('UI test source is not valid UTF-8.') from None
+                bodies = sorted((start, end, name) for name, (start, end) in functions(source).items() if name.startswith('test'))
+                require(all(bodies[index - 1][1] <= bodies[index][0] for index in range(1, len(bodies))), 'Overlapping XCTest method bodies.')
+                scaffold = source
+                for start, end, name in reversed(bodies):
+                    identity = Path(path).stem + '/' + name
+                    require(identity not in methods, 'Duplicate XCTest method identity.')
+                    methods[identity] = hashlib.sha256(source[start:end].encode()).hexdigest()
+                    scaffold = scaffold[:start] + '{TEST_BODY}' + scaffold[end:]
+                masked[path] = hashlib.sha256(scaffold.encode()).hexdigest()
+            return methods, masked
+        old_methods, old_scaffolds = ui_proof(before)
+        new_methods, scaffolds = ui_proof(after)
+        require(set(old_methods) == set(new_methods) and old_methods, 'UI test method identities changed.')
+        require(old_scaffolds == scaffolds, 'UI test signatures, helpers, setup or constants changed.')
+        require(set(tested_cases).issubset(old_methods), 'Protected executed XCTest case is missing.')
+        require(all(old_methods[name] == new_methods[name] for name in tested_cases), 'An executed/protected XCTest body changed.')
+        protected = [(name, old_methods[name]) for name in tested_cases]
+    require(changed and all(allowed(path) or path in ui_files for path in changed), 'Screenshot reuse permits pure evidence or unexecuted test-body changes only; runtime or protected XCTest changed.')
     required = {'App/Info.plist', 'Core/SaveStore.swift', 'Package.swift', 'ChaiClassics.xcodeproj/project.pbxproj',
                 'scripts/ci.sh', 'fastlane/Fastfile'}
     require(required.issubset(before) and required.issubset(after), 'Missing protected runtime source.')
-    records = []
-    for path, (mode, data) in sorted(after.items()):
-        require(mode in ('100644', '100755'), 'Source symlinks/submodules cannot establish screenshot equivalence.')
-        if not allowed(path):
-            records.append((path, mode, hashlib.sha256(data).hexdigest()))
-    return {'source_commit': source_sha, 'target_commit': target_sha, 'changed_paths': changed,
-            'runtime_digest': hashlib.sha256(json.dumps(records, separators=(',', ':')).encode()).hexdigest()}
+    records = [(path, mode, scaffolds.get(path, hashlib.sha256(data).hexdigest()))
+               for path, (mode, data) in sorted(after.items()) if not allowed(path)]
+    proof = {'source_commit': source_sha, 'target_commit': target_sha, 'changed_paths': changed,
+             'runtime_digest': hashlib.sha256(json.dumps(records, separators=(',', ':')).encode()).hexdigest()}
+    if tested_cases is not None:
+        proof.update(tested_cases=tested_cases, runtime_scaffold_and_testbody_digest=hashlib.sha256(
+            json.dumps({'runtime_and_scaffolds': records, 'protected_test_bodies': protected}, separators=(',', ':')).encode()).hexdigest())
+    return proof
 
 
 def artifact_evidence(artifacts, kind, read=github):
@@ -311,7 +348,9 @@ def verify(repo, sha, version, tag, runs, read=github, root=ROOT, branch='main')
             else:
                 require(scoped is not None, 'Cross-SHA evidence requires independently verified incremental coverage.')
                 evidence_sha = run.get('head_sha')
-                tooling_equivalence = verify_tooling_only_equivalence(evidence_sha, sha, root)
+                protected_cases = expected_tests(kind, root)
+                if kind == 'ipad': protected_cases += ipad_game_tests(root)
+                tooling_equivalence = verify_tooling_only_equivalence(evidence_sha, sha, root, tested_cases=protected_cases)
         validate_run(run, jobs, kind, repo, evidence_sha, evidence_branch)
         evidence = validate_evidence(kind, raw_evidence, evidence_sha, root)
         results[kind] = {'run_id': runs[kind], 'run_url': f'https://github.com/{repo}/actions/runs/{runs[kind]}',

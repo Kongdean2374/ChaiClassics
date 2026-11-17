@@ -465,7 +465,7 @@ final class ChaiClassicsV020UITests: XCTestCase {
             if game == "tictactoe" {
                 expectHumanTurn(game, computerFirst: false, app: app)
                 let cells = (0..<9).map { app.buttons[prefix + String($0)].label }
-                XCTAssertEqual(cells.filter { $0.contains("empty") }.count, 7)
+                XCTAssertEqual(cells.filter { $0.contains("Empty") }.count, 7)
                 XCTAssertTrue(app.buttons[prefix + "0"].label.hasSuffix("X"))
             }
             let board = (0..<(game == "tictactoe" ? 9 : 7)).map { app.buttons[prefix + String($0)].label }
@@ -593,13 +593,19 @@ final class ChaiClassicsV020UITests: XCTestCase {
         XCTAssertEqual(result.frame.minY, app.buttons["twentyfour.card.2"].frame.minY, accuracy: 2)
         XCTAssertLessThan(result.frame.minX, app.buttons["twentyfour.card.2"].frame.minX)
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'twentyfour.card.'")).count, 3)
-        let history0 = app.descendants(matching: .any).matching(identifier: "twentyfour.history.step.0").firstMatch
+        // Assert the real readable calculation. SwiftUI propagates the history
+        // container's identifier to its noninteractive combined text rows.
+        let history0 = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "2 + 1 = 3")).firstMatch
         show(history0, app: app, requireHittable: false)
         XCTAssertTrue(history0.label.contains("2 + 1 = 3"))
+        let firstHistory = XCTAttachment(string: app.debugDescription)
+        firstHistory.name = "v021-twentyfour-readable-first-calculation"
+        firstHistory.lifetime = .keepAlways; add(firstHistory)
+        capture(app, "v021-twentyfour-first-calculation")
         tap("twentyfour.card.4", app: app); tap("twentyfour.operator.divide", app: app)
         tap("twentyfour.card.3", app: app); tap("twentyfour.apply", app: app)
         XCTAssertTrue(app.buttons["twentyfour.card.5"].waitForExistence(timeout: 5))
-        let history1 = app.descendants(matching: .any).matching(identifier: "twentyfour.history.step.1").firstMatch
+        let history1 = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "3 ÷ 4 = 3/4")).firstMatch
         show(history1, app: app, requireHittable: false)
         XCTAssertTrue(history1.label.contains("3 ÷ 4 = 3/4"))
         tap("twentyfour.undo", app: app)
@@ -608,7 +614,22 @@ final class ChaiClassicsV020UITests: XCTestCase {
         }
         tap("twentyfour.card.4", app: app); tap("twentyfour.clear", app: app)
         XCTAssertEqual(app.staticTexts["twentyfour.stage"].label, "1 · Choose your first number")
-        tap("twentyfour.reset", app: app); tapNativeConfirmation("twentyfour.confirmReset", app: app)
+        let reset = app.buttons.matching(identifier: "twentyfour.reset").firstMatch
+        XCTAssertTrue(reset.waitForExistence(timeout: 5)); XCTAssertTrue(reset.isHittable)
+        XCTAssertTrue(app.navigationBars.firstMatch.frame.contains(reset.frame))
+        reset.tap(); tapNativeConfirmation("twentyfour.confirmReset", app: app)
+        let emptyHistory = app.staticTexts.matching(NSPredicate(format: "label == %@", "Each calculation will appear here. Undo removes the last step.")).firstMatch
+        show(emptyHistory, app: app, requireHittable: false)
+        XCTAssertTrue(emptyHistory.exists)
+        XCTAssertFalse(history0.exists); XCTAssertFalse(history1.exists)
+        let resetHistory = XCTAttachment(string: app.debugDescription)
+        resetHistory.name = "v021-twentyfour-visible-empty-calculation-history"
+        resetHistory.lifetime = .keepAlways; add(resetHistory)
+        capture(app, "v021-twentyfour-reset-empty-history")
+        for _ in 0..<6 {
+            if app.buttons["twentyfour.card.0"].exists { break }
+            app.swipeDown()
+        }
         show(app.buttons["twentyfour.card.0"], app: app)
         expectUI("Reset must restore the original four cards and clear calculation history.") {
             !history0.exists && app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'twentyfour.card.'")).count == 4

@@ -131,7 +131,7 @@ class CandidateVerificationTests(unittest.TestCase):
             self.responses[f'repos/{self.repo}/actions/artifacts/{self.runs[kind] * 10}/zip'] = self.archive(kind, evidence=earlier)
         trees = lambda sha, *args: older if sha == prior_sha else source
         original = candidate.verify_tooling_only_equivalence
-        equivalent = lambda old, new, root: original(old, new, root, tree_reader=trees, ancestor=lambda: True)
+        equivalent = lambda old, new, root, **kwargs: original(old, new, root, tree_reader=trees, ancestor=lambda: True, **kwargs)
         with mock.patch.object(scoped.historical, 'git_tree', side_effect=trees), \
              mock.patch.object(scoped.historical, 'load_results', return_value=(counts, actual)), \
              mock.patch.object(candidate, 'verify_tooling_only_equivalence', side_effect=equivalent):
@@ -141,6 +141,71 @@ class CandidateVerificationTests(unittest.TestCase):
                 self.assertEqual(proof['workflows'][kind]['source_commit'], prior_sha)
                 self.assertEqual(proof['workflows'][kind]['tooling_only_equivalence']['target_commit'], self.sha)
             older['UITests/ChaiClassicsVisualSmokeTests.swift'] = ('100644', b'changed helper or assertion')
+            with self.assertRaises(candidate.CandidateError): self.verify()
+
+    def prepare_unexecuted_case_repair(self):
+        legacy = self.root / 'UITests/ChaiClassicsUITests.swift'
+        legacy.write_text('func testPlayRestoreWinRestart() { XCTAssertTrue(true, "repaired current case") }')
+        source, counts, actual = self.prepare_scoped_evidence()
+        for path in ['App/Info.plist', 'Core/SaveStore.swift', 'Package.swift',
+                     'ChaiClassics.xcodeproj/project.pbxproj', 'scripts/ci.sh', 'fastlane/Fastfile']:
+            source[path] = ('100644', ('protected:' + path).encode())
+        source['scripts/verify_candidate.py'] = ('100644', b'new evidence reader')
+        older = copy.deepcopy(source)
+        older['scripts/verify_candidate.py'] = ('100644', b'old evidence reader')
+        older['UITests/ChaiClassicsUITests.swift'] = ('100644', b'func testPlayRestoreWinRestart() {}')
+        evidence = scoped.make_evidence(self.sha, self.runs['ci'], 'full', counts, actual, source, [])
+        self.responses[f'repos/{self.repo}/actions/artifacts/{self.runs["ci"] * 10}/zip'] = self.archive('ci', evidence=evidence)
+        prior_sha = 'b' * 40
+        for kind in ['visual', 'ipad']:
+            self.responses[f'repos/{self.repo}/actions/runs/{self.runs[kind]}']['head_sha'] = prior_sha
+            earlier = copy.deepcopy(self.evidence[kind]); earlier['source_commit'] = prior_sha
+            if kind == 'ipad': earlier['ipad_report']['device']['source_commit'] = prior_sha
+            self.responses[f'repos/{self.repo}/actions/artifacts/{self.runs[kind] * 10}/zip'] = self.archive(kind, evidence=earlier)
+        return source, older, counts, actual, prior_sha
+
+    def test_unexecuted_case_repair_preserves_actual_screenshot_source_and_selected_bodies(self):
+        source, older, counts, actual, prior_sha = self.prepare_unexecuted_case_repair()
+        trees = lambda sha, *args: older if sha == prior_sha else source
+        original = candidate.verify_tooling_only_equivalence
+        equivalent = lambda old, new, root, **kwargs: original(old, new, root, tree_reader=trees, ancestor=lambda: True, **kwargs)
+        with mock.patch.object(scoped.historical, 'git_tree', side_effect=trees), \
+             mock.patch.object(scoped.historical, 'load_results', return_value=(counts, actual)), \
+             mock.patch.object(candidate, 'verify_tooling_only_equivalence', side_effect=equivalent):
+            proof = self.verify()
+            self.assertEqual(proof['source_commit'], self.sha)
+            for kind in ['visual', 'ipad']:
+                workflow = proof['workflows'][kind]
+                self.assertEqual(workflow['source_commit'], prior_sha)
+                self.assertEqual(workflow['tooling_only_equivalence']['source_commit'], prior_sha)
+                self.assertEqual(workflow['tooling_only_equivalence']['target_commit'], self.sha)
+                protected = candidate.expected_tests(kind, self.root)
+                if kind == 'ipad': protected += candidate.ipad_game_tests(self.root)
+                self.assertEqual(workflow['tooling_only_equivalence']['tested_cases'], sorted(protected))
+                self.assertEqual(len(workflow['tooling_only_equivalence']['runtime_scaffold_and_testbody_digest']), 64)
+            self.assertEqual(proof['workflows']['ipad']['device']['source_commit'], prior_sha)
+            # Screenshot reuse cannot compensate for failing to execute the repaired CI case.
+            actual.pop('ChaiClassicsUITests/testPlayRestoreWinRestart')
+            counts['totalTestCount'] -= 1; counts['passedTests'] -= 1
+            with self.assertRaises(candidate.CandidateError): self.verify()
+
+    def test_selected_visual_or_ipad_body_and_forged_original_sha_cannot_reuse_evidence(self):
+        source, older, counts, actual, prior_sha = self.prepare_unexecuted_case_repair()
+        trees = lambda sha, *args: older if sha == prior_sha else source
+        original = candidate.verify_tooling_only_equivalence
+        equivalent = lambda old, new, root, **kwargs: original(old, new, root, tree_reader=trees, ancestor=lambda: True, **kwargs)
+        with mock.patch.object(scoped.historical, 'git_tree', side_effect=trees), \
+             mock.patch.object(scoped.historical, 'load_results', return_value=(counts, actual)), \
+             mock.patch.object(candidate, 'verify_tooling_only_equivalence', side_effect=equivalent):
+            for path, method in [('UITests/ChaiClassicsVisualSmokeTests.swift', 'testLight'),
+                                 ('UITests/ChaiClassicsV020UITests.swift', 'testTwentyFourRestoresExactCardsCompletesAndStartsNextPuzzle')]:
+                mode, data = older[path]
+                older[path] = (mode, data.replace(('func ' + method + '() {}').encode(),
+                                                 ('func ' + method + '() { XCTAssertTrue(false) }').encode()))
+                with self.subTest(executed=method), self.assertRaises(candidate.CandidateError): self.verify()
+                older[path] = (mode, data)
+            forged = copy.deepcopy(self.evidence['ipad'])
+            self.responses[f'repos/{self.repo}/actions/artifacts/{self.runs["ipad"] * 10}/zip'] = self.archive('ipad', evidence=forged)
             with self.assertRaises(candidate.CandidateError): self.verify()
 
     def test_exact_candidate_requires_all_three_runs_and_full_test_counts(self):

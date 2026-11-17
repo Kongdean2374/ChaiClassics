@@ -73,6 +73,101 @@ class EvidenceToolingEquivalenceTests(unittest.TestCase):
             with self.subTest(sha=sha), self.assertRaises(candidate.CandidateError):
                 candidate.verify_tooling_only_equivalence(sha, self.target_sha)
 
+class SelectedTestBodyEquivalenceTests(unittest.TestCase):
+    source_sha = 'a' * 40
+    target_sha = 'b' * 40
+    ui_path = 'UITests/ChaiClassicsVisualSmokeTests.swift'
+    case = 'ChaiClassicsVisualSmokeTests/testExecuted'
+
+    def setUp(self):
+        fixture = EvidenceToolingEquivalenceTests()
+        fixture.setUp()
+        self.before, self.after = fixture.before, fixture.after
+        source = b'''import XCTest
+let fixtureName = "stable fixture"
+final class ChaiClassicsVisualSmokeTests: XCTestCase {
+    override func setUpWithError() throws { continueAfterFailure = false }
+    private func helper() { XCTAssertTrue(true, "helper") }
+    func testExecuted() { helper(); XCTAssertTrue(true, "executed") }
+    func testUnexecuted() { XCTAssertTrue(true, "other") }
+}
+'''
+        for tree in (self.before, self.after):
+            tree[self.ui_path] = ('100644', source)
+            tree['UITests/ChaiClassicsUITests.swift'] = ('100644', b'func testLaterRepair() { XCTAssertTrue(true) }')
+            tree['UITests/Fixtures/legacy.json'] = ('100644', b'{"unchanged":true}')
+
+    def verify(self, tested_cases=None, *, strict=False):
+        trees = {self.source_sha: self.before, self.target_sha: self.after}
+        return candidate.verify_tooling_only_equivalence(self.source_sha, self.target_sha,
+            tree_reader=lambda sha: trees[sha], ancestor=lambda: True,
+            tested_cases=None if strict else ([self.case] if tested_cases is None else tested_cases))
+
+    def edit(self, path, old, new):
+        mode, data = self.after[path]
+        self.after[path] = (mode, data.replace(old, new))
+
+    def test_unexecuted_bodies_can_change_while_source_sha_and_protected_digest_stay_bound(self):
+        unchanged = self.verify()
+        self.edit(self.ui_path, b'XCTAssertTrue(true, "other")', b'XCTAssertTrue(false, "repaired other")')
+        self.edit('UITests/ChaiClassicsUITests.swift', b'XCTAssertTrue(true)', b'XCTAssertEqual(1, 1)')
+        proof = self.verify()
+        self.assertEqual(proof['tested_cases'], [self.case])
+        self.assertEqual(proof['source_commit'], self.source_sha)
+        self.assertEqual(proof['target_commit'], self.target_sha)
+        self.assertIn(self.ui_path, proof['changed_paths'])
+        self.assertEqual(proof['runtime_digest'], unchanged['runtime_digest'])
+        self.assertEqual(proof['runtime_scaffold_and_testbody_digest'], unchanged['runtime_scaffold_and_testbody_digest'])
+        self.assertEqual(len(proof['runtime_scaffold_and_testbody_digest']), 64)
+        with self.assertRaises(candidate.CandidateError): self.verify(strict=True)
+
+    def test_executed_body_change_or_adding_other_to_protected_selection_is_rejected(self):
+        self.edit(self.ui_path, b'XCTAssertTrue(true, "other")', b'XCTAssertTrue(false, "other")')
+        with self.assertRaises(candidate.CandidateError):
+            self.verify([self.case, 'ChaiClassicsVisualSmokeTests/testUnexecuted'])
+        self.after[self.ui_path] = self.before[self.ui_path]
+        self.edit(self.ui_path, b'XCTAssertTrue(true, "executed")', b'XCTAssertTrue(false, "executed")')
+        with self.assertRaises(candidate.CandidateError): self.verify()
+
+    def test_helpers_setup_constants_signatures_and_class_bytes_remain_protected(self):
+        baseline = copy.deepcopy(self.after)
+        for old, new in [(b'XCTAssertTrue(true, "helper")', b'XCTAssertTrue(false, "helper")'),
+                         (b'continueAfterFailure = false', b'continueAfterFailure = true'),
+                         (b'"stable fixture"', b'"new fixture"'),
+                         (b'func testUnexecuted()', b'func testUnexecuted(_ argument: Int = 0)'),
+                         (b'final class ', b'class ')]:
+            self.after = copy.deepcopy(baseline)
+            self.edit(self.ui_path, old, new)
+            with self.subTest(change=old), self.assertRaises(candidate.CandidateError): self.verify()
+
+    def test_ui_file_sets_modes_method_identities_and_balanced_syntax_cannot_change(self):
+        baseline = copy.deepcopy(self.after)
+        for mutation in ('file-add', 'file-remove', 'mode', 'method-add', 'method-remove', 'method-rename', 'duplicate', 'unbalanced'):
+            self.after = copy.deepcopy(baseline)
+            if mutation == 'file-add': self.after['UITests/Injected.swift'] = ('100644', b'func testInjected() {}')
+            if mutation == 'file-remove': del self.after['UITests/ChaiClassicsUITests.swift']
+            if mutation == 'mode': self.after[self.ui_path] = ('100755', self.after[self.ui_path][1])
+            if mutation == 'method-add': self.edit(self.ui_path, b'func testUnexecuted()', b'func testAdded() {}\n    func testUnexecuted()')
+            if mutation == 'method-remove': self.edit(self.ui_path, b'func testUnexecuted() { XCTAssertTrue(true, "other") }', b'')
+            if mutation == 'method-rename': self.edit(self.ui_path, b'testUnexecuted', b'testRenamed')
+            if mutation == 'duplicate': self.edit(self.ui_path, b'testUnexecuted', b'testExecuted')
+            if mutation == 'unbalanced': self.edit(self.ui_path, b'func testUnexecuted() {', b'func testUnexecuted() {{')
+            with self.subTest(mutation=mutation), self.assertRaises(candidate.CandidateError): self.verify()
+
+    def test_runtime_fixture_execution_asset_and_workflow_changes_are_rejected_in_selected_mode(self):
+        baseline = copy.deepcopy(self.after)
+        for path in self.before:
+            if path in candidate.PURE_EVIDENCE_SCRIPTS or path.endswith('.swift') and path.startswith('UITests/'):
+                continue
+            self.after = copy.deepcopy(baseline)
+            mode, data = self.after[path]
+            self.after[path] = (mode, data + b'changed')
+            with self.subTest(path=path), self.assertRaises(candidate.CandidateError): self.verify()
+
+    def test_missing_duplicate_or_invalid_protected_case_cannot_authorize_reuse(self):
+        for cases in [[], [self.case, self.case], ['Unknown/testInvented'], ['not-a-case'], [123], 'Class/testString']:
+            with self.subTest(cases=cases), self.assertRaises(candidate.CandidateError): self.verify(cases)
+
 
 if __name__ == '__main__':
     unittest.main()
