@@ -217,7 +217,8 @@ def verify_tooling_only_equivalence(source_sha, target_sha, root=ROOT, *, tree_r
 
     By default every XCTest byte is protected. An explicit selected case list permits
     only unexecuted test-method bodies to change; signatures, helpers, setup, constants,
-    fixtures and every runtime/execution byte stay protected. Original run/ZIP evidence
+    fixtures and runtime stay protected. Only exact audited execution preflight pairs
+    may differ; original run/ZIP evidence
     is still validated separately against its actual source SHA.
     """
     from verify_incremental_ci import git_tree, functions
@@ -234,6 +235,25 @@ def verify_tooling_only_equivalence(source_sha, target_sha, root=ROOT, *, tree_r
     allowed = lambda path: path in PURE_EVIDENCE_SCRIPTS or path.startswith(('docs/', 'tests/')) or path == 'README.md'
     for tree in (before, after):
         require(all(mode in ('100644', '100755') for mode, _data in tree.values()), 'Source symlinks/submodules cannot establish screenshot equivalence.')
+    # Only exact audited boot/ceiling pairs may retain an already successful
+    # whole screenshot run. App/runtime edits, helpers and protected test bodies
+    # still fail below; this never supplies missing/failed XCTest results.
+    from verify_scoped_ci import APPROVED_TIMEOUT_CEILINGS, shared_content_digest
+    execution_equivalence = {}
+    if tested_cases is not None:
+        for path in changed:
+            if path not in APPROVED_TIMEOUT_CEILINGS or path not in before or path not in after:
+                continue
+            old_mode, old_data = before[path]; new_mode, new_data = after[path]
+            if old_mode != '100644' or new_mode != '100644':
+                continue
+            old_digest = shared_content_digest(path, old_mode, old_data)
+            new_digest = shared_content_digest(path, new_mode, new_data)
+            if old_digest == new_digest == APPROVED_TIMEOUT_CEILINGS[path][0]:
+                execution_equivalence[path] = {
+                    'source_sha256': hashlib.sha256(old_data).hexdigest(),
+                    'target_sha256': hashlib.sha256(new_data).hexdigest(),
+                    'canonical_sha256': old_digest}
     ui_files, scaffolds, protected = set(), {}, []
     if tested_cases is not None:
         require(isinstance(tested_cases, (list, tuple, set)) and tested_cases and
@@ -267,7 +287,7 @@ def verify_tooling_only_equivalence(source_sha, target_sha, root=ROOT, *, tree_r
         require(set(tested_cases).issubset(old_methods), 'Protected executed XCTest case is missing.')
         require(all(old_methods[name] == new_methods[name] for name in tested_cases), 'An executed/protected XCTest body changed.')
         protected = [(name, old_methods[name]) for name in tested_cases]
-    require(changed and all(allowed(path) or path in ui_files for path in changed), 'Screenshot reuse permits pure evidence or unexecuted test-body changes only; runtime or protected XCTest changed.')
+    require(changed and all(allowed(path) or path in ui_files or path in execution_equivalence for path in changed), 'Screenshot reuse permits pure evidence, exact audited execution preflight or unexecuted test-body changes only; runtime or protected XCTest changed.')
     required = {'App/Info.plist', 'Core/SaveStore.swift', 'Package.swift', 'ChaiClassics.xcodeproj/project.pbxproj',
                 'scripts/ci.sh', 'fastlane/Fastfile'}
     require(required.issubset(before) and required.issubset(after), 'Missing protected runtime source.')
@@ -275,6 +295,8 @@ def verify_tooling_only_equivalence(source_sha, target_sha, root=ROOT, *, tree_r
                for path, (mode, data) in sorted(after.items()) if not allowed(path)]
     proof = {'source_commit': source_sha, 'target_commit': target_sha, 'changed_paths': changed,
              'runtime_digest': hashlib.sha256(json.dumps(records, separators=(',', ':')).encode()).hexdigest()}
+    if execution_equivalence:
+        proof['audited_execution_equivalence'] = execution_equivalence
     if tested_cases is not None:
         proof.update(tested_cases=tested_cases, runtime_scaffold_and_testbody_digest=hashlib.sha256(
             json.dumps({'runtime_and_scaffolds': records, 'protected_test_bodies': protected}, separators=(',', ':')).encode()).hexdigest())
