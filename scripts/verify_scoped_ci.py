@@ -32,6 +32,18 @@ APPROVED_PRIVACY_MANIFESTS = {
     '23ac8b6d794ba1806448fbc70f698f6864d32bbf8ba339af668b63dc44383947': True,
 }
 PRIVACY_GAMEPLAY_DIGEST = '6452295a6ad29254c92c668038f2c6a2cfd440c07cda81f814e996ac215b8415'
+# Exact audited script pairs differing only in the maximum XCTest allowance.
+# Defaults, enabled timeouts, selectors, Simulator arguments and exit handling
+# are identical. A real pass at the earlier ceiling remains a real pass;
+# failed/missing cases still cannot carry forward. Any other edit fails closed.
+APPROVED_TIMEOUT_CEILINGS = {
+    'scripts/ci.sh': (
+        'c7165f3cb81c288364f151aa637bb0b9f1477631d833d20941484de54b20433a',
+        '2e1252ec7bd4cd555a4320b85626bf754d14877c71b5326e80a1abdbb92d25bd', 600),
+    'scripts/ipad_screenshots.sh': (
+        '84ab95e08fd2103f38e03e741e79db1b74ba6f1263862b8a5fd18916db839f87',
+        '7978a7bd5c9d6e7336a80b7fd84abef7271581239e3e4015c1e39fea66abd00e', 720),
+}
 GAME_FILES = {
     'sudoku': {'Core/Sudoku.swift', 'App/SudokuView.swift'},
     'mines': {'Core/Minesweeper.swift', 'App/MinesView.swift', ZOOM_BOARD_FILE},
@@ -189,12 +201,20 @@ def digest(value):
 
 
 def shared_content_digest(path, mode, data):
-    """Keep PrivacyInfo shared; only two exact, validated declarations project alike.
+    """Project only exact audited declarations and ceiling-only execution pairs.
 
     Unsupported XML (including duplicate keys), reasons, modes and formatting
-    retain their raw hash. This is not an exemption for arbitrary privacy edits.
+    retain their raw hash, as do all other execution changes. Defaults, selectors,
+    enabled timeouts and failed-case treatment are never relaxed.
     """
     raw = hashlib.sha256(data).hexdigest()
+    if mode == '100644' and path in APPROVED_TIMEOUT_CEILINGS:
+        before, after, ceiling = APPROVED_TIMEOUT_CEILINGS[path]
+        if raw in (before, after):
+            normalized = data.replace(b'-maximum-test-execution-time-allowance 1800',
+                                      ('-maximum-test-execution-time-allowance ' + str(ceiling)).encode())
+            if hashlib.sha256(normalized).hexdigest() == before:
+                return before
     if path != PRIVACY_MANIFEST_FILE or mode != '100644' or raw not in APPROVED_PRIVACY_MANIFESTS:
         return raw
     expected_apis = [{'NSPrivacyAccessedAPIType': 'NSPrivacyAccessedAPICategoryUserDefaults',

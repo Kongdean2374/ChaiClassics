@@ -230,7 +230,12 @@ final class ChaiClassicsV030UITests: XCTestCase {
         try exercise("banqi")
     }
     func testChessCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("chess") }
-    func testShogiCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("shogi") }
+    func testShogiCompleteSessionRestoresAndConfirmsDeletion() throws {
+        // The Intel runner reached the real promoted win/review at 753s.
+        // Preserve the subsequent history/new-game/deletion/relaunch checks.
+        executionTimeAllowance = 1800
+        try exercise("shogi")
+    }
     func testKlondikeCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("klondike") }
     func testSpiderCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("spider") }
     func testFreecellCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("freecell") }

@@ -8,6 +8,8 @@ GitHub Actions → CI → Run workflow 可選 `ui_scope`。`full` 執行全部 7
 
 完成全部 71 個當前案例的可驗證覆蓋後，仍需同一候選版的 iPhone Visual 四項和 iPad 四張原生 PNG 加 22 款遊戲路徑證據。0.3.x TestFlight 禁止手動 QA 捷徑；不得把局部結果當成整體通過。`test-results` 保存原始執行日誌、xcresult 摘要及匯出的畫面／階層；大型原始 xcresult 另存 `simulator-xctest-results`，避免整個診斷 ZIP 超過下載工具的 512 MiB 限制。
 
+將棋完整對局／重啟流程在 Intel 到真正升變獲勝及回看時已約 753 秒，因此該項明確保留 1800 秒上限；其他案例原有的 300／420／600 秒設定不變。只有兩對已審閱、完整檔案雜湊固定的執行腳本可將「僅提高 maximum ceiling」視為相同的已通過來源；default、測試選擇、開啟逾時、退出處理及所有其他內容必須完全一致。失敗或未執行的將棋不沿用，新的方法內容也有獨立雜湊，必須真正重跑。任何其他腳本改動仍讓相依證據失效。iPad 的最終四圖及 22 條驗證不以此豁免失敗。
+
 上述工作完全 unsigned、不讀取 Apple 金鑰、不建立憑證。正式 TestFlight 仍限 main／手動入口及既有 match readonly 資產；只有驗證門檻通過後才執行使用者已授權的上傳。
 
 ## 保留未受影響的 iPhone 截圖

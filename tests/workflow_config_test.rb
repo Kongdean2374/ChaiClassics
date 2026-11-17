@@ -111,7 +111,7 @@ check(scope_inputs['options'].include?('beta'), 'manual CI exposes the explicit 
 check(ci_workflow['run-name'].include?('inputs.ui_scope') && test_job['name'].nil?, 'CI run title identifies scope without changing verification job identities')
 check(test_job['timeout-minutes'] == 90, 'unsigned ARM CI has a bounded total runtime')
 ci_script = File.read(File.join(root, 'scripts/ci.sh'))
-check(ci_script.include?('-test-timeouts-enabled YES') && ci_script.include?('-default-test-execution-time-allowance 420') && ci_script.include?('-maximum-test-execution-time-allowance 600'), 'complete UI allowance stays enabled and bounded on ARM or Intel')
+check(ci_script.include?('-test-timeouts-enabled YES') && ci_script.include?('-default-test-execution-time-allowance 420') && ci_script.include?('-maximum-test-execution-time-allowance 1800'), 'ordinary cases keep their original allowances; the measured long Shogi journey has an explicit bounded cap')
 _, _, invalid_phase = Open3.capture3('bash', File.join(root, 'scripts/ci.sh'), 'unknown-phase')
 check(invalid_phase.exitstatus == 64, 'unknown CI phase must fail instead of silently skipping verification')
 puts 'PASS: visible ordered CI phases, bounded UI/total runtimes and rejected unknown phase; all tests retained.'

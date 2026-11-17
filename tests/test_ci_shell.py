@@ -102,7 +102,7 @@ class CIShellTests(unittest.TestCase):
         self.assertFalse(any(arg.startswith(('-only-testing', '-skip-testing')) for arg in args))
         self.assertEqual(args.count('-test-timeouts-enabled'), 1)
         self.assertEqual(args[args.index('-test-timeouts-enabled') + 1], 'YES')
-        self.assertEqual(args[args.index('-maximum-test-execution-time-allowance') + 1], '600')
+        self.assertEqual(args[args.index('-maximum-test-execution-time-allowance') + 1], '1800')
         self.assertTrue((self.root / 'build/UITests-summary.json').is_file())
         self.assertNotIn('unbound variable', result.stderr)
 

@@ -80,7 +80,7 @@ elif [[ "$CHAI_IPAD_PHASE" == games ]]; then
     -only-testing:ChaiClassicsUITests/ChaiClassicsV020UITests/testMazeRestoresPositionResumesCompletesAndGeneratesNextMaze \
     -only-testing:ChaiClassicsUITests/ChaiClassicsV030UITests \
     -parallel-testing-enabled NO -test-timeouts-enabled YES \
-    -default-test-execution-time-allowance 600 -maximum-test-execution-time-allowance 720 \
+    -default-test-execution-time-allowance 600 -maximum-test-execution-time-allowance 1800 \
     test-without-building 2>&1 | tee "$CHAI_IPAD_OUTPUT/games.log"
 else
   # Reuse the existing test target, helpers and isolated v0.1.0 seed data. Four
