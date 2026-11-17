@@ -105,6 +105,9 @@ jobs:
             build/ipad-screenshots/attachments/*.png
             build/ipad-screenshots/attachments/*.json
             build/ipad-screenshots/attachments/*.txt
+            build/ipad-screenshots/game-attachments/*.png
+            build/ipad-screenshots/game-attachments/*.json
+            build/ipad-screenshots/game-attachments/*.txt
           if-no-files-found: error
           retention-days: 14
       - name: Preserve the full XCTest bundle separately

@@ -39,6 +39,16 @@ unmodified native PNGs with matching XCTest attachment provenance.
 | `build/ipad-screenshots/IPadScreenshots.xcresult`, `test-summary.json`, `tests.log` | Four original iPad captures |
 | `build/ipad-screenshots/IPadGames.xcresult`, `games-summary.json`, `games.log` | Five complete new-game iPad journeys |
 | `build/ipad-screenshots/report.json` | Original PNG dimensions, hashes, selected device, source SHA and collector verdict |
+| `build/ui-screenshots/` | Full iPhone UI attachments, including actual 320/375/390/430pt and accessibility captures |
+| `build/ipad-screenshots/game-attachments/` | Original attachments from all five iPad game journeys |
+
+The normal `test-results` artifact includes exported iPhone PNGs, attachment
+manifests and text; the main iPad screenshot artifact also includes the new-game
+PNGs, JSON manifests and text. These reviewable exports exclude movie files.
+The original xcresult bundles remain available separately as listed above.
+Attachment export runs even after test failure whenever its result bundle
+exists. An export failure remains a failed step, with available originals and
+diagnostics preserved for review.
 
 The phone selector prefers the newest installed Pro Max/Plus because the layout
 suite tests actual widths through 430pt inside its real Simulator window. A

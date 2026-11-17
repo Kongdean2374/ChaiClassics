@@ -53,6 +53,12 @@ jobs:
           path: build/candidate-ci-evidence.json
           if-no-files-found: error
           retention-days: 14
+      - name: Export full UI screenshots for visual review
+        if: always()
+        run: |
+          if [ -d build/UITests.xcresult ]; then
+            xcrun xcresulttool export attachments --path build/UITests.xcresult --output-path build/ui-screenshots
+          fi
       - name: Preserve verification report and simulator results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -63,6 +69,9 @@ jobs:
             build/UITests.xcresult
             build/UITests-summary.json
             build/UITests.log
+            build/ui-screenshots/*.png
+            build/ui-screenshots/*.json
+            build/ui-screenshots/*.txt
           if-no-files-found: warn
   codesign-extraction:
     runs-on: macos-15-intel

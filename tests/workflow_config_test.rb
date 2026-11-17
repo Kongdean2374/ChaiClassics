@@ -1,5 +1,7 @@
 require 'yaml'
 require 'open3'
+require 'tmpdir'
+require 'fileutils'
 
 root = File.expand_path('..', __dir__)
 def check(condition, message)
@@ -221,6 +223,52 @@ check(games_step && games_step['run'] == 'bash scripts/ipad_screenshots.sh games
 check(ipad_script.include?('IPadGames.xcresult') && ipad_script.include?('games-summary.json'), 'iPad game journeys retain an independent result and actual summary')
 check(ipad_script.scan('-only-testing:ChaiClassicsUITests/ChaiClassicsV020UITests/').length == 5, 'exactly five new game journeys are selected separately from four gallery tests')
 check(ipad_steps.any? { |step| step.dig('with', 'path') == 'build/ipad-screenshots/IPadGames.xcresult' }, 'all five iPad journey results remain reviewable')
+check(ipad_script.include?('--output-path "$CHAI_IPAD_OUTPUT/game-attachments"'), 'new iPad game result attachments are actually exported')
+%w[png json txt].each do |extension|
+  check(artifact_paths.include?('build/ipad-screenshots/game-attachments/*.' + extension), 'iPad game ' + extension + ' files are included in the mobile review artifact')
+end
+check(artifact_paths.none? { |path| path.match?(/\.(mp4|mov)\z/) || path.end_with?('game-attachments/') }, 'mobile review artifact does not upload new-game movies')
+ui_export = test_job.fetch('steps').find { |step| step['name'] == 'Export full UI screenshots for visual review' }
+check(ui_export && ui_export['if'] == 'always()' && !ui_export.key?('continue-on-error'), 'full UI export always preserves failures rather than ignoring them')
+check(ui_export.fetch('run').include?('--path build/UITests.xcresult --output-path build/ui-screenshots'), 'complete UI screenshots come from the actual full-suite result')
+ci_results = test_job.fetch('steps').find { |step| step.dig('with', 'name') == 'test-results' }
+%w[png json txt].each do |extension|
+  check(ci_results.dig('with', 'path').lines.map(&:strip).include?('build/ui-screenshots/*.' + extension), 'full UI ' + extension + ' files remain reviewable without Xcode')
+end
+
+# Exercise real shell exit propagation with a synthetic command, never Xcode.
+# A failure exporting one bundle must not suppress summary attempts or turn green.
+Dir.mktmpdir('chai-attachment-export-') do |directory|
+  bin = File.join(directory, 'bin')
+  FileUtils.mkdir_p(bin)
+  fake = File.join(bin, 'xcrun')
+  File.write(fake, <<~'BASH')
+    #!/bin/bash
+    printf '%s\n' "$*" >> "$CHAI_EXPORT_CALL_LOG"
+    if [[ "$*" == *'export attachments'* ]]; then
+      if [[ "$*" == *'IPadGames.xcresult'* && "${CHAI_FAIL_GAME_EXPORT:-0}" == 1 ]]; then exit 7; fi
+      if [[ "$*" == *'UITests.xcresult'* && "${CHAI_FAIL_UI_EXPORT:-0}" == 1 ]]; then exit 9; fi
+    fi
+    if [[ "$*" == *'get test-results summary'* ]]; then printf '{}\n'; fi
+    exit 0
+  BASH
+  FileUtils.chmod(0o755, fake)
+  FileUtils.mkdir_p(File.join(directory, 'build/ipad-screenshots/IPadScreenshots.xcresult'))
+  FileUtils.mkdir_p(File.join(directory, 'build/ipad-screenshots/IPadGames.xcresult'))
+  FileUtils.mkdir_p(File.join(directory, 'build/UITests.xcresult'))
+  calls_path = File.join(directory, 'calls.txt')
+  fixture_env = {'PATH' => bin + File::PATH_SEPARATOR + ENV.fetch('PATH'), 'CHAI_EXPORT_CALL_LOG' => calls_path}
+  _, _, success = Open3.capture3(fixture_env, 'bash', File.join(root, 'scripts/ipad_screenshots.sh'), 'export', chdir: directory)
+  check(success.success?, 'both iPad attachment exports and summaries may succeed')
+  _, _, failure = Open3.capture3(fixture_env.merge('CHAI_FAIL_GAME_EXPORT' => '1'), 'bash', File.join(root, 'scripts/ipad_screenshots.sh'), 'export', chdir: directory)
+  check(!failure.success?, 'iPad game attachment export failure remains nonzero')
+  calls = File.read(calls_path)
+  check(calls.include?('--path build/ipad-screenshots/IPadGames.xcresult --output-path build/ipad-screenshots/game-attachments'), 'game attachment export was invoked')
+  check(calls.include?('get test-results summary --path build/ipad-screenshots/IPadGames.xcresult'), 'a failed attachment export still attempts its summary')
+  _, _, failure = Open3.capture3(fixture_env.merge('CHAI_FAIL_UI_EXPORT' => '1'), 'bash', '-e', '-o', 'pipefail', '-c', ui_export.fetch('run'), chdir: directory)
+  check(!failure.success?, 'full UI attachment export failure remains nonzero')
+end
+puts 'PASS: original iPad-game and full-UI PNG/manifest/text exports remain reviewable; actual export failures propagate without hiding diagnostics.'
 status_workflow = workflows.fetch('testflight-status.yml')
 status_job = status_workflow.fetch('jobs').fetch('status')
 check((status_workflow['on'] || status_workflow[true]).keys == ['workflow_dispatch'], 'Apple status is separately explicitly dispatched')

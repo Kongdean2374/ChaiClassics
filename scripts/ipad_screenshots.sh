@@ -30,6 +30,10 @@ if [[ "$CHAI_IPAD_PHASE" == export ]]; then
     CHAI_IPAD_EXPORT_EXIT=1
   fi
   if [[ -d "$CHAI_IPAD_OUTPUT/IPadGames.xcresult" ]]; then
+    if ! xcrun xcresulttool export attachments --path "$CHAI_IPAD_OUTPUT/IPadGames.xcresult" \
+      --output-path "$CHAI_IPAD_OUTPUT/game-attachments" 2>&1 | tee "$CHAI_IPAD_OUTPUT/game-attachments-export.log"; then
+      CHAI_IPAD_EXPORT_EXIT=1
+    fi
     if ! xcrun xcresulttool get test-results summary --path "$CHAI_IPAD_OUTPUT/IPadGames.xcresult" \
       > "$CHAI_IPAD_OUTPUT/games-summary.json" 2> "$CHAI_IPAD_OUTPUT/games-summary-error.log"; then
       CHAI_IPAD_EXPORT_EXIT=1
