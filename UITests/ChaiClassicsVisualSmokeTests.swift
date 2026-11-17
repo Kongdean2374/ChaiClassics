@@ -226,7 +226,7 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
     private func cancelIPadRestart(_ app: XCUIApplication, prefix: String) {
         let restart = app.buttons[prefix + ".restart"]
         assertIPadVisible(restart, app: app, toolbar: true); restart.tap()
-        let confirm = app.buttons[prefix + ".confirmRestart"]
+        let confirm = app.buttons.matching(identifier: prefix + ".confirmRestart").firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))
         // iPad confirmation popovers may omit the Cancel action. Dismiss from
         // the empty lower-left margin, outside both popover and game board.
@@ -397,7 +397,7 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         cancelIPadRestart(app, prefix: "sliding")
         XCTAssertEqual(app.staticTexts["sliding.moves"].label, "36 步")
         app.buttons["sliding.restart"].tap()
-        let confirm = app.buttons["sliding.confirmRestart"]
+        let confirm = app.buttons.matching(identifier: "sliding.confirmRestart").firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 5)); confirm.tap()
         XCTAssertFalse(confirm.exists)
         XCTAssertEqual(app.staticTexts["sliding.moves"].label, "0 步")
