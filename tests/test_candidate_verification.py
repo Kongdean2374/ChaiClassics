@@ -108,6 +108,38 @@ class CandidateVerificationTests(unittest.TestCase):
             self.responses[f'repos/{self.repo}/actions/runs/{self.runs["visual"]}']['head_sha'] = 'b' * 40
             with self.assertRaises(candidate.CandidateError): self.verify()
 
+    def test_scoped_visual_keeps_original_successful_source_and_explicit_dependency_proof(self):
+        source, counts, actual = self.prepare_scoped_evidence()
+        older = 'b' * 40
+        self.responses[f'repos/{self.repo}/actions/runs/{self.runs["visual"]}']['head_sha'] = older
+        self.evidence['visual']['source_commit'] = older
+        self.responses[f'repos/{self.repo}/actions/artifacts/{self.runs["visual"] * 10}/zip'] = self.archive('visual')
+        dependency = {'verification': 'dependency-scoped-visual', 'source_commit': older,
+                      'target_commit': self.sha, 'case_fingerprints': {'audited-case': 'c' * 64}}
+        with mock.patch.object(scoped.historical, 'git_tree', return_value=source), \
+                mock.patch.object(scoped.historical, 'load_results', return_value=(counts, actual)), \
+                mock.patch.object(candidate, 'verify_tooling_only_equivalence', side_effect=candidate.CandidateError('Runtime changed.')), \
+                mock.patch.object(candidate, 'verify_visual_case_equivalence', return_value=dependency) as validate:
+            proof = self.verify()
+            self.responses[f'repos/{self.repo}/actions/runs/{self.runs["visual"]}']['conclusion'] = 'failure'
+            with self.assertRaises(candidate.CandidateError): self.verify()
+        validate.assert_called_with(older, self.sha, self.root)
+        visual = proof['workflows']['visual']
+        self.assertEqual(visual['source_commit'], older)
+        self.assertEqual(visual['case_dependency_equivalence'], dependency)
+        self.assertNotIn('tooling_only_equivalence', visual)
+        self.assertEqual(proof['source_commit'], self.sha)
+
+    def test_visual_dependency_fallback_never_skips_ipad_runtime_equivalence(self):
+        source, counts, actual = self.prepare_scoped_evidence()
+        self.responses[f'repos/{self.repo}/actions/runs/{self.runs["ipad"]}']['head_sha'] = 'b' * 40
+        with mock.patch.object(scoped.historical, 'git_tree', return_value=source), \
+                mock.patch.object(scoped.historical, 'load_results', return_value=(counts, actual)), \
+                mock.patch.object(candidate, 'verify_tooling_only_equivalence', side_effect=candidate.CandidateError('Runtime changed.')), \
+                mock.patch.object(candidate, 'verify_visual_case_equivalence') as visual:
+            with self.assertRaises(candidate.CandidateError): self.verify()
+        visual.assert_not_called()
+
     def test_schema_three_partial_actual_pass_cannot_authorize_candidate(self):
         source, counts, actual = self.prepare_scoped_evidence('legacy')
         self.assertEqual(len(actual), 1)

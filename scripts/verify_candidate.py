@@ -281,6 +281,36 @@ def verify_tooling_only_equivalence(source_sha, target_sha, root=ROOT, *, tree_r
     return proof
 
 
+def verify_visual_case_equivalence(source_sha, target_sha, root=ROOT, *, tree_reader=None, ancestor=None):
+    """Retain four real phone captures only when every case dependency matches.
+
+    Called after complete current CI coverage has been independently rebuilt.
+    Original source SHA, workflow success and four actual passes remain required.
+    The same conservative dependency audit as CI protects all Core, shared views,
+    assets, execution files, test helpers and each executed assertion.
+    """
+    from verify_incremental_ci import git_tree
+    from verify_scoped_ci import fingerprints
+    require(all(isinstance(value, str) and re.fullmatch(r'[0-9a-f]{40}', value)
+                for value in (source_sha, target_sha)), 'Invalid visual source SHA.')
+    ancestor = ancestor or (lambda: subprocess.run(['git', 'merge-base', '--is-ancestor', source_sha, target_sha], cwd=root,
+                                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0)
+    require(ancestor(), 'Visual source is not an ancestor of the candidate.')
+    reader = tree_reader or (lambda commit: git_tree(commit, root))
+    before, after = reader(source_sha), reader(target_sha)
+    required = {'App/Info.plist', 'Core/SaveStore.swift', 'Package.swift', 'ChaiClassics.xcodeproj/project.pbxproj',
+                'scripts/ci.sh', 'scripts/visual_smoke.sh', 'fastlane/Fastfile'}
+    require(required.issubset(before) and required.issubset(after), 'Missing protected visual runtime source.')
+    cases = sorted(expected_tests('visual', root))
+    require(set(cases) == set(VISUAL_FOCUS_TESTS), 'Only the four audited phone captures support dependency-scoped reuse.')
+    old, new = fingerprints(before), fingerprints(after)
+    require(all(name in old and name in new and old[name] == new[name] for name in cases),
+            'A visual case, helper, shared runtime or game dependency changed; fresh phone captures are required.')
+    return {'verification': 'dependency-scoped-visual', 'source_commit': source_sha, 'target_commit': target_sha,
+            'case_fingerprints': {name: new[name] for name in cases},
+            'changed_paths': sorted(path for path in set(before) | set(after) if before.get(path) != after.get(path))}
+
+
 def artifact_evidence(artifacts, kind, read=github):
     expected = 'candidate-' + kind + '-evidence'
     require(isinstance(artifacts, dict) and isinstance(artifacts.get('artifacts'), list)
@@ -375,6 +405,7 @@ def verify(repo, sha, version, tag, runs, read=github, root=ROOT, branch='main')
             continue
         evidence_sha = sha
         tooling_equivalence = None
+        visual_equivalence = None
         if kind != 'ci' and run.get('head_sha') != sha:
             if incremental is not None and run.get('head_sha') == incremental['baseline_commit']:
                 evidence_sha = incremental['baseline_commit']
@@ -383,7 +414,12 @@ def verify(repo, sha, version, tag, runs, read=github, root=ROOT, branch='main')
                 evidence_sha = run.get('head_sha')
                 protected_cases = expected_tests(kind, root)
                 if kind == 'ipad': protected_cases += ipad_game_tests(root)
-                tooling_equivalence = verify_tooling_only_equivalence(evidence_sha, sha, root, tested_cases=protected_cases)
+                try:
+                    tooling_equivalence = verify_tooling_only_equivalence(evidence_sha, sha, root, tested_cases=protected_cases)
+                except CandidateError:
+                    if kind != 'visual':
+                        raise
+                    visual_equivalence = verify_visual_case_equivalence(evidence_sha, sha, root)
         validate_run(run, jobs, kind, repo, evidence_sha, evidence_branch)
         evidence = validate_evidence(kind, raw_evidence, evidence_sha, root)
         results[kind] = {'run_id': runs[kind], 'run_url': f'https://github.com/{repo}/actions/runs/{runs[kind]}',
@@ -391,6 +427,8 @@ def verify(repo, sha, version, tag, runs, read=github, root=ROOT, branch='main')
                          'source_commit': evidence_sha, 'summary': evidence['summary'], 'executed_tests': evidence['executed_tests']}
         if tooling_equivalence:
             results[kind]['tooling_only_equivalence'] = tooling_equivalence
+        if visual_equivalence:
+            results[kind]['case_dependency_equivalence'] = visual_equivalence
         if kind == 'ipad':
             results[kind]['device'] = evidence['ipad_report']['device']
             results[kind]['games_summary'] = evidence['games_summary']
