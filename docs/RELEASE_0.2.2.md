@@ -49,15 +49,11 @@ CHAI_UI_SCOPE=full bash scripts/ci.sh ui
 
 ### 本次 TestFlight Beta 門檻
 
-依本次使用者要求，`TestFlight` 新增預設 `validation_mode: beta`，另保留 `full`。Beta 要求同一 SHA 的三組 CI 工作全部成功，包含 Python／Ruby 工具與安全檢查、遊戲／存檔 Swift 測試、iOS Simulator 編譯，以及 `full_ui: true`、`ui_scope: beta` 真正執行以下三項：
+依使用者最新要求，`TestFlight` 預設 `validation_mode: beta`，直接進入既有的免簽署工具／安全預檢與正式簽署編譯、封存及上傳，不等待模擬器或自動 UI 測試。`scripts/verify_beta_candidate.py --manual-qa` 仍核對受信任 main 手動觸發、版本、候選 tag 與來源，產生明確的人工 QA Beta 記錄；它不宣稱任何 CI 或 UI 測試通過。簽署沿用既有 match readonly，正式封存失敗仍會阻擋上傳。
 
-- 數獨的開始、計時、暫停、恢復、結算、查看棋盤及繼續進度刪除。
-- 滑塊拼圖的共用對局流程及繼續進度刪除。
-- 遊玩紀錄搜尋、篩選與鍵盤收起時保留原有操作。
+完整的 50 項 UI、三項關鍵 UI、Visual Smoke 與 iPad 測試保留，可自行手動執行。嚴格的 Beta 證據驗證路徑及 `validation_mode: full` 仍保留；正式完整模式仍需同 SHA 的 CI／Visual／iPad 成功證據。人工 QA 記錄不能當成完整回歸或 App Store 上架證明。
 
-獨立的 `scripts/verify_beta_candidate.py` 核對 main、版本、候選 tag、受信任手動 CI、原始結果 ZIP 的 SHA-256、三項實際通過且零略過，以及沒有繼承舊 UI 結果。它只產生 `beta_verified`，明確標示 `full_regression_complete: false`，不能當成完整回歸或 App Store 上架證明。原有 50 項 UI 測試與完整候選驗證器仍保留，完整模式另需 Visual Smoke／iPad 的成功證據。
-
-真機安裝、ProMotion／120 Hz 手感、觸覺回饋、Files 匯入匯出、iPad 輔助使用與其餘模式由開發者及外部 Beta 測試者繼續檢查。TestFlight 觸發後回報連結，不等待 Apple 處理；觸發成功不代表 IPA 已上傳或 Beta 已可下載。
+遊戲操作、暫停／恢復／刪除、搜尋鍵盤、真機安裝、ProMotion／120 Hz 手感、觸覺回饋、Files 匯入匯出、iPad 輔助使用與其餘模式由開發者及外部 Beta 測試者檢查。觸發 TestFlight 後回報連結並停止等待；觸發成功不代表 IPA 已上傳、Apple 處理完成或 Beta 已可下載。
 
 發布驗收另外記錄來源 commit、候選 tag、CI／Visual／iPad run URL、裝置與通過數，以及 TestFlight 的上傳、Apple 處理、內部可用與外部 Beta 審查狀態。此版本文件不代表其中任何 Apple 步驟已完成，也不會自行觸發工作流程。
 

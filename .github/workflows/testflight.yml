@@ -7,7 +7,7 @@ on:
         required: true
         default: '0.2.2'
       validation_mode:
-        description: 'Beta: critical operations and save checks; Full: complete release regression'
+        description: 'Beta: compile and upload for manual testing; Full: complete release regression'
         type: choice
         options: [beta, full]
         default: beta
@@ -16,7 +16,7 @@ on:
         required: false
         type: string
       ci_run:
-        description: 'Required for 0.2.x: successful exact-SHA beta or full CI run ID'
+        description: 'Full mode only: successful exact-SHA CI run ID'
         required: false
         type: string
       visual_run:
@@ -63,9 +63,9 @@ jobs:
         run: |
           case "$CHAI_VALIDATION_MODE" in
             beta)
-              python3 scripts/verify_beta_candidate.py --repo "$GITHUB_REPOSITORY" \
+              python3 scripts/verify_beta_candidate.py --manual-qa --repo "$GITHUB_REPOSITORY" \
                 --sha "$GITHUB_SHA" --version "$CHAI_CANDIDATE_VERSION" --tag "$CHAI_CANDIDATE_TAG" \
-                --ci-run "$CHAI_CANDIDATE_CI_RUN" --branch main --output build/candidate-proof.json
+                --branch main --output build/candidate-proof.json
               ;;
             full)
               python3 scripts/verify_candidate.py verify --repo "$GITHUB_REPOSITORY" \

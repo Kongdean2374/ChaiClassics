@@ -109,6 +109,44 @@ class BetaCandidateTests(unittest.TestCase):
                          {'real_devices', '120hz', 'haptics', 'native_files', 'ipad_accessibility', 'other_game_modes'})
         self.assertEqual(proof['apple_upload'], 'not_performed')
 
+    def test_explicit_manual_qa_requires_no_ci_or_ui_and_never_fabricates_results(self):
+        reads = []
+        def identity_only(path, **kwargs):
+            reads.append(path)
+            self.assertNotIn('/actions/', path, 'Manual Beta must not wait for or inspect Simulator/CI evidence.')
+            return self.read(path, **kwargs)
+        proof = beta.verify(self.repo, self.sha, self.version, self.tag, manual_qa=True,
+                            read=identity_only, tree_reader=lambda sha: self.tree)
+        self.assertEqual(len(reads), 2)
+        self.assertEqual(proof['status'], 'manual_beta_ready')
+        self.assertTrue(proof['beta_eligible']); self.assertFalse(proof['full_regression_complete'])
+        self.assertFalse(proof['release_eligible']); self.assertFalse(proof['app_store_release_eligible'])
+        self.assertEqual(proof['ui_tests'], 'not_required_manual_qa')
+        self.assertEqual(proof['workflows'], {}); self.assertEqual(proof['executed_ui_tests'], [])
+        self.assertEqual(proof['apple_archive'], 'pending_testflight_workflow')
+        self.assertEqual(proof['declared_ui_test_count'], 50)
+        self.assertEqual(len(proof['required_session_journeys']), 9)
+        self.assertTrue(all(item['status'] == 'pending' for item in proof['manual_qa_items']))
+
+    def test_missing_ci_id_still_rejects_automated_mode_and_manual_retains_identity_guards(self):
+        with self.assertRaises(candidate.CandidateError):
+            beta.verify(self.repo, self.sha, self.version, self.tag, read=self.read, tree_reader=lambda sha: self.tree)
+        self.responses[f'repos/{self.repo}/git/ref/heads/main']['object']['sha'] = 'b' * 40
+        with self.assertRaises(candidate.CandidateError):
+            beta.verify(self.repo, self.sha, self.version, self.tag, manual_qa=True,
+                        read=self.read, tree_reader=lambda sha: self.tree)
+
+    def test_manual_cli_accepts_no_ci_run_and_reports_pending_instead_of_passed_tests(self):
+        proof = {'status': 'manual_beta_ready', 'beta_eligible': True, 'full_regression_complete': False}
+        console = io.StringIO(); output = self.cache / 'manual-proof.json'
+        with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(beta, 'verify', return_value=proof) as verify, mock.patch('sys.stdout', console):
+            result = beta.main(['--sha', self.sha, '--version', self.version, '--tag', self.tag,
+                                '--manual-qa', '--output', str(output)])
+        self.assertEqual(result, 0)
+        self.assertIsNone(verify.call_args.args[4]); self.assertTrue(verify.call_args.kwargs['manual_qa'])
+        self.assertEqual(json.loads(output.read_text()), proof)
+        self.assertNotIn('UI journeys and CI passed', console.getvalue())
+
     def test_exact_same_sha_develop_run_remains_original_source_after_main_fast_forward(self):
         self.ci_run['head_branch'] = 'develop/0.2.2'
         self.artifact['workflow_run']['head_branch'] = 'develop/0.2.2'

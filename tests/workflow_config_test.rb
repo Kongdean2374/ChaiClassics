@@ -226,14 +226,14 @@ check(candidate_gate && candidate_gate['if'] == "startsWith(inputs.version, '0.2
 check(flight.fetch('permissions') == {'contents' => 'read', 'actions' => 'read'}, 'candidate reads receive no repository or Actions write permission')
 check(candidate_gate.dig('env', 'GH_TOKEN') == '${{ github.token }}', 'candidate metadata reads use the short-lived read-only workflow token')
 validation_mode = (flight['on'] || flight[true]).dig('workflow_dispatch', 'inputs', 'validation_mode')
-check(validation_mode['type'] == 'choice' && validation_mode['options'] == %w[beta full] && validation_mode['default'] == 'beta', 'explicit user-selected TestFlight policy defaults to critical Beta checks and retains optional full regression')
+check(validation_mode['type'] == 'choice' && validation_mode['options'] == %w[beta full] && validation_mode['default'] == 'beta', 'explicit user-selected TestFlight policy defaults to manual Beta QA and retains optional full regression')
 check(candidate_gate.dig('env', 'CHAI_VALIDATION_MODE') == "${{ inputs.validation_mode || 'beta' }}", 'candidate gate receives the explicit Beta/full policy')
 gate_run = candidate_gate.fetch('run')
 beta_case = gate_run.match(/beta\)\n(.*?)\n\s*;;/m)&.captures&.first
 full_case = gate_run.match(/full\)\n(.*?)\n\s*;;/m)&.captures&.first
-check(beta_case && beta_case.include?('scripts/verify_beta_candidate.py') && beta_case.include?('--sha "$GITHUB_SHA"') && beta_case.include?('--branch main') && beta_case.include?('--ci-run "$CHAI_CANDIDATE_CI_RUN"'), 'Beta independently verifies the exact main/tag SHA and real critical CI evidence')
-check(!beta_case.include?('--visual-run') && !beta_case.include?('--ipad-run'), 'Beta does not require the optional full Visual/iPad regression')
-check(full_case && full_case.include?('scripts/verify_candidate.py verify') && full_case.include?('--sha "$GITHUB_SHA"') && full_case.include?('--visual-run "$CHAI_CANDIDATE_VISUAL_RUN"') && full_case.include?('--ipad-run "$CHAI_CANDIDATE_IPAD_RUN"'), 'Full mode retains all three exact-SHA workflow evidence requirements')
+check(beta_case && beta_case.include?('scripts/verify_beta_candidate.py') && beta_case.include?('--sha "$GITHUB_SHA"') && beta_case.include?('--tag "$CHAI_CANDIDATE_TAG"') && beta_case.include?('--branch main') && beta_case.include?('--manual-qa'), 'manual-QA Beta independently verifies the exact main/tag/source SHA')
+check(!beta_case.include?('--ci-run') && !beta_case.include?('--visual-run') && !beta_case.include?('--ipad-run'), 'manual-QA Beta defers UI checks to testers without requiring CI/Visual/iPad run inputs')
+check(full_case && full_case.include?('scripts/verify_candidate.py verify') && full_case.include?('--sha "$GITHUB_SHA"') && full_case.include?('--ci-run "$CHAI_CANDIDATE_CI_RUN"') && full_case.include?('--visual-run "$CHAI_CANDIDATE_VISUAL_RUN"') && full_case.include?('--ipad-run "$CHAI_CANDIDATE_IPAD_RUN"') && !full_case.include?('--manual-qa'), 'Full mode retains all three exact-SHA workflow evidence requirements')
 check(gate_run.include?('case "$CHAI_VALIDATION_MODE" in') && gate_run.include?("*) echo 'Unknown candidate validation mode.' >&2; exit 64"), 'unknown validation modes fail instead of bypassing verification')
 %w[candidate_tag ci_run visual_run ipad_run].each do |input|
   check((flight['on'] || flight[true]).dig('workflow_dispatch', 'inputs', input, 'type') == 'string', 'candidate evidence input is explicit: ' + input)
@@ -307,4 +307,4 @@ check(status_job.fetch('steps').any? { |step| step['run'] == 'ruby scripts/testf
 status_source = File.read(File.join(root, 'scripts/testflight_status.rb'))
 check(status_source.include?('Net::HTTP::Get.new') && !status_source.match?(/Net::HTTP::(?:Post|Put|Patch|Delete)|upload_to_testflight|match\(/), 'status performs GET only, with no signing or upload')
 check(tooling_runs.include?('ruby tests/testflight_status_test.rb'), 'read-only Apple state separation is tested without credentials')
-puts 'PASS: explicit exact-SHA Beta critical checks and optional full CI/Visual/4+5 iPad regression; read-only Apple processing/internal/external status remains separate from upload.'
+puts 'PASS: explicit exact-SHA manual-QA Beta and optional full CI/Visual/4+5 iPad regression; read-only Apple processing/internal/external status remains separate from upload.'

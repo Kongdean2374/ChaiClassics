@@ -125,12 +125,12 @@ class AppResourceTests(unittest.TestCase):
         header=actual.split(b'jobs:\n',1)[0]
         self.assertEqual(header.count(b"'Version (e.g. 0.2.2)'"),1)
         self.assertEqual(header.count(b"        default: '0.2.2'\n"),1)
-        # v0.2.2's reviewed header adds the user-requested Beta/full policy input.
+        # v0.2.2's reviewed header makes UI run inputs optional for manual-QA Beta.
         # The actual signing/upload job below stays byte-frozen to the released
         # pipeline; normalize only the documented current-version label/default.
         stable_header=header.replace(b"'Version (e.g. 0.2.2)'", b"'Version (e.g. 0.2.1)'")
         stable_header=stable_header.replace(b"        default: '0.2.2'\n", b"        default: '0.2.1'\n")
-        self.assertEqual(hashlib.sha256(stable_header).hexdigest(),'2defbc7d5d5a431f189b5d6c029bc881b4ba13a67a8e06471367e49f63dd9a82')
+        self.assertEqual(hashlib.sha256(stable_header).hexdigest(),'7e445d5b3b238d0b3b0f904a1134f40ded830ade90f1349ee446424972384507')
         upload=b'  upload:\n'+actual.split(b'  upload:\n',1)[1]
         self.assertEqual(upload.count(b'    needs: preflight\n'),1)
         self.assertEqual(upload.count(b'    runs-on: macos-15-intel\n'),1)

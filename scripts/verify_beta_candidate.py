@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Read-only exact-SHA TestFlight Beta gate, explicitly short of full regression.
 
-Only three current-run UI journeys are required by the user's Beta policy. No
+The automated mode requires three current-run UI journeys. Explicit --manual-qa
+delegates Simulator/CI checks to Beta testers without claiming they passed. No
 historical UI pass is inherited and this proof never authorizes App Store release.
 The formal verify_candidate.py gate remains independent and unchanged.
 """
@@ -150,15 +151,13 @@ def original_results(repo, sha, run_id, source_branch, read):
     }
 
 
-def verify(repo, sha, version, tag, ci_run, *, branch='main', read=candidate.github,
-           root=candidate.ROOT, tree_reader=None):
+def validate_candidate_source(repo, sha, version, tag, *, branch, read, root, tree_reader):
     require(repo == REPOSITORY and branch == 'main', 'TestFlight Beta verification only authorizes this repository main branch.')
     require(isinstance(sha, str) and re.fullmatch(r'[0-9a-f]{40}', sha) is not None
             and isinstance(version, str) and re.fullmatch(r'0\.2\.\d+', version) is not None,
             'A full SHA and explicit numeric 0.2.x Beta version are required.')
     require(isinstance(tag, str) and re.fullmatch(re.escape('v' + version) + r'-rc\.[1-9]\d*', tag) is not None,
             'An explicit version-matched vVERSION-rc.N tag is required.')
-    require(type(ci_run) is int and ci_run > 0, 'A positive current Beta CI run ID is required.')
     head = read(f'repos/{repo}/git/ref/heads/main')
     require(isinstance(head, dict) and isinstance(head.get('object'), dict) and head['object'].get('sha') == sha,
             'Main has advanced or differs from the requested Beta SHA.')
@@ -174,11 +173,34 @@ def verify(repo, sha, version, tag, ci_run, *, branch='main', read=candidate.git
         require(isinstance(annotated, dict) and isinstance(annotated.get('object'), dict), 'Invalid annotated Beta tag target.')
         obj = annotated['object']
     require(obj.get('type') == 'commit' and obj.get('sha') == sha, 'Beta tag does not resolve to the exact main SHA.')
+    tree = (tree_reader or (lambda commit: historical.git_tree(commit, root)))(sha)
+    return validate_source(tree, version)
+
+
+def verify(repo, sha, version, tag, ci_run=None, *, branch='main', manual_qa=False,
+           read=candidate.github, root=candidate.ROOT, tree_reader=None):
+    require(type(manual_qa) is bool, 'Manual Beta policy must be an explicit boolean.')
+    if not manual_qa:
+        require(type(ci_run) is int and ci_run > 0, 'A positive current Beta CI run ID is required unless --manual-qa is explicit.')
+    inventory, sessions = validate_candidate_source(repo, sha, version, tag, branch=branch,
+                                                    read=read, root=root, tree_reader=tree_reader)
+    if manual_qa:
+        return {
+            'schema': 1, 'status': 'manual_beta_ready', 'verification': 'exact-sha-manual-beta',
+            'version': version, 'source_commit': sha, 'candidate_tag': tag, 'branch': 'main',
+            'beta_eligible': True, 'release_target': 'testflight_beta', 'release_eligible': False,
+            'app_store_release_eligible': False, 'full_regression_complete': False,
+            'declared_ui_tests': inventory, 'declared_ui_test_count': len(inventory),
+            'required_session_journeys': sessions, 'ui_tests': 'not_required_manual_qa',
+            'ci_validation': 'not_required_manual_qa', 'workflows': {}, 'executed_ui_tests': [],
+            'inherited_ui_cases': [],
+            'manual_qa_items': [{'area': area, 'status': 'pending', 'detail': detail} for area, detail in MANUAL_QA_ITEMS],
+            'apple_build': 'pending_testflight_workflow', 'apple_archive': 'pending_testflight_workflow',
+            'apple_upload': 'not_performed', 'apple_processing': 'not_checked',
+        }
     prefix = f'repos/{repo}/actions/runs/{ci_run}'
     run, jobs = read(prefix), read(prefix + '/jobs?per_page=100&filter=latest')
     validate_ci(run, jobs, repo, sha, ci_run)
-    tree = (tree_reader or (lambda commit: historical.git_tree(commit, root)))(sha)
-    inventory, sessions = validate_source(tree, version)
     summary, actual, artifact = original_results(repo, sha, ci_run, run['head_branch'], read)
     return {
         'schema': 1, 'status': 'beta_verified', 'verification': 'exact-sha-beta-smoke',
@@ -216,20 +238,24 @@ def main(argv=None):
     parser.add_argument('--sha', required=True)
     parser.add_argument('--version', required=True)
     parser.add_argument('--tag', required=True)
-    parser.add_argument('--ci-run', required=True, type=int)
+    parser.add_argument('--ci-run', type=int)
+    parser.add_argument('--manual-qa', action='store_true', help='Explicitly delegate CI/Simulator UI validation to Beta testers; never claims a test pass.')
     parser.add_argument('--branch', choices=('main',), default='main')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args(argv)
     try:
         validate_caller(args.repo, args.sha)
-        proof = verify(args.repo, args.sha, args.version, args.tag, args.ci_run, branch=args.branch)
+        proof = verify(args.repo, args.sha, args.version, args.tag, args.ci_run, branch=args.branch, manual_qa=args.manual_qa)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(proof, indent=2) + '\n')
     except (candidate.CandidateError, OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
         detail = str(error) if isinstance(error, candidate.CandidateError) else 'Required trusted source, CI or original Beta evidence is unavailable or invalid.'
         print('Beta verification failed: ' + detail, file=sys.stderr)
         return 1
-    print('Beta verified: three current-SHA UI journeys and CI passed. Full regression is incomplete; manual QA remains. No Apple operation performed.')
+    if args.manual_qa:
+        print('Manual Beta ready: main/tag/version/source matched. CI and Simulator UI are not required by this explicit policy; testers must validate the Beta. Signed build/archive/upload remain pending.')
+    else:
+        print('Beta verified: three current-SHA UI journeys and CI passed. Full regression is incomplete; manual QA remains. No Apple operation performed.')
     return 0
 
 
