@@ -217,9 +217,9 @@ def verify_tooling_only_equivalence(source_sha, target_sha, root=ROOT, *, tree_r
 
     By default every XCTest byte is protected. An explicit selected case list permits
     only unexecuted test-method bodies to change; signatures, helpers, setup, constants,
-    fixtures and runtime stay protected. Only exact audited execution preflight pairs
-    may differ; original run/ZIP evidence
-    is still validated separately against its actual source SHA.
+    fixtures and runtime stay protected. Only exact audited execution preflight
+    and whole-case allowance pairs may differ; original run/ZIP evidence is still
+    validated separately against its actual source SHA.
     """
     from verify_incremental_ci import git_tree, functions
     require(all(isinstance(value, str) and re.fullmatch(r'[0-9a-f]{40}', value) for value in (source_sha, target_sha)), 'Invalid equivalent source SHA.')
@@ -238,7 +238,7 @@ def verify_tooling_only_equivalence(source_sha, target_sha, root=ROOT, *, tree_r
     # Only exact audited boot/ceiling pairs may retain an already successful
     # whole screenshot run. App/runtime edits, helpers and protected test bodies
     # still fail below; this never supplies missing/failed XCTest results.
-    from verify_scoped_ci import APPROVED_TIMEOUT_CEILINGS, APPROVED_CI_JOB_TIMEOUT, APPROVED_IPAD_JOB_BUDGET, shared_content_digest
+    from verify_scoped_ci import APPROVED_TIMEOUT_CEILINGS, APPROVED_CI_JOB_TIMEOUT, APPROVED_IPAD_JOB_BUDGET, shared_content_digest, scaffold_budget_digest, canonical_xctest_allowance_body
     execution_equivalence = {}
     canonical_execution = {path: pair[0] for path, pair in APPROVED_TIMEOUT_CEILINGS.items()}
     canonical_execution['.github/workflows/ci.yml'] = APPROVED_CI_JOB_TIMEOUT[0]
@@ -267,7 +267,7 @@ def verify_tooling_only_equivalence(source_sha, target_sha, root=ROOT, *, tree_r
         require(ui_files and ui_files == {path for path in after if path.startswith('UITests/') and path.endswith('.swift')}, 'UI test source file set changed.')
         require(all(before[path][0] == after[path][0] for path in ui_files), 'UI test source mode changed.')
         def ui_proof(tree):
-            methods, masked = {}, {}
+            methods, masked, allowance_projection = {}, {}, {}
             for path in sorted(ui_files):
                 try:
                     source = tree[path][1].decode('utf-8')
@@ -279,12 +279,22 @@ def verify_tooling_only_equivalence(source_sha, target_sha, root=ROOT, *, tree_r
                 for start, end, name in reversed(bodies):
                     identity = Path(path).stem + '/' + name
                     require(identity not in methods, 'Duplicate XCTest method identity.')
-                    methods[identity] = hashlib.sha256(source[start:end].encode()).hexdigest()
+                    body = source[start:end]
+                    canonical = canonical_xctest_allowance_body(path, identity, tree[path][0], body)
+                    methods[identity] = hashlib.sha256(canonical.encode()).hexdigest()
+                    if canonical != body:
+                        allowance_projection['method:' + identity] = {
+                            'raw_sha256': hashlib.sha256(body.encode()).hexdigest(),
+                            'canonical_sha256': methods[identity]}
                     scaffold = scaffold[:start] + '{TEST_BODY}' + scaffold[end:]
-                masked[path] = hashlib.sha256(scaffold.encode()).hexdigest()
-            return methods, masked
-        old_methods, old_scaffolds = ui_proof(before)
-        new_methods, scaffolds = ui_proof(after)
+                masked[path] = scaffold_budget_digest(path, tree[path][0], scaffold)
+                raw_scaffold = hashlib.sha256(scaffold.encode()).hexdigest()
+                if raw_scaffold != masked[path]:
+                    allowance_projection['scaffold:' + path] = {
+                        'raw_sha256': raw_scaffold, 'canonical_sha256': masked[path]}
+            return methods, masked, allowance_projection
+        old_methods, old_scaffolds, old_allowances = ui_proof(before)
+        new_methods, scaffolds, new_allowances = ui_proof(after)
         require(set(old_methods) == set(new_methods) and old_methods, 'UI test method identities changed.')
         require(old_scaffolds == scaffolds, 'UI test signatures, helpers, setup or constants changed.')
         require(set(tested_cases).issubset(old_methods), 'Protected executed XCTest case is missing.')
@@ -300,6 +310,8 @@ def verify_tooling_only_equivalence(source_sha, target_sha, root=ROOT, *, tree_r
              'runtime_digest': hashlib.sha256(json.dumps(records, separators=(',', ':')).encode()).hexdigest()}
     if execution_equivalence:
         proof['audited_execution_equivalence'] = execution_equivalence
+    if tested_cases is not None and (old_allowances or new_allowances):
+        proof['audited_xctest_allowances'] = {'source': old_allowances, 'target': new_allowances}
     if tested_cases is not None:
         proof.update(tested_cases=tested_cases, runtime_scaffold_and_testbody_digest=hashlib.sha256(
             json.dumps({'runtime_and_scaffolds': records, 'protected_test_bodies': protected}, separators=(',', ':')).encode()).hexdigest())

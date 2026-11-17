@@ -29,3 +29,5 @@ GitHub Actions → CI → Run workflow 可選 `ui_scope`。`full` 執行全部 7
 ### 有界的 XCTest 時間預算
 
 Intel 實測完整目錄／版面案例超過 420 秒後會觸發 XCTest watchdog，影響下一項 App 啟停。已用固定來源、精確還原與負面測試核准一般 whole-case 600 秒及 V020 兩個同值設定；既有通過紀錄的字面斷言、遊戲資料與每步等待不變。另有固定 iPad job／boot／gallery 預算組合及 gallery maximum ceiling。未知時間、命令、權限、selector、模式或其他 setup 變化仍不等價。iPad-only 變更在手機略過時，加跑一個真實 Home 案例；失敗／取消／未執行紀錄不計為通過。
+
+完整成功的 iPad 26 項來源，亦可在上述固定 V020 whole-case 420→600 秒及固定數獨方法 600→1800 秒差異下保留。驗證必須同時符合原、新完整 hash 與精確逆向還原，並列出 raw／canonical hash；26 項操作與斷言、其他 helper／setup、App、資料及模式仍受保護。這不合併部分 iPad 結果，也不改寫逐案例 CI 指紋：CI 中改過數獨方法仍須實際重跑。取消、失敗、缺摘要或未完整成功的來源仍拒絕使用。五項回歸測試涵蓋修改斷言、動作、setup、路徑、模式、非核准時限及偽造 after-hash 的拒絕行為；這些來源測試不是模擬器通過證據。
