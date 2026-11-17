@@ -221,7 +221,7 @@ private struct CatalogFolderView: View {
 }
 
 private extension CatalogItem {
-    func availabilityText(using model: AppModel) -> String {
+    @MainActor func availabilityText(using model: AppModel) -> String {
         guard kind == .folder else { return model.t(availabilityKey) }
         let children = GameCatalog.children(of: id)
         let playable = children.filter { $0.gameID != nil }.count

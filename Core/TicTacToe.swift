@@ -45,6 +45,11 @@ public struct TicTacToeBoard: Codable, Equatable, Sendable {
         cells.count == 9 && history.count < 9 && cells.indices.contains(index) && cells[index] == nil &&
         player == currentPlayer && !isFinished
     }
+    /// Human input always belongs to the configured human side in solo play.
+    /// This also guards queued taps before the view redraws for the AI turn.
+    public func canHumanPlay(at index: Int, active: Bool) -> Bool {
+        active && canPlay(at: index, by: mode == .singlePlayer ? humanPlayer : currentPlayer)
+    }
     @discardableResult public mutating func play(at index: Int, by player: DuelPlayer) -> Bool {
         guard canPlay(at: index, by: player) else { return false }
         cells[index] = player; history.append(index); return true

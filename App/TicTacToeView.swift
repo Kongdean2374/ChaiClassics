@@ -107,8 +107,10 @@ struct TicTacToePlayView: View {
                     if paused || scenePhase != .active {
                         PauseCard(game: .ticTacToe) { turnGeneration = UUID(); paused = false }.frame(height: 300)
                     } else {
-                        TicTacToeGrid(board: board, enabled: active && !board.isComputerTurn) { index in
-                            if model.editTicTacToe({ _ = $0.play(at: index, by: board.currentPlayer) }) { model.feedback() }
+                        TicTacToeGrid(board: board, enabled: active) { index in
+                            guard let current = model.ticTacToe,
+                                  current.canHumanPlay(at: index, active: active) else { return }
+                            if model.editTicTacToe({ _ = $0.play(at: index, by: current.currentPlayer) }) { model.feedback() }
                         }
                     }
                     if board.isFinished {
@@ -231,7 +233,7 @@ private struct TicTacToeGrid: View {
                                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing).padding(8)
                         }
                     }.aspectRatio(1, contentMode: .fit).contentShape(Rectangle())
-                }.buttonStyle(QuietPressStyle()).disabled(!enabled || !board.canPlay(at: index, by: board.currentPlayer))
+                }.buttonStyle(QuietPressStyle()).disabled(!board.canHumanPlay(at: index, active: enabled))
                     .accessibilityLabel(model.t("tictactoe.cell", index / 3 + 1, index % 3 + 1, value == .first ? "X" : value == .second ? "O" : model.t("tictactoe.empty")))
                     .accessibilityValue(winning ? model.t("tictactoe.winningCell") : "")
                     .accessibilityIdentifier("tictactoe.cell.\(index)")
