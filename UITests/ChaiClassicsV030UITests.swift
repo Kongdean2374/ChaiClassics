@@ -142,9 +142,49 @@ final class ChaiClassicsV030UITests: XCTestCase {
     func testKakuroCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("kakuro") }
     func testKlotskiCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("klotski") }
     func testGomokuCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("gomoku") }
-    func testReversiCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("reversi") }
+    func testReversiCompleteSessionRestoresAndConfirmsDeletion() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing","--ui-profile","v030-reversi","--ui-reset","--ui-language","en","--ui-appearance","dark"]
+        app.launch(); open("reversi",app); tap("reversi.start",app); tap("reversi.new.confirm",app)
+        let legal = app.buttons["reversi.cell.19"], occupied = app.buttons["reversi.cell.27"]
+        wait("Black must initially have a legal opening") { legal.exists && legal.isEnabled }
+        XCTAssertFalse(occupied.isEnabled,"An occupied Reversi disc is not a selectable chess piece.")
+        reach(occupied,app); occupied.coordinate(withNormalizedOffset:CGVector(dx:0.5,dy:0.5)).tap()
+        XCTAssertTrue(legal.isEnabled,"An ignored occupied-disc tap must not hide legal destinations.")
+        XCTAssertEqual(node("reversi.moves",app).value as? String,"0")
+        tap("reversi.cell.19",app)
+        wait("A legal move must still work after tapping an occupied disc",timeout:35) {
+            (Int(self.node("reversi.moves",app).value as? String ?? "") ?? 0)>=2
+        }
+        attach(app,"reversi-occupied-disc-regression"); app.terminate()
+        try exercise("reversi")
+    }
     func testXiangqiCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("xiangqi") }
-    func testBanqiCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("banqi") }
+    func testBanqiCompleteSessionRestoresAndConfirmsDeletion() throws {
+        // Mirror a valid position so player one owns Black. This checks the
+        // assignment after restoration without depending on a random reveal.
+        let resource = try XCTUnwrap(Bundle(for:Self.self).url(forResource:"v030-banqi",withExtension:"json"))
+        var envelope = try XCTUnwrap(JSONSerialization.jsonObject(with:Data(contentsOf:resource)) as? [String:Any])
+        var payload = try XCTUnwrap(envelope["payload"] as? [String:Any])
+        var state = try XCTUnwrap(payload["state"] as? [String:Any]), associated = try XCTUnwrap(state["banqi"] as? [String:Any])
+        var board = try XCTUnwrap(associated["_0"] as? [String:Any])
+        board["pieces"] = try XCTUnwrap(board["pieces"] as? [Int]).map { -$0 }
+        board["firstPlayerColor"] = -1; board["moves"] = 62
+        associated["_0"] = board; state["banqi"] = associated; payload["state"] = state; envelope["payload"] = payload
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing","--ui-profile","v030-banqi","--ui-reset","--ui-language","en","--ui-appearance","dark"]
+        app.launchEnvironment["CHAI_UI_SEED_BANQI"] = try JSONSerialization.data(withJSONObject:envelope).base64EncodedString()
+        app.launch(); app.launchEnvironment["CHAI_UI_SEED_BANQI"] = nil
+        open("banqi",app); tap("banqi.continue",app); tap("banqi.session.resume",app)
+        wait("The restored player-one assignment must visibly identify Black") {
+            self.node("banqi.turn",app).label.unicodeScalars.contains { $0.value==0x26AB }
+        }
+        XCTAssertTrue(app.buttons["banqi.cell.0"].label.unicodeScalars.contains { $0.value==0x26AB })
+        attach(app,"banqi-black-first-orientation")
+        tap("banqi.cell.0",app); tap("banqi.cell.1",app)
+        XCTAssertTrue(app.buttons["banqi.session.done"].waitForExistence(timeout:15)); app.terminate()
+        try exercise("banqi")
+    }
     func testChessCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("chess") }
     func testShogiCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("shogi") }
     func testKlondikeCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("klondike") }

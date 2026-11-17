@@ -19,10 +19,18 @@ struct ExpandedStrategyView: View {
     private var actions: [ExpandedStrategyAction] { save?.state.legalStrategyActions ?? [] }
     private var targets: Set<Int> {
         Set(actions.filter { action in
+            if game == .gomoku || game == .reversi { return action.from == nil }
             if case .shogi(let move) = action, let drop { return move.drop == drop }
             if let selected { return action.from == selected }
-            return action.from == nil && (game == .gomoku || game == .reversi)
+            return false
         }.map(\.to))
+    }
+    private var turnText: String {
+        let text = model.t("expanded.playerTurn",save?.state.currentPlayer?.rawValue ?? 1)
+        if case .banqi(let board) = save?.state, let color = board.color {
+            return text + (color>0 ? " · 🔴" : " · ⚫️")
+        }
+        return text
     }
     var body: some View {
         ScrollView {
@@ -31,7 +39,7 @@ struct ExpandedStrategyView: View {
                     GameArtwork(game:game,size:44)
                     VStack(alignment:.leading,spacing:4) {
                         Text(model.gameTitle(game)).font(.headline)
-                        Text(model.t("expanded.playerTurn",save?.state.currentPlayer?.rawValue ?? 1))
+                        Text(turnText)
                             .font(.subheadline).accessibilityIdentifier(game.rawValue+".turn")
                     }
                     Spacer()
@@ -106,7 +114,8 @@ struct ExpandedStrategyView: View {
     private func strategyCell(_ index: Int,cells: [Int],legalTargets: Set<Int>,canPlay: Bool,isActive: Bool,showTargets: Bool) -> some View {
         let hidden: Bool = { if case .banqi(let board) = save?.state { return !board.revealed[index] }; return false }()
         let piece = hidden ? 0 : cells[index]
-        let available = canPlay && (cells[index] != 0 || legalTargets.contains(index) || game == .gomoku || hidden)
+        let placement = game == .gomoku || game == .reversi
+        let available = canPlay && (placement ? legalTargets.contains(index) : cells[index] != 0 || legalTargets.contains(index) || hidden)
         return Button { choose(index) } label: {
             ZStack {
                 Rectangle().fill(squareColor(index))
@@ -144,7 +153,11 @@ struct ExpandedStrategyView: View {
     }
     @ViewBuilder private func strategyPiece(_ piece: Int) -> some View {
         let positive = game == .gomoku || game == .reversi ? piece==1 : piece>0
-        let rotate = save?.mode == .localTwoPlayer && !positive
+        let belongsToFirst: Bool = {
+            if case .banqi(let board) = save?.state, let firstColor = board.firstPlayerColor { return piece*firstColor>0 }
+            return positive
+        }()
+        let rotate = save?.mode == .localTwoPlayer && !belongsToFirst
         if game == .gomoku || game == .reversi {
             Circle().fill(LinearGradient(colors:positive ? [.gray,GameMaterial.ink,.black] : [.white,GameMaterial.ivory,.gray],startPoint:.topLeading,endPoint:.bottomTrailing))
                 .overlay(Circle().strokeBorder(GameMaterial.gold.opacity(0.8),lineWidth:0.8)).shadow(color:.black.opacity(0.25),radius:1.5,y:2)
@@ -161,7 +174,10 @@ struct ExpandedStrategyView: View {
     private func pieceName(_ piece: Int) -> String {
         if game == .gomoku || game == .reversi { return model.t(piece==1 ? "expanded.black" : "expanded.white") }
         let family = game == .banqi ? "xiangqi" : game.rawValue
-        return model.t("piece.\(family).\(abs(piece))")
+        let name = model.t("piece.\(family).\(abs(piece))")
+        if game == .chess { return model.t(piece>0 ? "expanded.white" : "expanded.black") + ", " + name }
+        if game == .banqi || game == .xiangqi { return (piece>0 ? "🔴 " : "⚫️ ") + name }
+        return name
     }
     private func chessGlyph(_ piece: Int) -> String { let glyphs = piece>0 ? ["","♙","♘","♗","♖","♕","♔"] : ["","♟","♞","♝","♜","♛","♚"]; return glyphs[min(abs(piece),6)] }
     private func pieceGlyph(_ piece: Int) -> String {
@@ -198,6 +214,10 @@ struct ExpandedStrategyView: View {
         else { choices = actions.filter { $0.from==selected && $0.to==index } }
         if choices.count>1 { promotions = choices; choosingPromotion = true; return }
         if let action = choices.first { apply(action); return }
+        // Placement games never select an existing stone/disc. In particular,
+        // Reversi's positive 1/2 disc IDs must not enter signed-piece selection
+        // and hide every legal empty destination on Black's turn.
+        if game == .gomoku || game == .reversi { selected = nil; drop = nil; return }
         let piece = board.state.strategyCells[index]
         let own = game == .banqi ? { if case .banqi(let b) = board.state { return piece*(b.color ?? 0)>0 }; return false }() : piece*(board.state.currentPlayer == .first ? 1 : -1)>0
         selected = own ? index : nil; drop = nil
