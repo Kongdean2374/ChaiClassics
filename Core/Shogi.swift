@@ -18,6 +18,7 @@ public struct ShogiBoard: Codable, Equatable, Sendable {
     public private(set) var moves = 0
     private var positions: [String:Int] = [:]
     private var consecutiveChecks = [0,0]
+    public private(set) var declaredWinner: DuelPlayer?
     public init() {
         let back: [Int] = [2,3,4,5,8,5,4,3,2]
         cells = back.map { -$0 }
@@ -117,11 +118,28 @@ public struct ShogiBoard: Codable, Equatable, Sendable {
         currentPlayer = currentPlayer.opponent; moves += 1
     }
     public var result: StrategyResult {
+        if let declaredWinner { return .won(declaredWinner) }
         if legalMoves().isEmpty { return .won(currentPlayer.opponent) }
         if positions[key,default:0]>=4 {
             if consecutiveChecks[0]>=4 { return .won(.second) }; if consecutiveChecks[1]>=4 { return .won(.first) }; return .draw
         }
         return .playing
+    }
+    /// The 27-point entering-king declaration rule. Only pieces in the enemy
+    /// camp and in hand count; the king is excluded and may not be in check.
+    public var canDeclareEnteringKing: Bool {
+        guard declaredWinner==nil, let king = cells.firstIndex(of:8*sign), !isInCheck(currentPlayer) else { return false }
+        func inCamp(_ i: Int) -> Bool { sign==1 ? i/9<=2 : i/9>=6 }
+        guard inCamp(king) else { return false }
+        let camp = cells.indices.filter { cells[$0]*sign>0 && abs(cells[$0]) != 8 && inCamp($0) }
+        guard camp.count>=10 else { return false }
+        func points(_ kind: Int) -> Int { [6,7].contains(Self.unpromoted(kind)) ? 5 : 1 }
+        let boardPoints = camp.reduce(0) { $0+points(abs(cells[$1])) }
+        let handPoints = (1...7).reduce(0) { $0+hands[currentPlayer.rawValue-1][$1]*points($1) }
+        return boardPoints+handPoints >= (currentPlayer == .first ? 28 : 27)
+    }
+    @discardableResult public mutating func declareEnteringKing() -> Bool {
+        guard isValidSave, canDeclareEnteringKing else { return false }; declaredWinner = currentPlayer; return true
     }
     @discardableResult public mutating func play(_ move: ShogiMove) -> Bool {
         guard isValidSave, result == .playing, legalMoves().contains(move) else { return false }

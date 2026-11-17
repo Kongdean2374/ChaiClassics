@@ -59,38 +59,56 @@ private struct GameActionConfirmation: ViewModifier {
     let onConfirm: () -> Void
     let onCancel: () -> Void
     @EnvironmentObject private var model: AppModel
-    @State private var gate = GameActionGate()
     @State private var decision: Bool?
-
-    private func resolve(_ token: UUID?, accepting: Bool) {
-        guard isPresented, let token, gate.resolve(token) else { return }
-        decision = accepting
-        isPresented = false
-    }
     func body(content: Content) -> some View {
-        content.fullScreenCover(isPresented: $isPresented, onDismiss: {
+        content.disabled(isPresented).allowsHitTesting(!isPresented).fullScreenCover(isPresented: $isPresented, onDismiss: {
             let accepted = decision == true
             decision = nil
             if accepted { onConfirm() } else { onCancel() }
         }) {
-            let token = gate.id
-            SessionDialog {
-                Image(systemName: "questionmark.circle.fill").font(.system(size: 38)).foregroundStyle(.tint)
-                Text(title).font(.system(.title2, design: .rounded, weight: .bold)).multilineTextAlignment(.center)
-                Text(message).font(.body).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                Button(confirmTitle) { resolve(token, accepting: true) }
-                    .buttonStyle(.borderedProminent).controlSize(.large).frame(maxWidth: .infinity)
-                    .accessibilityIdentifier(prefix + ".confirm")
-                Button(model.t("common.cancel")) { resolve(token, accepting: false) }
-                    .buttonStyle(.bordered).controlSize(.large).frame(maxWidth: .infinity)
-                    .accessibilityIdentifier(prefix + ".cancel")
+            GameConfirmationDialog(title:title,message:message,confirmTitle:confirmTitle,
+                                   cancelTitle:model.t("common.cancel"),prefix:prefix) { accepting in
+                guard isPresented else { return }
+                decision = accepting; isPresented = false
             }
+            .environment(\.isEnabled,true).allowsHitTesting(true)
             .presentationBackground(.clear).interactiveDismissDisabled()
-            .onAppear { if gate.id == nil { _ = gate.begin() } }
         }
             .onChange(of: isPresented) { _, presented in
-                if presented { decision = nil; _ = gate.begin() } else { gate.invalidate() }
+                if presented { decision = nil }
             }
+    }
+}
+
+/// Own the response gate inside the presented view. A Form swipe presenter can
+/// create its cover before the parent's onChange/onAppear runs; capturing that
+/// parent's nil token made both buttons visible but inert on the first attempt.
+private struct GameConfirmationDialog: View {
+    let title: String
+    let message: String
+    let confirmTitle: String
+    let cancelTitle: String
+    let prefix: String
+    let onDecide: (Bool)->Void
+    @State private var gate: GameActionGate = {
+        var value = GameActionGate(); _ = value.begin(); return value
+    }()
+    var body: some View {
+        SessionDialog {
+            Image(systemName:"questionmark.circle.fill").font(.system(size:38)).foregroundStyle(.tint)
+            Text(title).font(.system(.title2,design:.rounded,weight:.bold)).multilineTextAlignment(.center)
+            Text(message).font(.body).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            Button(confirmTitle) { choose(true) }
+                .buttonStyle(.borderedProminent).controlSize(.large).frame(maxWidth:.infinity)
+                .disabled(gate.id==nil).accessibilityIdentifier(prefix+".confirm")
+            Button(cancelTitle) { choose(false) }
+                .buttonStyle(.bordered).controlSize(.large).frame(maxWidth:.infinity)
+                .disabled(gate.id==nil).accessibilityIdentifier(prefix+".cancel")
+        }
+    }
+    private func choose(_ accepting: Bool) {
+        guard let token = gate.id, gate.resolve(token) else { return }
+        onDecide(accepting)
     }
 }
 
@@ -139,6 +157,7 @@ struct ContinueGameRow<Label: View>: View {
     @State private var suppressContinueUntil: TimeInterval = 0
     @State private var confirmDelete = false
     @State private var deletionSession: UUID?
+    @StateObject private var touchObserver = ContinueTouchObserver()
     private var continueID: String { (game == .minesweeper ? "mines" : game == .twentyFour ? "twentyfour" : game.rawValue) + ".continue" }
 
     var body: some View {
@@ -148,9 +167,11 @@ struct ContinueGameRow<Label: View>: View {
                 customScrollRow
             } else {
                 continueButton.swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    Button(role: .destructive) { requestDeletion() } label: {
+                    // A destructive *role* makes List optimistically remove its
+                    // row before confirmation. Red tint alone leaves it alive.
+                    Button { requestDeletion() } label: {
                         SwiftUI.Label(model.t("session.delete.action"), systemImage: "trash")
-                    }.accessibilityIdentifier(game.rawValue + ".continue.delete")
+                    }.tint(.red).accessibilityIdentifier(game.rawValue + ".continue.delete")
                 }
             }
         }
@@ -160,14 +181,18 @@ struct ContinueGameRow<Label: View>: View {
                 if let deletionSession, model.deleteCurrentGame(game, expectedSessionID: deletionSession) { revealed = false }
                 deletionSession = nil
             }, onCancel: { deletionSession = nil }))
+        .onChange(of:confirmDelete) { _,presented in
+            if presented { touchObserver.suspend() } else { revealed = false; touchObserver.resume() }
+        }
     }
     private var continueButton: some View {
         Button {
-            guard !dragging, ProcessInfo.processInfo.systemUptime >= suppressContinueUntil,
+            guard touchObserver.allowsActivation, !dragging, ProcessInfo.processInfo.systemUptime >= suppressContinueUntil,
                   !confirmDelete, !model.navigationTouchLocked else { return }
             if revealed { revealed = false } else { action() }
         } label: { label.frame(maxWidth: .infinity).contentShape(Rectangle()) }
             .buttonStyle(.plain).accessibilityIdentifier(continueID)
+            .background(ContinueTouchMonitor(observer:touchObserver,enabled:!confirmDelete && !model.navigationTouchLocked))
     }
     private var customScrollRow: some View {
         HStack(spacing: 12) {
@@ -199,6 +224,7 @@ struct ContinueGameRow<Label: View>: View {
         guard !confirmDelete, !model.navigationTouchLocked else { return }
         model.preparePreviousSession(game)
         guard let session = model.sessionData.sessions[game] else { return }
+        touchObserver.suspend()
         deletionSession = session.id; confirmDelete = true
     }
 }

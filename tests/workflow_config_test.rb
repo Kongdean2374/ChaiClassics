@@ -213,7 +213,7 @@ check(invalid_ipad_phase.exitstatus == 64, 'invalid iPad phase fails before invo
 puts 'PASS: independent iPad screenshot workflow is manual, unsigned, standard-hosted, credential-free and retains partial results.'
 
 # v0.2.0 remains an explicit candidate release, never an ordinary-push upload.
-check(ci_triggers.dig('push', 'branches') == %w[main develop/0.2.0 develop/0.2.1 develop/0.2.2], 'isolated development pushes receive ordinary credential-free CI')
+check(ci_triggers.dig('push', 'branches') == %w[main develop/0.2.0 develop/0.2.1 develop/0.2.2 develop/0.3.0], 'isolated development pushes receive ordinary credential-free CI')
 check(!ci_script.include?('-only-testing:'), 'the complete CI UI phase cannot silently become a subset')
 check(ci_script.include?('Pro Max') && ci_script.include?('Plus'), 'full UI prefers a real phone window wide enough for 430pt coverage')
 [visual_job, ipad_job].each do |entry|

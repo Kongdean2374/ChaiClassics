@@ -21,7 +21,10 @@ public struct GomokuBoard: Codable, Equatable, Sendable {
     public var isValidSave: Bool {
         guard cells.count == 225, history.count <= 225, Set(history).count == history.count, history.allSatisfy(cells.indices.contains),
               cells.allSatisfy({ (0...2).contains($0) }), cells.filter({$0>0}).count == history.count else { return false }
-        return history.enumerated().allSatisfy { cells[$0.element] == $0.offset%2+1 } && currentPlayer.rawValue == history.count%2+1
+        guard history.enumerated().allSatisfy({ cells[$0.element] == $0.offset%2+1 }), currentPlayer.rawValue == history.count%2+1 else { return false }
+        var replay = Self()
+        for i in history { if !replay.place(i) { return false } }
+        return replay.cells==cells
     }
     @discardableResult public mutating func place(_ index: Int) -> Bool {
         guard cells.count == 225, !isFinished, cells.indices.contains(index), cells[index] == 0 else { return false }

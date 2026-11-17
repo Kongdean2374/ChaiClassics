@@ -119,6 +119,8 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         let result = XCTWaiter.wait(for: [ready], timeout: 10)
         if result != .completed { attachUIEvidence(app, name: "continue-delete-action-missing-" + game) }
         XCTAssertEqual(result, .completed, "A real left swipe must reveal the enabled Delete progress action.")
+        XCTAssertFalse(app.buttons[game+".session.pause"].exists,"Swiping Continue must never navigate into the game.")
+        XCTAssertFalse(app.buttons[game+".delete.confirm"].exists,"A swipe alone must not request deletion.")
         guard let action = continueDeleteAction(game, app: app) else {
             attachUIEvidence(app, name: "continue-delete-action-disappeared-" + game)
             XCTFail("The Continue deletion action disappeared before selection.")
@@ -195,6 +197,9 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         let shield = node(game + ".session.reviewBoard", app: app)
         XCTAssertTrue(shield.waitForExistence(timeout: 10))
         XCTAssertFalse(node(game + ".session.result", app: app).exists)
+        current.swipeRight()
+        XCTAssertTrue(current.exists,"A rightward swipe must stay on the menu.")
+        XCTAssertFalse(app.buttons[game+".session.pause"].exists)
         shield.tap()
         assertResult(game, app: app)
         XCTAssertEqual(node(game + ".session.result.elapsed", app: app).value as? String, elapsed)
@@ -812,11 +817,19 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         let current = app.buttons.matching(identifier: continueID(game)).firstMatch
         XCTAssertTrue(current.waitForExistence(timeout: 10), "Done must return to the game's menu.")
         XCTAssertFalse(node(game + ".session.result", app: app).exists)
+        let savedDetailBeforeRequest = current.label
         tapContinueDelete(game, current: current, app: app)
         XCTAssertTrue(app.buttons[game + ".delete.confirm"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons[game + ".delete.confirm"].isEnabled)
+        XCTAssertTrue(app.buttons[game + ".delete.cancel"].isEnabled)
         tap(game + ".delete.cancel", app: app)
         waitUI("Cancel must dismiss the actual deletion confirmation.") { !app.buttons[game + ".delete.confirm"].exists }
         XCTAssertTrue(current.exists, "Cancelling deletion must preserve the saved round.")
+        XCTAssertEqual(current.label,savedDetailBeforeRequest,"Requesting deletion must not change the saved progress.")
+        app.terminate(); app.launch()
+        openMenu(game,app:app)
+        XCTAssertTrue(current.waitForExistence(timeout:10),"Cancellation must preserve actual on-disk progress after a fresh process.")
+        XCTAssertEqual(current.label,savedDetailBeforeRequest)
         tapContinueDelete(game, current: current, app: app)
         let confirm = app.buttons[game + ".delete.confirm"]
         XCTAssertTrue(confirm.waitForExistence(timeout: 10)); confirm.doubleTap()

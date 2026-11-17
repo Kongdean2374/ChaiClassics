@@ -787,3 +787,5 @@
 "piece.shogi.14" = "Dragon";
 
 "expanded.undo" = "Undo";
+
+"expanded.shogi.declare" = "Declare entering-king win";

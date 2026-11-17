@@ -42,7 +42,16 @@ struct ExpandedStrategyView: View {
                     .accessibilityIdentifier(game.rawValue+".thinking")
                 if game == .shogi { shogiHand(.second) }
                 board
-                if game == .shogi { shogiHand(.first) }
+                if game == .shogi {
+                    shogiHand(.first)
+                    if case .shogi(let board) = save?.state, board.canDeclareEnteringKing {
+                        Button(model.t("expanded.shogi.declare")) {
+                            _ = model.editExpanded(game) { state in
+                                guard case .shogi(var b) = state, b.declareEnteringKing() else { return false }; state = .shogi(b); return true
+                            }
+                        }.buttonStyle(.borderedProminent).disabled(!humanTurn).accessibilityIdentifier("shogi.declare")
+                    }
+                }
                 Text(model.t(game == .gomoku || game == .reversi ? "expanded.strategy.place" : "expanded.strategy.select"))
                     .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 if case .reversi(let board) = save?.state {
