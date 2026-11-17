@@ -192,7 +192,9 @@ def select_device(inventory, target, device_name='auto'):
                     or not compatible(kind, runtime, existing=True)):
                 continue
             try:
-                udid = str(uuid.UUID(device.get('udid', '')))
+                # CoreSimulator/Xcode destinations use Apple's uppercase UUID
+                # spelling. UUID validation must not lowercase that identity.
+                udid = str(uuid.UUID(device.get('udid', ''))).upper()
             except (ValueError, AttributeError, TypeError):
                 continue
             candidates.append((runtime, kind, device.get('name'), udid))
@@ -295,7 +297,7 @@ def main(argv=None, runner=run_command, root=ROOT):
             except (OSError, subprocess.SubprocessError):
                 raise SelectionError('IPAD13_CREATE_FAILED', 'Local 13-inch iPad Pro simulator creation failed; no runtime download or fallback was attempted.') from None
             try:
-                report['device_udid'] = str(uuid.UUID(created))
+                report['device_udid'] = str(uuid.UUID(created)).upper()
             except (ValueError, TypeError, AttributeError):
                 raise SelectionError('IPAD13_CREATE_INVALID_UDID', 'Simulator creation did not return a valid simulator UUID.') from None
             report['created'] = True

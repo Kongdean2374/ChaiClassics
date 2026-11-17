@@ -22,6 +22,7 @@ AIR = selector.TYPE_PREFIX + 'iPad-Air-13-inch-M3'
 UDID4 = '11111111-1111-4111-8111-111111111111'
 UDID5 = '22222222-2222-4222-8222-222222222222'
 CREATED = '33333333-3333-4333-8333-333333333333'
+APPLE_UDID = 'CAAA601F-5038-46D8-BBF8-CA5E3BE47EC1'
 SHA = 'a' * 40
 
 
@@ -77,6 +78,12 @@ class SelectionTests(unittest.TestCase):
         value = inventory(kinds=[kind(), kind(PRO5, 'iPad Pro 13-inch (M5)')])
         value['devices'][runtime()['identifier']].append(device(PRO5, 'iPad Pro 13-inch (M5)', UDID5))
         self.assertEqual(selector.select_device(value, '17.0')['device_udid'], UDID5)
+
+    def test_existing_uuid_keeps_apple_uppercase_destination_identity(self):
+        for spelling in (APPLE_UDID, APPLE_UDID.lower()):
+            with self.subTest(spelling=spelling):
+                value = inventory(devices={runtime()['identifier']: [device(udid=spelling)]})
+                self.assertEqual(selector.select_device(value, '17.0')['device_udid'], APPLE_UDID)
 
     def test_beta_rc_seed_and_missing_build_are_never_stable(self):
         for candidate in (runtime('27.0', '24A5276f'), runtime('27.0', '24A50', 'iOS 27.0 Beta'),
@@ -244,6 +251,18 @@ class CliTests(unittest.TestCase):
         self.assertTrue(result['created'])
         self.assertEqual(result['device_udid'], CREATED)
         self.assertEqual(self.calls[-1], ['xcrun', 'simctl', 'create', 'iPad Pro 13-inch (M4) - ChaiClassics', PRO4, runtime()['identifier']])
+
+    def test_created_uuid_keeps_apple_uppercase_destination_identity(self):
+        for spelling in (APPLE_UDID, APPLE_UDID.lower()):
+            def command(arguments, timeout=60):
+                if arguments[1:3] == ['simctl', 'create']:
+                    return spelling
+                return self.runner(arguments, timeout)
+            with self.subTest(spelling=spelling):
+                status, result = self.invoke(inventory(devices={}), runner=command)
+                self.assertEqual(status, 0)
+                self.assertTrue(result['created'])
+                self.assertEqual(result['device_udid'], APPLE_UDID)
 
     def test_create_failure_timeout_and_bad_uuid_are_fixed_safe_diagnostics(self):
         for failure, expected in ((subprocess.CalledProcessError(1, ['xcrun'], stderr='PRIVATE_RAW_ERROR'), 'IPAD13_CREATE_FAILED'),
