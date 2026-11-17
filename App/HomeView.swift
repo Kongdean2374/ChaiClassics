@@ -3,7 +3,6 @@ import ChaiCore
 
 struct HomeView: View {
     @EnvironmentObject var model: AppModel
-    private let columns = Array(repeating: GridItem(.flexible(minimum: 0), spacing: 10, alignment: .top), count: GameRegistry.columns)
 
     var body: some View {
         NavigationStack {
@@ -14,18 +13,7 @@ struct HomeView: View {
                         Text(model.t("home.games"))
                             .font(.headline)
                             .accessibilityAddTraits(.isHeader)
-                        LazyVGrid(columns: columns, spacing: 14) {
-                            ForEach(GameRegistry.games) { game in
-                                NavigationLink(value: game.id) {
-                                    GameCard(game: game)
-                                }
-                                .buttonStyle(QuietPressStyle())
-                                .disabled(model.blocked.contains(game.id))
-                                .accessibilityLabel(cardLabel(game.id))
-                                .accessibilityIdentifier("game.\(game.id.rawValue)")
-                            }
-                        }
-                        .accessibilityIdentifier("home.threeColumns")
+                        CatalogGrid(items: GameCatalog.homeItems, identifier: "home")
                     }
                     HStack(alignment: .top, spacing: 7) {
                         Image(systemName: "tray.and.arrow.down")
@@ -39,25 +27,31 @@ struct HomeView: View {
                     .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("home.autosave")
                 }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
-                    .padding(.bottom, 28)
-                    .frame(maxWidth: 720)
-                    .frame(maxWidth: .infinity)
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 28)
+                .frame(maxWidth: 720)
+                .frame(maxWidth: .infinity)
             }
-                .background { GameCanvas() }
-                .navigationTitle(model.t("home.title"))
-                .navigationDestination(for: GameID.self) { id in
-                    switch id { case .sudoku: SudokuMenuView(); case .minesweeper: MinesMenuView(); case .sliding: SlidingMenuView() }
-                }
-                .toolbar {
-                    NavigationLink { SettingsView() } label: {
-                        Image(systemName: "gearshape")
-                            .symbolRenderingMode(.hierarchical)
+            .background { GameCanvas() }
+            .navigationTitle(model.t("home.title"))
+            .navigationDestination(for: CatalogItemID.self) { id in
+                if let item = GameCatalog.item(id) {
+                    switch item.kind {
+                    case let .playable(game): GameMenuDestination(game: game)
+                    case .comingSoon: ComingSoonView(item: item)
+                    case .folder: CatalogFolderView(folder: item)
                     }
-                    .accessibilityLabel(model.t("settings.title"))
-                    .accessibilityIdentifier("settings.open")
                 }
+            }
+            .toolbar {
+                NavigationLink { SettingsView() } label: {
+                    Image(systemName: "gearshape")
+                        .symbolRenderingMode(.hierarchical)
+                }
+                .accessibilityLabel(model.t("settings.title"))
+                .accessibilityIdentifier("settings.open")
+            }
         }
     }
 
@@ -74,60 +68,91 @@ struct HomeView: View {
                 .background(Color(.secondarySystemGroupedBackground).opacity(0.85), in: Capsule())
         }
     }
+}
 
-    private func cardLabel(_ id: GameID) -> String {
-        let summary = model.summary(id)
-        let status = model.t(model.blocked.contains(id) ? "storage.attention" : "status." + summary.state.rawValue)
-        let detail = model.blocked.contains(id) ? model.t("storage.preserved") : model.summaryDetail(summary)
-        return [model.gameTitle(id), status, detail].joined(separator: ", ")
+private struct GameMenuDestination: View {
+    let game: GameID
+    @ViewBuilder var body: some View {
+        switch game {
+        case .sudoku: SudokuMenuView()
+        case .minesweeper: MinesMenuView()
+        case .sliding: SlidingMenuView()
+        case .ticTacToe: TicTacToeMenuView()
+        case .connectFour: ConnectFourMenuView()
+        case .twentyFour: TwentyFourMenuView()
+        case .memory: MemoryMenuView()
+        case .maze: MazeMenuView()
+        }
     }
 }
 
-private struct GameCard: View {
-    let game: GameDescriptor
-    @EnvironmentObject var model: AppModel
+/// Cards contain only catalog information, including their VoiceOver labels.
+/// Progress and storage details belong to the corresponding game's menu.
+private struct CatalogGrid: View {
+    let items: [CatalogItem]
+    let identifier: String
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    private var columnCount: Int {
+        // At accessibility sizes a three-column phone card is narrower than a
+        // few large glyphs. Widen cards while keeping every name untruncated.
+        if dynamicTypeSize >= .accessibility4 { return 1 }
+        return dynamicTypeSize.isAccessibilitySize ? 2 : GameRegistry.columns
+    }
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.flexible(minimum: 0), spacing: 10, alignment: .top), count: columnCount)
+    }
+
+    var body: some View {
+        LazyVGrid(columns: columns, spacing: 14) {
+            ForEach(items) { item in
+                NavigationLink(value: item.id) {
+                    CatalogCard(item: item)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(QuietPressStyle())
+                .accessibilityLabel([model.t(item.titleKey), model.t(item.descriptionKey), model.t(item.availabilityKey)].joined(separator: ", "))
+                .accessibilityIdentifier(item.gameID.map { "game." + $0.rawValue } ?? "catalog." + item.id.rawValue)
+            }
+        }
+        .accessibilityIdentifier(identifier + (columnCount == 3 ? ".threeColumns" : ".accessibleColumns"))
+    }
+}
+
+private struct CatalogCard: View {
+    let item: CatalogItem
+    @EnvironmentObject private var model: AppModel
     @ScaledMetric(relativeTo: .subheadline) private var titleMinimumHeight: CGFloat = 42
     @ScaledMetric(relativeTo: .caption2) private var detailMinimumHeight: CGFloat = 54
-    private var summary: GameSummary { model.summary(game.id) }
-    private var tint: Color { GamePalette.tint(game.id) }
-    private var status: String { model.t(model.blocked.contains(game.id) ? "storage.attention" : "status." + summary.state.rawValue) }
-    private var detail: String { model.blocked.contains(game.id) ? model.t("storage.preserved") : model.summaryDetail(summary) }
-    private var statusColor: Color {
-        if model.blocked.contains(game.id) { return .orange }
-        switch summary.state {
-        case .notStarted: return .secondary
-        case .inProgress: return tint
-        case .completed: return .green
-        case .failed: return .orange
-        }
-    }
+    private var tint: Color { GamePalette.tint(item.accent) }
 
     var body: some View {
         VStack(spacing: 12) {
             GeometryReader { geometry in
-                GameArtwork(game: game.id, size: min(92, max(44, geometry.size.width - 4)))
+                CatalogArtwork(item: item, size: min(92, max(44, geometry.size.width - 4)))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .frame(height: 96)
             .accessibilityHidden(true)
 
-            Text(model.gameTitle(game.id))
+            Text(model.t(item.titleKey))
                 .font(.system(.subheadline, design: .rounded, weight: .semibold))
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, minHeight: titleMinimumHeight)
 
-            Text(status)
+            Text(model.t(item.availabilityKey))
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 7)
                 .padding(.vertical, 5)
-                .background(statusColor.opacity(0.11), in: Capsule())
+                .background(tint.opacity(0.11), in: Capsule())
 
-            Text(detail)
+            Text(model.t(item.descriptionKey))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -150,5 +175,76 @@ private struct GameCard: View {
                 .strokeBorder(tint.opacity(0.15), lineWidth: 1)
         }
         .shadow(color: .black.opacity(0.035), radius: 12, y: 5)
+    }
+}
+
+private struct CatalogFolderView: View {
+    let folder: CatalogItem
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                Text(model.t(folder.descriptionKey))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                CatalogGrid(items: GameCatalog.children(of: folder.id), identifier: folder.id.rawValue)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 20)
+            .frame(maxWidth: 720)
+            .frame(maxWidth: .infinity)
+        }
+        .background { GameCanvas() }
+        .navigationTitle(model.t(folder.titleKey))
+        .navigationBarTitleDisplayMode(.inline)
+        .localizedNavigation()
+        .accessibilityIdentifier("catalog.folder." + folder.id.rawValue)
+    }
+}
+
+private struct ComingSoonView: View {
+    let item: CatalogItem
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 22) {
+                CatalogArtwork(item: item, size: 112)
+                Text(model.t(item.titleKey))
+                    .font(.system(.title2, design: .rounded, weight: .bold))
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityIdentifier("comingSoon.title")
+                Text(model.t(item.descriptionKey))
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                Label(model.t("catalog.comingSoon.message"), systemImage: "clock")
+                    .font(.headline)
+                    .foregroundStyle(GamePalette.tint(item.accent))
+                    .padding(18)
+                    .frame(maxWidth: .infinity)
+                    .background(GamePalette.tint(item.accent).opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
+                    .accessibilityIdentifier("comingSoon.status")
+            }
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(24)
+            .frame(maxWidth: 540)
+            .frame(maxWidth: .infinity)
+        }
+        .background { GameCanvas() }
+        .navigationTitle(model.t(item.titleKey))
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { dismiss() } label: {
+                    Label(model.t("common.back"), systemImage: "chevron.left")
+                }.accessibilityIdentifier("comingSoon.back")
+            }
+        }
+        .accessibilityIdentifier("comingSoon." + item.id.rawValue)
     }
 }

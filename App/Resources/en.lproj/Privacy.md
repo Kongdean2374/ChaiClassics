@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Document version: 0.1.2
+Document version: 0.2.0
 
 ## Data the app actually handles
 
@@ -8,9 +8,11 @@ Chai Classics is a free, offline collection of classic games, with no ads, subsc
 
 ## Local progress and preferences
 
-Sudoku boards, pencil notes and completion history; Minesweeper mine positions, flags, revealed cells and time; and Sliding Puzzle tiles, moves and time are stored in the app’s storage on this device. Appearance, language, haptic and screen-awake preferences are stored separately in local settings. These records provide gameplay and offline continuation.
+Sudoku boards, pencil notes and completion history; Minesweeper mine positions, flags, revealed cells and time; and Sliding Puzzle tiles, moves and time are stored in the app’s storage on this device. Tic-tac-toe and Connect Four also store legal move histories, mode, AI difficulty and local match records. 24 Game stores its number cards, expression operations and solved count. Memory Match stores its shuffled deck and revealed and matched cards. Maze stores its generated walls, position and movement history. These five games also keep applicable move counts and elapsed time locally. Appearance, language, haptic and screen-awake preferences are stored separately in local settings. These records provide gameplay and offline continuation.
 
 Autosave is always enabled. The app keeps the previous complete save for recovery when possible. Files that cannot be read safely are preserved and protected from overwriting, rather than silently cleared.
+
+When you explicitly confirm recovery of an unreadable save, a local copy of that game’s files is kept before its active progress is reset. Other games are not changed. Saves written by a newer unsupported app version cannot be reset through this recovery control.
 
 ## System backups and Apple services
 

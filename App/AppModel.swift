@@ -8,11 +8,18 @@ final class AppModel: ObservableObject {
     @Published private(set) var sudoku = SudokuProgress()
     @Published private(set) var sliding: SlidingBoard?
     @Published private(set) var mines: MinesweeperBoard?
+    @Published private(set) var ticTacToe: TicTacToeBoard?
+    @Published private(set) var connectFour: ConnectFourBoard?
+    @Published private(set) var twentyFour: TwentyFourBoard?
+    @Published private(set) var memory: MemoryBoard?
+    @Published private(set) var maze: MazeBoard?
     @Published private(set) var puzzles: [SudokuPuzzle] = []
     @Published private(set) var preferences = AppPreferences()
     @Published var notice: Notice?
     @Published private(set) var blocked: Set<GameID> = []
+    @Published private(set) var newerSaves: Set<GameID> = []
     let store: SaveStore?
+    private var recovery: GameSaveRecovery?
     private let preferenceStore: PreferencesStore
     private var activeGame: GameID?
     private var sceneActive = true
@@ -37,6 +44,7 @@ final class AppModel: ObservableObject {
                     .appendingPathComponent("ChaiClassics", isDirectory: true)
             }
             store = try SaveStore(directory: directory)
+            recovery = GameSaveRecovery(directory: directory)
         } catch { store = nil; notice = .storageUnavailable; blocked = Set(GameID.allCases) }
         do {
             puzzles = try SudokuPuzzle.bundled()
@@ -48,21 +56,67 @@ final class AppModel: ObservableObject {
                 sudoku = saved
             }
             if store?.recoveredBackup == true { notice = .recovered(.sudoku) }
-        } catch { blocked.insert(.sudoku); notice = .unreadable(.sudoku) }
+        } catch { recordLoadFailure(error, game: .sudoku) }
         do {
             if let saved = try store?.load(MinesweeperBoard.self, namespace: "minesweeper") {
                 guard saved.isValidSave else { throw SaveStore.StoreError.corrupt }
                 mines = saved
             }
             if store?.recoveredBackup == true { notice = .recovered(.minesweeper) }
-        } catch { blocked.insert(.minesweeper); notice = .unreadable(.minesweeper) }
+        } catch { recordLoadFailure(error, game: .minesweeper) }
         do {
             if let saved = try store?.load(SlidingBoard.self, namespace: "sliding") {
                 guard saved.isValidSave else { throw SaveStore.StoreError.corrupt }
                 sliding = saved
             }
             if store?.recoveredBackup == true { notice = .recovered(.sliding) }
-        } catch { blocked.insert(.sliding); notice = .unreadable(.sliding) }
+        } catch { recordLoadFailure(error, game: .sliding) }
+        ticTacToe = restore(TicTacToeBoard.self, game: .ticTacToe) { $0.isValidSave }
+        connectFour = restore(ConnectFourBoard.self, game: .connectFour) { $0.isValidSave }
+        twentyFour = restore(TwentyFourBoard.self, game: .twentyFour) { $0.isValidSave }
+        memory = restore(MemoryBoard.self, game: .memory) { $0.isValidSave }
+        maze = restore(MazeBoard.self, game: .maze) { $0.isValidSave }
+    }
+
+    private func recordLoadFailure(_ error: Error, game: GameID) {
+        if let storeError = error as? SaveStore.StoreError,
+           case let .unsupportedVersion(version) = storeError, version > 1 { newerSaves.insert(game) }
+        blocked.insert(game); notice = .unreadable(game)
+    }
+
+    private func restore<T: Codable>(_ type: T.Type, game: GameID, validate: (T) -> Bool) -> T? {
+        guard let store else { return nil }
+        do {
+            guard let saved = try store.load(type, namespace: game.rawValue) else { return nil }
+            guard validate(saved) else { throw SaveStore.StoreError.corrupt }
+            if store.recoveredBackup { notice = .recovered(game) }
+            return saved
+        } catch { recordLoadFailure(error, game: game); return nil }
+    }
+
+    private func persist<T: Codable>(_ next: T, game: GameID, validate: (T) -> Bool) -> Bool {
+        guard !blocked.contains(game), let store, validate(next) else { return false }
+        do { try store.save(next, namespace: game.rawValue); return true }
+        catch { notice = .writeFailed; return false }
+    }
+
+    /// Called only by a confirmed recovery control; future schemas cannot be reset.
+    @discardableResult func recoverGame(_ game: GameID) -> Bool {
+        guard blocked.contains(game), !newerSaves.contains(game), let recovery else { return false }
+        do {
+            try recovery.quarantine(game)
+            switch game {
+            case .sudoku: sudoku = SudokuProgress()
+            case .minesweeper: mines = nil
+            case .sliding: sliding = nil
+            case .ticTacToe: ticTacToe = nil
+            case .connectFour: connectFour = nil
+            case .twentyFour: twentyFour = nil
+            case .memory: memory = nil
+            case .maze: maze = nil
+            }
+            blocked.remove(game); notice = nil; return true
+        } catch { notice = .writeFailed; return false }
     }
 
     var noticeText: String {
@@ -124,5 +178,46 @@ final class AppModel: ObservableObject {
         guard var board = sliding else { return false }
         let previous = board; change(&board)
         return board != previous && saveSliding(board)
+    }
+
+    @discardableResult func saveTicTacToe(_ next: TicTacToeBoard) -> Bool {
+        guard persist(next, game: .ticTacToe, validate: { $0.isValidSave }) else { return false }
+        ticTacToe = next; return true
+    }
+    @discardableResult func editTicTacToe(_ change: (inout TicTacToeBoard) -> Void) -> Bool {
+        guard var next = ticTacToe else { return false }; let previous = next; change(&next)
+        return next != previous && saveTicTacToe(next)
+    }
+    @discardableResult func saveConnectFour(_ next: ConnectFourBoard) -> Bool {
+        guard persist(next, game: .connectFour, validate: { $0.isValidSave }) else { return false }
+        connectFour = next; return true
+    }
+    @discardableResult func editConnectFour(_ change: (inout ConnectFourBoard) -> Void) -> Bool {
+        guard var next = connectFour else { return false }; let previous = next; change(&next)
+        return next != previous && saveConnectFour(next)
+    }
+    @discardableResult func saveTwentyFour(_ next: TwentyFourBoard) -> Bool {
+        guard persist(next, game: .twentyFour, validate: { $0.isValidSave }) else { return false }
+        twentyFour = next; return true
+    }
+    @discardableResult func editTwentyFour(_ change: (inout TwentyFourBoard) -> Void) -> Bool {
+        guard var next = twentyFour else { return false }; let previous = next; change(&next)
+        return next != previous && saveTwentyFour(next)
+    }
+    @discardableResult func saveMemory(_ next: MemoryBoard) -> Bool {
+        guard persist(next, game: .memory, validate: { $0.isValidSave }) else { return false }
+        memory = next; return true
+    }
+    @discardableResult func editMemory(_ change: (inout MemoryBoard) -> Void) -> Bool {
+        guard var next = memory else { return false }; let previous = next; change(&next)
+        return next != previous && saveMemory(next)
+    }
+    @discardableResult func saveMaze(_ next: MazeBoard) -> Bool {
+        guard persist(next, game: .maze, validate: { $0.isValidSave }) else { return false }
+        maze = next; return true
+    }
+    @discardableResult func editMaze(_ change: (inout MazeBoard) -> Void) -> Bool {
+        guard var next = maze else { return false }; let previous = next; change(&next)
+        return next != previous && saveMaze(next)
     }
 }

@@ -1,6 +1,6 @@
 # Support & Contact
 
-Document version: 0.1.2
+Document version: 0.2.0
 
 ## Questions and suggestions
 

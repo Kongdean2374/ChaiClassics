@@ -3,6 +3,7 @@ import Foundation
 public enum SessionState: String, Equatable, Sendable { case notStarted, inProgress, completed, failed }
 
 public struct GameSummary: Equatable, Sendable {
+    public static let empty = Self(state: .notStarted, detail: .none)
     public enum Detail: Equatable, Sendable {
         case none
         case sudoku(SudokuDifficulty, Int, Int, Int)

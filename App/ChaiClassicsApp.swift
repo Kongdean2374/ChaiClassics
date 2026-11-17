@@ -7,7 +7,7 @@ struct ChaiClassicsApp: App {
     @Environment(\.scenePhase) private var scenePhase
     var body: some Scene {
         WindowGroup {
-            HomeView().environmentObject(model)
+            HomeView().modifier(UITestDisplayOptions()).environmentObject(model)
                 .tint(GamePalette.tint(.sudoku))
                 .environment(\.locale, Locale(identifier: model.preferences.language.rawValue))
                 .preferredColorScheme(model.preferences.appearance == .system ? nil : model.preferences.appearance == .dark ? .dark : .light)

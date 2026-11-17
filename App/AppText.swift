@@ -21,6 +21,8 @@ extension AppModel {
         case .sudoku: return .sudoku(sudoku, catalog: puzzles)
         case .minesweeper: return .mines(mines)
         case .sliding: return .sliding(sliding)
+        // New games present their own session details after entering the menu.
+        default: return .empty
         }
     }
     func summaryDetail(_ summary: GameSummary) -> String {

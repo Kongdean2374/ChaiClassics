@@ -118,7 +118,11 @@ final class ChaiClassicsUITests: XCTestCase {
     func testHomeHasExactlyThreeColumns() {
         let app = launch("base")
         let cards = ["game.sudoku", "game.minesweeper", "game.sliding"].map { app.buttons[$0] }
-        for card in cards { XCTAssertTrue(card.waitForExistence(timeout: 10)); XCTAssertTrue(card.label.contains("尚未開始")) }
+        for card in cards {
+            XCTAssertTrue(card.waitForExistence(timeout: 10))
+            XCTAssertTrue(card.label.contains("可遊玩"))
+            XCTAssertFalse(card.label.contains("進行中"))
+        }
         XCTAssertEqual(cards[0].frame.minY, cards[1].frame.minY, accuracy: 2)
         XCTAssertEqual(cards[1].frame.minY, cards[2].frame.minY, accuracy: 2)
         XCTAssertLessThan(cards[0].frame.minX, cards[1].frame.minX)
@@ -194,9 +198,15 @@ final class ChaiClassicsUITests: XCTestCase {
     }
     func testLegacyFlagModeStillRevealsOnSingleTap() {
         let app = launch("legacy",legacy: true)
-        XCTAssertTrue(app.buttons["game.sliding"].label.contains("35"))
-        XCTAssertTrue(app.buttons["game.sudoku"].label.contains("001"))
-        XCTAssertTrue(app.buttons["game.sudoku"].label.contains("進行中"))
+        XCTAssertFalse(app.buttons["game.sliding"].label.contains("35"))
+        XCTAssertFalse(app.buttons["game.sudoku"].label.contains("001"))
+        XCTAssertFalse(app.buttons["game.sudoku"].label.contains("進行中"))
+        app.buttons["game.sliding"].tap()
+        XCTAssertTrue(app.buttons["sliding.continue"].label.contains("35"))
+        back(app)
+        app.buttons["game.sudoku"].tap()
+        XCTAssertTrue(app.buttons["sudoku.continue"].label.contains("001"))
+        back(app)
         app.buttons["game.minesweeper"].tap(); app.buttons["mines.continue"].tap()
         XCTAssertTrue(app.buttons["mines.cell.30"].label.contains("旗標"))
         let cell = app.buttons["mines.cell.40"]
@@ -261,11 +271,20 @@ final class ChaiClassicsUITests: XCTestCase {
         XCTAssertEqual(awake.value as? String, "1")
         screenshot(app, "settings-native-switches-changed")
         back(app)
-        XCTAssertTrue(app.buttons["game.sudoku"].label.contains("Easy 001"))
-        XCTAssertTrue(app.buttons["game.sliding"].label.contains("35 moves"))
+        XCTAssertFalse(app.buttons["game.sudoku"].label.contains("Easy 001"))
+        XCTAssertFalse(app.buttons["game.sliding"].label.contains("35 moves"))
+        app.buttons["game.sudoku"].tap()
+        XCTAssertTrue(app.buttons["sudoku.continue"].label.contains("Easy 001"))
+        back(app)
+        app.buttons["game.sliding"].tap()
+        XCTAssertTrue(app.buttons["sliding.continue"].label.contains("35 moves"))
+        back(app)
         screenshot(app,"home-en-dark")
         app.terminate(); app.launch()
-        XCTAssertTrue(app.buttons["game.sliding"].label.contains("35 moves"))
+        XCTAssertFalse(app.buttons["game.sliding"].label.contains("35 moves"))
+        app.buttons["game.sliding"].tap()
+        XCTAssertTrue(app.buttons["sliding.continue"].label.contains("35 moves"))
+        back(app)
         app.buttons["settings.open"].tap()
         XCTAssertTrue(app.segmentedControls["settings.appearance"].buttons["Dark"].isSelected)
         XCTAssertTrue(app.segmentedControls["settings.language"].buttons["English"].isSelected)

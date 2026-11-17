@@ -32,7 +32,7 @@ class AppResourceTests(unittest.TestCase):
         for language in ['zh-Hant','en']:
             for name in ['Privacy','Terms','Support']:
                 text=(ROOT/'App/Resources'/f'{language}.lproj/{name}.md').read_text()
-                self.assertGreater(len(text),400);self.assertIn('0.1.2',text)
+                self.assertGreater(len(text),400);self.assertIn('0.2.0',text)
                 self.assertIn('a090825159@icloud.com',text)
                 expected_path=('/en' if language=='en' else '')+'/'+name.lower()
                 routes={(urlsplit(url).scheme,urlsplit(url).netloc,urlsplit(url).path.rstrip('/'))
@@ -70,8 +70,8 @@ class AppResourceTests(unittest.TestCase):
             for file in ['Localizable.strings','InfoPlist.strings','Privacy.md','Terms.md','Support.md']:
                 self.assertIn(f'App/Resources/{language}.lproj/{file}',project)
         for file in (ROOT/'App').glob('*.swift'):self.assertIn('App/'+file.name,project)
-        self.assertIn('MARKETING_VERSION = 0.1.3',project)
-        self.assertIn('CHAI_RELEASE_VERSION = 0.1.3',project)
+        self.assertIn('MARKETING_VERSION = 0.2.0',project)
+        self.assertIn('CHAI_RELEASE_VERSION = 0.2.0',project)
         info=plistlib.loads((ROOT/'App/Info.plist').read_bytes())
         self.assertEqual(info['CFBundleLocalizations'],['zh-Hant','en'])
         self.assertEqual(info['CFBundleIdentifier'],'$(PRODUCT_BUNDLE_IDENTIFIER)')

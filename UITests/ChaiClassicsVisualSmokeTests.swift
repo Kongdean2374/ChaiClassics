@@ -297,7 +297,10 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier IN %@", cards.map(\.identifier))).count, 3)
         for card in cards {
             assertIPadVisible(card, app: app)
-            XCTAssertTrue(card.label.contains("進行中"))
+            XCTAssertTrue(card.label.contains("可遊玩"))
+            XCTAssertFalse(card.label.contains("進行中"))
+            XCTAssertFalse(card.label.contains("001"))
+            XCTAssertFalse(card.label.contains("35"))
         }
         XCTAssertEqual(cards[0].frame.minY, cards[1].frame.minY, accuracy: 2)
         XCTAssertEqual(cards[1].frame.minY, cards[2].frame.minY, accuracy: 2)
@@ -306,6 +309,43 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         assertIPadCaptureReady(app)
         screenshot(app, name: "01_iPad_Home")
         try attachIPadLayout(app, page: "Home", grid: cards, controls: [app.buttons["settings.open"]])
+
+        let expected = Set(["sudoku", "minesweeper", "sliding", "tictactoe", "connectfour", "twentyfour", "memory", "maze"].map { "game." + $0 }
+            + ["nonogram", "kakuro", "klotski", "gomoku", "reversi", "solitaire", "snake", "fallingblocks", "brickbreaker"].map { "catalog." + $0 })
+        var seen: Set<String> = []
+        for _ in 0..<8 {
+            let visible = app.frame.insetBy(dx: 0, dy: 50)
+            let entries = app.buttons.matching(NSPredicate(format: "identifier IN %@", Array(expected)))
+            for entry in entries.allElementsBoundByIndex where visible.contains(CGPoint(x: entry.frame.midX, y: entry.frame.midY)) {
+                XCTAssertFalse(entry.label.contains("進行中"))
+                XCTAssertTrue(entry.label.contains(entry.identifier.hasPrefix("game.") ? "可遊玩" : "尚未推出"))
+                seen.insert(entry.identifier)
+            }
+            if seen == expected { break }
+            app.swipeUp()
+        }
+        XCTAssertEqual(seen, expected, "All 17 iPad Home cards must be reachable by scrolling.")
+        screenshot(app, name: "v020-iPad-home-bottom")
+        let folder = app.buttons["catalog.solitaire"]
+        scrollFullyIntoView(folder, app: app); folder.tap()
+        let solitaire = ["klondike", "spider", "freecell", "pyramid", "tripeaks"].map { app.buttons["catalog." + $0] }
+        for card in solitaire {
+            scrollFullyIntoView(card, app: app)
+            assertIPadVisible(card, app: app)
+            XCTAssertTrue(card.label.contains("尚未推出"))
+        }
+        XCTAssertEqual(solitaire[0].frame.minY, solitaire[1].frame.minY, accuracy: 2)
+        XCTAssertEqual(solitaire[1].frame.minY, solitaire[2].frame.minY, accuracy: 2)
+        XCTAssertLessThan(solitaire[0].frame.minX, solitaire[1].frame.minX)
+        XCTAssertLessThan(solitaire[1].frame.minX, solitaire[2].frame.minX)
+        screenshot(app, name: "v020-iPad-solitaire")
+        solitaire[0].tap()
+        XCTAssertTrue(app.staticTexts["comingSoon.title"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["comingSoon.title"].label, "經典接龍")
+        let status = app.descendants(matching: .any).matching(identifier: "comingSoon.status").firstMatch
+        XCTAssertTrue(status.label.contains("尚未推出"))
+        screenshot(app, name: "v020-iPad-coming-soon")
+        app.buttons["comingSoon.back"].tap(); back(app)
     }
 
     func testIPadSudokuScreenshot() throws {

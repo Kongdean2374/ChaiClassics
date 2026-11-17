@@ -12,12 +12,24 @@ enum GamePalette {
     private static let sliding = Color(uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark ? UIColor(red: 0.97, green: 0.73, blue: 0.40, alpha: 1) : UIColor(red: 0.61, green: 0.31, blue: 0.02, alpha: 1)
     })
-    static func tint(_ game: GameID) -> Color {
-        switch game {
-        case .sudoku: return sudoku
-        case .minesweeper: return mines
-        case .sliding: return sliding
+    private static func adaptive(_ light: UIColor, _ dark: UIColor) -> Color {
+        Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? dark : light })
+    }
+    static func tint(_ accent: CatalogAccent) -> Color {
+        switch accent {
+        case .violet: return sudoku
+        case .jade: return mines
+        case .amber: return sliding
+        case .rose: return adaptive(UIColor(red: 0.66, green: 0.18, blue: 0.40, alpha: 1), UIColor(red: 1, green: 0.63, blue: 0.77, alpha: 1))
+        case .blue: return adaptive(UIColor(red: 0.15, green: 0.36, blue: 0.69, alpha: 1), UIColor(red: 0.55, green: 0.75, blue: 1, alpha: 1))
+        case .coral: return adaptive(UIColor(red: 0.68, green: 0.27, blue: 0.16, alpha: 1), UIColor(red: 1, green: 0.68, blue: 0.53, alpha: 1))
+        case .teal: return adaptive(UIColor(red: 0.08, green: 0.43, blue: 0.49, alpha: 1), UIColor(red: 0.44, green: 0.83, blue: 0.89, alpha: 1))
+        case .indigo: return adaptive(UIColor(red: 0.34, green: 0.31, blue: 0.67, alpha: 1), UIColor(red: 0.73, green: 0.70, blue: 1, alpha: 1))
+        case .slate: return adaptive(UIColor(red: 0.31, green: 0.36, blue: 0.44, alpha: 1), UIColor(red: 0.72, green: 0.77, blue: 0.85, alpha: 1))
         }
+    }
+    static func tint(_ game: GameID) -> Color {
+        tint(GameCatalog.item(for: game)?.accent ?? .violet)
     }
 }
 
@@ -39,6 +51,12 @@ struct GameArtwork: View {
     private var tint: Color { GamePalette.tint(game) }
     var body: some View {
         Canvas { context, bounds in
+            if game != .sudoku && game != .minesweeper && game != .sliding {
+                var symbol = context.resolve(Image(systemName: GameCatalog.item(for: game)?.symbol ?? "square.grid.3x3"))
+                symbol.shading = .color(tint)
+                context.draw(symbol, in: CGRect(origin: .zero, size: bounds).insetBy(dx: bounds.width * 0.22, dy: bounds.height * 0.22))
+                return
+            }
             let inset = bounds.width * 0.17
             let gap = bounds.width * 0.035
             let side = (bounds.width - inset * 2 - gap * 2) / 3
@@ -73,6 +91,29 @@ struct GameArtwork: View {
     }
 }
 
+/// Catalog previews use the same rounded vector-art tiles as playable games.
+/// No remote artwork or board state is involved.
+struct CatalogArtwork: View {
+    let item: CatalogItem
+    var size: CGFloat = 72
+    private var tint: Color { GamePalette.tint(item.accent) }
+
+    @ViewBuilder var body: some View {
+        if let game = item.gameID {
+            GameArtwork(game: game, size: size)
+        } else {
+            Image(systemName: item.symbol)
+                .font(.system(size: size * 0.42, weight: .medium))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(tint)
+                .frame(width: size, height: size)
+                .background(LinearGradient(colors: [tint.opacity(0.12), tint.opacity(0.035)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: size * 0.25))
+                .overlay(RoundedRectangle(cornerRadius: size * 0.25).strokeBorder(tint.opacity(0.16), lineWidth: 1))
+                .accessibilityHidden(true)
+        }
+    }
+}
+
 struct QuietPressStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func makeBody(configuration: Configuration) -> some View {
@@ -88,14 +129,19 @@ struct GameIntroHeader: View {
     let title: String
     let subtitle: String
     var body: some View {
-        HStack(alignment: .center, spacing: 16) {
-            GameArtwork(game: game, size: 62)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title).font(.system(.title3, design: .rounded, weight: .bold)).foregroundStyle(.primary)
-                Text(subtitle).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 16) {
+                GameArtwork(game: game, size: 62)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(title).font(.system(.title3, design: .rounded, weight: .bold)).foregroundStyle(.primary)
+                    Text(subtitle).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
-        }.padding(.vertical, 6).accessibilityElement(children: .contain)
+            .padding(.vertical, 6)
+            .accessibilityElement(children: .contain)
+            GameStorageRecoveryView(game: game)
+        }
     }
 }
 
