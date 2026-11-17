@@ -177,7 +177,6 @@ struct MemoryPlayView: View {
                             }
                         }.id(board.seed).padding(4)
                             .background(GameBoardSurface(game: .memory, cornerRadius: 18))
-                            .accessibilityIdentifier("memory.board")
                     }
                     Text(model.t("memory.controls")).font(.caption).foregroundStyle(.secondary)
                         .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)

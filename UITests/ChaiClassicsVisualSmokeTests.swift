@@ -426,11 +426,31 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         app.buttons["sudoku.erase"].tap()
         XCTAssertEqual(empty.value as? String, "空白")
         assertIPadPauseResume(app, prefix: "sudoku", firstCell: "sudoku.cell.0")
-        cancelIPadRestart(app, prefix: "sudoku")
+        let preservedNotes = app.buttons["sudoku.cell.1"].value as? String
+        XCTAssertTrue(preservedNotes?.contains("2, 7") == true)
+        let restart = app.buttons["sudoku.restart"]
+        assertIPadVisible(restart, app: app, toolbar: true); restart.tap()
+        let confirm = app.buttons.matching(identifier: "sudoku.confirmRestart").firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        attachUIEvidence(app, name: "v021-iPad-sudoku-restart-before-cancel")
+        let cancel = app.buttons.matching(NSPredicate(format: "label == %@", "取消")).firstMatch
+        if cancel.exists && cancel.isHittable {
+            cancel.tap()
+        } else {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.04, dy: 0.94)).tap()
+        }
+        // The recorded outside tap dismissed the popup, but the five-second
+        // waiter interrupted a slow remote AX query. Keep the real dismissal
+        // requirement while allowing that query to complete on this device.
+        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: confirm)
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 15), .completed)
+        XCTAssertFalse(confirm.exists)
         XCTAssertEqual(seededBlueDigit.value as? String, "4")
         XCTAssertEqual(empty.value as? String, "空白")
+        XCTAssertEqual(app.buttons["sudoku.cell.1"].value as? String, preservedNotes)
         XCTAssertFalse(app.staticTexts["sudoku.complete"].exists)
         assertIPadCaptureReady(app, prefix: "sudoku")
+        attachUIEvidence(app, name: "v021-iPad-sudoku-restart-cancelled")
         screenshot(app, name: "02_iPad_Sudoku")
         try attachIPadLayout(app, page: "Sudoku", grid: corners,
                              controls: digits + [app.segmentedControls["sudoku.tools"], app.buttons["sudoku.erase"], app.buttons["sudoku.pause"], app.buttons["sudoku.restart"], app.buttons["navigation.back"]])
