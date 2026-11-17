@@ -1,0 +1,199 @@
+name: Original CI Artifact Diagnostics
+on:
+  workflow_dispatch:
+  push:
+    branches: [diagnostics/ci-artifacts]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  transport-original:
+    if: (github.event_name == 'workflow_dispatch' || github.event_name == 'push') && github.repository == 'Kongdean2374/ChaiClassics' && github.ref == 'refs/heads/diagnostics/ci-artifacts'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify, preserve and split the original private CI artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          umask 077
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, shutil, stat, subprocess, sys, zipfile
+
+          REPO = 'Kongdean2374/ChaiClassics'
+          ARTIFACT = 14312138313
+          RUN = 44039807203
+          COMMIT = '6c28e03eb610afa4caee39c844cf3acacdb1774f'
+          SIZE = 973526985
+          DIGEST = 'c558835b027c21875d74b1c693a62e7949bd2f4ef4d8e03a861d5b0f160ce864'
+          MIB = 1024 * 1024
+          PART_SIZE = 400 * MIB
+          work = pathlib.Path(os.environ['RUNNER_TEMP']) / 'chai-original-ci-artifact'
+          work.mkdir(mode=0o700, exist_ok=False)
+          diagnostics = work / 'diagnostics'
+          diagnostics.mkdir(mode=0o700)
+          parts = work / 'parts'
+          parts.mkdir(mode=0o700)
+
+          def require(condition, label):
+              if not condition:
+                  raise ValueError(label)
+
+          def digest_file(path):
+              digest = hashlib.sha256()
+              with path.open('rb') as stream:
+                  for block in iter(lambda: stream.read(8 * MIB), b''):
+                      digest.update(block)
+              return digest.hexdigest()
+
+          try:
+              require(os.environ['GITHUB_REPOSITORY'] == REPO, 'Unexpected repository')
+              require(os.environ['GITHUB_REF'] == 'refs/heads/diagnostics/ci-artifacts', 'Unexpected branch')
+              response = subprocess.run(['gh', 'api', f'repos/{REPO}/actions/artifacts/{ARTIFACT}'],
+                                        check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
+              meta = json.loads(response.stdout)
+              source = meta['workflow_run']
+              require(meta['id'] == ARTIFACT and meta['name'] == 'test-results', 'Unexpected artifact identity')
+              require(meta['expired'] is False and meta['size_in_bytes'] == SIZE, 'Expired or wrong-size artifact')
+              require(meta.get('digest') == 'sha256:' + DIGEST, 'Unexpected source artifact digest')
+              require(source['id'] == RUN and source['head_sha'] == COMMIT, 'Unexpected source run or commit')
+              require(str(source['repository_id']) == os.environ['GITHUB_REPOSITORY_ID'] and
+                      source['head_repository_id'] == source['repository_id'], 'Unexpected source repository')
+
+              archive = work / 'original-test-results.zip'
+              with archive.open('xb') as output:
+                  subprocess.run(['gh', 'api', f'repos/{REPO}/actions/artifacts/{ARTIFACT}/zip'],
+                                 check=True, stdout=output, stderr=subprocess.PIPE, timeout=300)
+              require(archive.stat().st_size == SIZE, 'Downloaded archive size mismatch')
+              require(digest_file(archive) == DIGEST, 'Downloaded ORIGINAL ZIP SHA-256 mismatch')
+
+              # These are byte-for-byte contiguous slices of the verified ZIP.
+              part_records = []
+              with archive.open('rb') as original:
+                  index = 1
+                  while True:
+                      block = original.read(8 * MIB)
+                      if not block:
+                          break
+                      part = parts / f'original-test-results.part-{index:03d}.bin'
+                      count = 0
+                      digest = hashlib.sha256()
+                      with part.open('xb') as output:
+                          while block:
+                              output.write(block)
+                              digest.update(block)
+                              count += len(block)
+                              if count == PART_SIZE:
+                                  break
+                              block = original.read(min(8 * MIB, PART_SIZE - count))
+                      part_records.append({'file': part.name, 'size_bytes': count, 'sha256': digest.hexdigest()})
+                      index += 1
+              require(len(part_records) == 3 and sum(p['size_bytes'] for p in part_records) == SIZE,
+                      'Unexpected original ZIP partitioning')
+
+              # Only existing original diagnostics are copied; no screenshots,
+              # summaries, logs or XCTest outcomes are regenerated or altered.
+              selected = []
+              total = 0
+              with zipfile.ZipFile(archive) as bundle:
+                  entries = bundle.infolist()
+                  require(len(entries) <= 100000, 'Too many ZIP entries')
+                  seen = set()
+                  for info in entries:
+                      path = pathlib.PurePosixPath(info.filename)
+                      require(not path.is_absolute() and '..' not in path.parts and
+                              '\\' not in info.filename and ':' not in info.filename and
+                              '\x00' not in info.filename, 'Unsafe ZIP path')
+                      require(info.filename not in seen, 'Duplicate ZIP path')
+                      seen.add(info.filename)
+                      require(not stat.S_ISLNK(info.external_attr >> 16), 'ZIP symlink rejected')
+                      if info.is_dir():
+                          continue
+                      suffix = path.suffix.lower()
+                      screenshots = len(path.parts) == 3 and path.parts[:2] == ('build', 'ui-screenshots')
+                      root_report = info.filename in {
+                          'ui-selection.json', 'sudoku-verification.json',
+                          'build/UITests-summary.json', 'build/UITests.log', 'build/ui-scope-plan.json'
+                      }
+                      if not (root_report or screenshots and suffix in {'.png', '.txt', '.json'}):
+                          continue
+                      limit = {'.png': 48 * MIB, '.txt': 16 * MIB, '.json': 16 * MIB, '.log': 64 * MIB}[suffix]
+                      require(0 <= info.file_size <= limit, 'Original diagnostic exceeds per-file bound')
+                      total += info.file_size
+                      require(total <= 320 * MIB, 'Original diagnostics exceed aggregate bound')
+                      target = diagnostics.joinpath(*path.parts)
+                      target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+                      copied = 0
+                      digest = hashlib.sha256()
+                      with bundle.open(info) as source_file, target.open('xb') as destination:
+                          while block := source_file.read(MIB):
+                              copied += len(block)
+                              require(copied <= limit and copied <= info.file_size, 'ZIP member exceeded declared bound')
+                              digest.update(block)
+                              destination.write(block)
+                      require(copied == info.file_size, 'Incomplete original ZIP member')
+                      selected.append({'original_zip_path': info.filename, 'size_bytes': copied, 'sha256': digest.hexdigest()})
+              require((diagnostics / 'build/ui-screenshots/manifest.json').is_file(), 'Original screenshot manifest missing')
+              require((diagnostics / 'build/UITests-summary.json').is_file(), 'Original XCTest summary missing')
+              require((diagnostics / 'build/UITests.log').is_file(), 'Original XCTest log missing')
+              manifest = {
+                  'purpose': 'Transport metadata only; extracted diagnostic contents and original ZIP bytes are unchanged.',
+                  'source_repository': REPO, 'source_run_id': RUN, 'source_commit': COMMIT,
+                  'source_artifact_id': ARTIFACT, 'original_zip_size_bytes': SIZE,
+                  'original_zip_sha256': DIGEST, 'parts_in_order': part_records,
+                  'original_diagnostic_files': selected, 'original_diagnostic_total_bytes': total
+              }
+              (diagnostics / 'original-transport-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+              print(json.dumps({'source_run_id': RUN, 'source_commit': COMMIT, 'source_artifact_id': ARTIFACT,
+                                'original_zip_sha256': DIGEST, 'original_zip_size_bytes': SIZE,
+                                'part_count': len(part_records), 'diagnostic_file_count': len(selected),
+                                'diagnostic_total_bytes': total}))
+          except Exception as error:
+              # Never echo subprocess stderr, metadata download URLs, tokens or
+              # signed redirect URLs, even when GitHub/Azure rejects a request.
+              print('Original artifact verification/transport preparation failed: ' + type(error).__name__, file=sys.stderr)
+              sys.exit(1)
+          PY
+      - name: Upload bounded unchanged original diagnostics
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Original-Test-Diagnostics
+          path: ${{ runner.temp }}/chai-original-ci-artifact/diagnostics/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload original ZIP bytes part 001 of 003
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Original-Test-ZIP-Part-001
+          path: ${{ runner.temp }}/chai-original-ci-artifact/parts/original-test-results.part-001.bin
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload original ZIP bytes part 002 of 003
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Original-Test-ZIP-Part-002
+          path: ${{ runner.temp }}/chai-original-ci-artifact/parts/original-test-results.part-002.bin
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload original ZIP bytes part 003 of 003
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Original-Test-ZIP-Part-003
+          path: ${{ runner.temp }}/chai-original-ci-artifact/parts/original-test-results.part-003.bin
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
+      - name: Always remove private original ZIP and transport files
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, shutil
+          shutil.rmtree(pathlib.Path(os.environ['RUNNER_TEMP']) / 'chai-original-ci-artifact', ignore_errors=True)
+          PY
