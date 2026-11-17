@@ -159,17 +159,27 @@ ipad_triggers = ipad['on'] || ipad[true]
 check(ipad['name'] == 'iPad Screenshots' && ipad_triggers.keys == ['workflow_dispatch'], 'iPad screenshots have an independent manual entry point')
 check(ipad_job.fetch('if').include?("github.ref == 'refs/heads/main'") && ipad_job.fetch('if').include?("github.event_name == 'workflow_dispatch'"), 'iPad screenshots only trusted manual main')
 check(ipad.fetch('permissions') == {'contents' => 'read'} && !ipad_job.key?('environment') && !ipad_job.key?('secrets'), 'iPad screenshots use no signing environment or repository write permission')
-check(ipad_triggers.dig('workflow_dispatch', 'inputs', 'runner', 'options') == %w[macos-15-intel macos-15], 'iPad runner choices contain only standard hosted pools')
+check(ipad_triggers.dig('workflow_dispatch', 'inputs', 'runner', 'options') == %w[macos-15 macos-15-intel], 'iPad runner choices contain only standard hosted pools')
+check(ipad_triggers.dig('workflow_dispatch', 'inputs', 'runner', 'default') == 'macos-15', 'iPad screenshots default to the measured faster standard ARM pool')
 check(ipad_job['runs-on'] == "${{ inputs.runner == 'macos-15' && 'macos-15' || 'macos-15-intel' }}", 'arbitrary runner inputs cannot select paid labels')
 ipad_source = File.read(File.join(root, '.github/workflows/ipad-screenshots.yml'))
 check(!ipad_source.match?(/secrets\.|run_signing_lane|fastlane|upload_to_testflight|MATCH_PASSWORD|ASC_API_KEY/), 'iPad screenshots cannot access signing credentials or publish an app')
 ipad_steps = ipad_job.fetch('steps')
+boot_step = ipad_steps.find { |step| step['id'] == 'boot' }
+test_step = ipad_steps.find { |step| step['id'] == 'ui' }
+check(boot_step && boot_step['run'] == 'bash scripts/ipad_screenshots.sh boot' && boot_step['timeout-minutes'] == 10, 'cold iPad startup has its own bounded step')
+check(test_step && test_step['run'] == 'bash scripts/ipad_screenshots.sh test' && test_step['timeout-minutes'] == 25, 'XCTest keeps a separate timeout for execution and xcresult finalization')
+check(ipad_steps.index(boot_step) < ipad_steps.index(test_step), 'the selected iPad boots before XCTest starts')
 checkout = ipad_steps.find { |step| step.fetch('uses', '').start_with?('actions/checkout@') }
 check(checkout.dig('with', 'persist-credentials') == false, 'iPad checkout does not persist credentials')
 %w[export].each { |id| check(ipad_steps.find { |step| step['id'] == id }['if'] == 'always()', 'iPad diagnostics survive test failure') }
 artifact = ipad_steps.find { |step| step.fetch('uses', '').start_with?('actions/upload-artifact@') }
 check(artifact['if'] == 'always()' && artifact.dig('with', 'name') == 'ChaiClassics-iPad-AppStore-Screenshots', 'iPad artifact name and partial-failure preservation are fixed')
-check(artifact.dig('with', 'path') == 'build/ipad-screenshots', 'iPad artifact excludes unrelated derived data and signing paths')
+artifact_paths = artifact.dig('with', 'path').lines.map(&:strip).reject(&:empty?)
+check(artifact_paths.include?('build/ipad-screenshots/*.png') && artifact_paths.include?('build/ipad-screenshots/*.json') && artifact_paths.include?('build/ipad-screenshots/*.md'), 'the mobile-download artifact includes native PNGs, device metadata and reports')
+check(artifact_paths.all? { |path| path.start_with?('build/ipad-screenshots/') } && artifact_paths.none? { |path| path.include?('xcresult') || path.include?('DerivedData') }, 'the screenshot artifact excludes large XCTest movies, unrelated derived data and signing paths')
+result_artifact = ipad_steps.find { |step| step.dig('with', 'name') == 'ChaiClassics-iPad-XCTest-Results' }
+check(result_artifact && result_artifact['if'] == 'always()' && result_artifact.dig('with', 'path') == 'build/ipad-screenshots/IPadScreenshots.xcresult', 'the complete xcresult remains available in a separate artifact even after UI failure')
 ipad_script = File.read(File.join(root, 'scripts/ipad_screenshots.sh'))
 check(ipad_script.include?('-sdk iphonesimulator') && ipad_script.include?('CODE_SIGNING_ALLOWED=NO') && ipad_script.include?('test-without-building'), 'iPad tests execute an unsigned Simulator build')
 %w[Home Sudoku Minesweeper SlidingPuzzle].each do |game|

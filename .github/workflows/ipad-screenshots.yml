@@ -6,9 +6,9 @@ on:
         description: Standard macOS runner (no paid larger runners)
         type: choice
         options:
-          - macos-15-intel
           - macos-15
-        default: macos-15-intel
+          - macos-15-intel
+        default: macos-15
       device_name:
         description: Exact installed 13-inch iPad Pro name, or auto
         type: string
@@ -20,7 +20,7 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
     # Map inputs to standard hosted pools; arbitrary labels cannot select paid hosts.
     runs-on: ${{ inputs.runner == 'macos-15' && 'macos-15' || 'macos-15-intel' }}
-    timeout-minutes: 40
+    timeout-minutes: 55
     env:
       CHAI_IPAD_REQUESTED_RUNNER: ${{ inputs.runner }}
       CHAI_IPAD_DEVICE_NAME: ${{ inputs.device_name }}
@@ -44,9 +44,13 @@ jobs:
         id: build
         timeout-minutes: 15
         run: bash scripts/ipad_screenshots.sh build
-      - name: Boot portrait iPad and run four real UI screenshot tests
+      - name: Boot the selected 13-inch iPad Simulator
+        id: boot
+        timeout-minutes: 10
+        run: bash scripts/ipad_screenshots.sh boot
+      - name: Run four portrait iPad UI screenshot tests
         id: ui
-        timeout-minutes: 20
+        timeout-minutes: 25
         run: bash scripts/ipad_screenshots.sh test
       - name: Export XCTest screenshots and diagnostics
         id: export
@@ -79,6 +83,22 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ChaiClassics-iPad-AppStore-Screenshots
-          path: build/ipad-screenshots
+          path: |
+            build/ipad-screenshots/*.png
+            build/ipad-screenshots/*.json
+            build/ipad-screenshots/*.md
+            build/ipad-screenshots/*.txt
+            build/ipad-screenshots/*.log
+            build/ipad-screenshots/attachments/*.png
+            build/ipad-screenshots/attachments/*.json
+            build/ipad-screenshots/attachments/*.txt
           if-no-files-found: error
+          retention-days: 14
+      - name: Preserve the full XCTest bundle separately
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ChaiClassics-iPad-XCTest-Results
+          path: build/ipad-screenshots/IPadScreenshots.xcresult
+          if-no-files-found: warn
           retention-days: 14

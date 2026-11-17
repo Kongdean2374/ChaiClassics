@@ -2,12 +2,12 @@
 set -euo pipefail
 CHAI_IPAD_PHASE="${1:-}"
 if (( $# != 1 )); then
-  echo 'Usage: scripts/ipad_screenshots.sh [build|test|export]' >&2
+  echo 'Usage: scripts/ipad_screenshots.sh [build|boot|test|export]' >&2
   exit 64
 fi
 case "$CHAI_IPAD_PHASE" in
-  build|test|export) ;;
-  *) echo 'Usage: scripts/ipad_screenshots.sh [build|test|export]' >&2; exit 64 ;;
+  build|boot|test|export) ;;
+  *) echo 'Usage: scripts/ipad_screenshots.sh [build|boot|test|export]' >&2; exit 64 ;;
 esac
 CHAI_IPAD_OUTPUT=build/ipad-screenshots
 CHAI_IPAD_RESULT="$CHAI_IPAD_OUTPUT/IPadScreenshots.xcresult"
@@ -41,6 +41,14 @@ if not re.fullmatch(r'[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}',udid
 print(udid)
 PY
 )
+if [[ "$CHAI_IPAD_PHASE" == boot ]]; then
+  # Keep first-boot migration outside the test timeout, so a cold simulator
+  # cannot interrupt xcresult finalization after otherwise completed cases.
+  xcrun simctl bootstatus "$CHAI_IPAD_UDID" -b 2>&1 | tee "$CHAI_IPAD_OUTPUT/simulator-boot.log"
+  open -a Simulator --args -CurrentDeviceUDID "$CHAI_IPAD_UDID"
+  xcrun simctl ui "$CHAI_IPAD_UDID" appearance dark
+  exit 0
+fi
 CHAI_IPAD_ARCH=$(uname -m)
 CHAI_IPAD_ARGS=(-project ChaiClassics.xcodeproj -scheme ChaiClassics -sdk iphonesimulator \
   -destination "platform=iOS Simulator,arch=$CHAI_IPAD_ARCH,id=$CHAI_IPAD_UDID" \
@@ -49,9 +57,6 @@ CHAI_IPAD_ARGS=(-project ChaiClassics.xcodeproj -scheme ChaiClassics -sdk iphone
 if [[ "$CHAI_IPAD_PHASE" == build ]]; then
   xcodebuild "${CHAI_IPAD_ARGS[@]}" build-for-testing 2>&1 | tee "$CHAI_IPAD_OUTPUT/build.log"
 else
-  xcrun simctl bootstatus "$CHAI_IPAD_UDID" -b 2>&1 | tee "$CHAI_IPAD_OUTPUT/simulator-boot.log"
-  open -a Simulator --args -CurrentDeviceUDID "$CHAI_IPAD_UDID"
-  xcrun simctl ui "$CHAI_IPAD_UDID" appearance dark
   # Reuse the existing test target, helpers and isolated v0.1.0 seed data. Four
   # independent cases retain other screens when one game's assertions fail.
   xcodebuild "${CHAI_IPAD_ARGS[@]}" -resultBundlePath "$CHAI_IPAD_RESULT" \
