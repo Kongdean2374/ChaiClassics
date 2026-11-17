@@ -21,8 +21,21 @@ The ledger records actual current case counts separately from retained per-case
 run/SHA/fingerprint provenance. Partial coverage is useful successful CI output;
 `complete=false` cannot authorize TestFlight. The candidate verifier reloads the real
 GitHub jobs and digest-verified original XCTest log/summary and rebuilds every claim.
-Final iPhone Visual Smoke and iPad 4+5 evidence must still use the target SHA. The
-signed TestFlight upload job remains unchanged, behind the complete candidate gate.
+Final iPhone Visual Smoke and iPad 4+5 evidence must use the target application and
+XCTest bytes. A separate narrow exception retains their original source SHA when
+the only intervening changes are the two pure evidence readers, documentation or
+tooling tests. The verifier checks ancestry and every other file's exact bytes and
+mode, including all App/Core/UI tests/helpers, assets, project, execution scripts,
+workflows and signing code. The proof records both original source and target SHA;
+an App or UI test edit cannot use this exception. The signed TestFlight upload job
+remains unchanged, behind the complete candidate gate.
+
+Mixed-case dependency profiles are bound to their exact test-body SHA-256. An
+edited or unknown body falls back to all games. All Core files remain shared,
+because AppModel restores all game types at startup. Game-specific view changes
+can preserve unrelated passes; shared helpers, preferences, clocks and resources
+still invalidate their dependents. Source ledgers are indexes only: their claimed
+passes and fingerprints are always rebuilt from actual raw results and Git trees.
 
 The historical v0.2.0 schema-2 helper-only proof is preserved as a separate narrow
 verification path. It cannot authorize application changes.

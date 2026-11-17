@@ -113,6 +113,36 @@ class CandidateVerificationTests(unittest.TestCase):
         with mock.patch.object(scoped.historical, 'git_tree', return_value=source), mock.patch.object(scoped.historical, 'load_results', return_value=(counts, actual)):
             with self.assertRaisesRegex(candidate.CandidateError, 'partial'): self.verify()
 
+    def test_scoped_gate_retains_original_screenshot_sha_only_for_proven_tooling_equivalence(self):
+        source, counts, actual = self.prepare_scoped_evidence()
+        for path in ['App/Info.plist', 'Core/SaveStore.swift', 'Package.swift',
+                     'ChaiClassics.xcodeproj/project.pbxproj', 'scripts/ci.sh', 'fastlane/Fastfile']:
+            source[path] = ('100644', ('protected:' + path).encode())
+        source['scripts/verify_candidate.py'] = ('100644', b'new evidence reader')
+        older = copy.deepcopy(source)
+        older['scripts/verify_candidate.py'] = ('100644', b'old evidence reader')
+        prior_sha = 'b' * 40
+        evidence = scoped.make_evidence(self.sha, self.runs['ci'], 'full', counts, actual, source, [])
+        self.responses[f'repos/{self.repo}/actions/artifacts/{self.runs["ci"] * 10}/zip'] = self.archive('ci', evidence=evidence)
+        for kind in ['visual', 'ipad']:
+            self.responses[f'repos/{self.repo}/actions/runs/{self.runs[kind]}']['head_sha'] = prior_sha
+            earlier = copy.deepcopy(self.evidence[kind]); earlier['source_commit'] = prior_sha
+            if kind == 'ipad': earlier['ipad_report']['device']['source_commit'] = prior_sha
+            self.responses[f'repos/{self.repo}/actions/artifacts/{self.runs[kind] * 10}/zip'] = self.archive(kind, evidence=earlier)
+        trees = lambda sha, *args: older if sha == prior_sha else source
+        original = candidate.verify_tooling_only_equivalence
+        equivalent = lambda old, new, root: original(old, new, root, tree_reader=trees, ancestor=lambda: True)
+        with mock.patch.object(scoped.historical, 'git_tree', side_effect=trees), \
+             mock.patch.object(scoped.historical, 'load_results', return_value=(counts, actual)), \
+             mock.patch.object(candidate, 'verify_tooling_only_equivalence', side_effect=equivalent):
+            proof = self.verify()
+            self.assertEqual(proof['source_commit'], self.sha)
+            for kind in ['visual', 'ipad']:
+                self.assertEqual(proof['workflows'][kind]['source_commit'], prior_sha)
+                self.assertEqual(proof['workflows'][kind]['tooling_only_equivalence']['target_commit'], self.sha)
+            older['UITests/ChaiClassicsVisualSmokeTests.swift'] = ('100644', b'changed helper or assertion')
+            with self.assertRaises(candidate.CandidateError): self.verify()
+
     def test_exact_candidate_requires_all_three_runs_and_full_test_counts(self):
         proof = self.verify()
         self.assertEqual(proof['status'], 'verified')

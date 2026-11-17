@@ -32,8 +32,68 @@ GAME_FILES = {
 }
 ALL_GAME_FILES = set().union(*GAME_FILES.values())
 
+# Reviewed flows only: an edited or unknown mixed body falls back to every game.
+# All Core files remain shared: startup/fixtures can restore every game even on Home.
+# Shared helpers, fixtures, assets, preferences and animation clocks remain shared.
+BODY_PROFILES = {
+    'ChaiClassicsUITests/testHomeHasExactlyThreeColumns': (
+        '927bb66520b4a9b6b8f266592efd0e33775b6b9754e3802566ce5b39c558ecd0', ()),
+    'ChaiClassicsUITests/testLegacyFlagModeStillRevealsOnSingleTap': (
+        'd8aac8222c34998ecc03f9b3c4dd4608742dcad6783d9efb87dad3b5b051ce47', ('sudoku', 'mines', 'sliding')),
+    'ChaiClassicsUITests/testThemeLanguagePreferencesAndLegacySummariesPersist': (
+        '6205cb7e0011e46bdcb7eba4369c41fdd2b816afd7780acac8e3ce8d1d3995d3', ('sudoku', 'mines', 'sliding')),
+    'ChaiClassicsUITests/testEnglishIsAppliedToAllGamesAndAccessibility': (
+        'cf05b833ed6ebee5a52d6b9b40eba5fe77d0ff19423d7b86905d45b930a022c3', ('sudoku', 'mines', 'sliding')),
+    'ChaiClassicsUITests/testBundledLegalAndSupportInBothLanguages': (
+        'd5c227fdaf438ce86b6af0386035a3565cd1e98306aed6abf965bf6a1b698f8e', ()),
+    'ChaiClassicsV020UITests/testCompleteCatalogAndThirteenComingSoonPagesInEnglish': (
+        'efb196fb65141eb89d33a365a76e44865a680c822600206f9eec5acc601df9fe', ()),
+    'ChaiClassicsV020UITests/testCompleteCatalogAndThirteenComingSoonPagesInTraditionalChinese': (
+        '49bae2235581390c0a5e46680bb9f687424c105a42f164d56944dc7f7653adda', ()),
+    'ChaiClassicsV020UITests/testAllEightPlayableCardsOpenRealMenus': (
+        '61175c35f72d63954d937f92788b78f578bea5e611df30590f930557ea779341', ('sudoku', 'mines', 'sliding', 'tictactoe', 'connectfour', 'twentyfour', 'memory', 'maze')),
+    'ChaiClassicsV020UITests/testNewPuzzleModesStartRealBoards': (
+        '9606b4c1b08030466f58eedf4109ed2d4e4e0768fa140b037032ec01e4adabca', ('twentyfour', 'memory', 'maze')),
+    'ChaiClassicsV020UITests/testCorruptNewSaveRecoveryPreservesAllThreeLegacySaves': (
+        '3420966b46c6e381cac9e7e68e965c5f88b705eb1f75b4eb8cf767d532621620', ('sudoku', 'mines', 'sliding', 'memory')),
+    'ChaiClassicsV020UITests/testFutureSchemaRemainsProtectedAcrossRelaunch': (
+        '76e37e79752b099450f43f29905948adb73f9d86265074a86465ca723d8214d8', ('memory', 'sliding')),
+    'ChaiClassicsV020UITests/testCatalogLayoutAt320PointViewport': (
+        '2abbc9a2e4cb5015df14e5a6c8fb145f41178430e451d97f63ab8abac7844f40', ()),
+    'ChaiClassicsV020UITests/testCatalogLayoutAt375PointViewport': (
+        'f32d2b9e8880d30177c959425c09bb7fdf83f2a759af7ab6cd63202c8dda443e', ()),
+    'ChaiClassicsV020UITests/testCatalogLayoutAt390PointViewport': (
+        '7f67ebf94089c5e2f7338e1a2c527b736343f3fbe03dc67c59b5ddc9fb43352b', ()),
+    'ChaiClassicsV020UITests/testCatalogLayoutAt430PointViewport': (
+        '8d5c69b188ea4db8ea9f44b528a4d3c580bcb101ff3dad88c68728cddbdaa00c', ()),
+    'ChaiClassicsV020UITests/testAccessibilityTypeAdaptsCatalogAndSupportsReducedMotion': (
+        '3f4bc97949c1db678c664a3e3b8590abc865fc0561ed0aa7162299b54d82593b', ()),
+    'ChaiClassicsVisualSmokeTests/testFreshWinCelebratesOnceAndRestoredWinDoesNotReplay': (
+        'cd007d0736badd2f3c2907836ae77107177b9fabd0aeb685496d702ca7524e00', ('sliding',)),
+    'ChaiClassicsVisualSmokeTests/testReducedMotionSuppressesCelebrationButStillCompletesGame': (
+        '70c41d41386e486704ba65b90e4d642b01d43d6cd44c0dd9a7606b29296139eb', ('sliding',)),
+    'ChaiClassicsVisualSmokeTests/testLowPowerSuppressesCelebrationButStillCompletesGame': (
+        'd61c0385dafb936cc689eb2a99a09bfa0054600f25f224fa476b2d9e75893cba', ('sliding',)),
+    'ChaiClassicsVisualSmokeTests/testScreenshotGallery': (
+        'b15165766e7bb259fb470b6e835542ec1a803ae4b33eb2d98189e88fe767bc4b', ('sudoku', 'mines', 'sliding')),
+    'ChaiClassicsVisualSmokeTests/testIPadHomeScreenshot': (
+        'd847e98d7e53138a9aa8bbccd1ef3a954481cdb36d95921404f31f105de7d918', ()),
+    'ChaiClassicsVisualSmokeTests/testIPadSudokuScreenshot': (
+        '8b6d8e134e018014f95f5d01cf45974e8694aa190050c34bbd0828990eeb0191', ('sudoku',)),
+    'ChaiClassicsVisualSmokeTests/testIPadMinesweeperScreenshot': (
+        '9bd9829a3fb25156121a0417973708afff8ce96d5cd645b9b1cd8a4d6a7b7f0d', ('mines',)),
+    'ChaiClassicsVisualSmokeTests/testIPadSlidingPuzzleScreenshot': (
+        '5f88849a45c0237a1624d6a7e2a4c8c5d9823ad8b1b30a8fac20cd18a02dd816', ('sliding',)),
+}
+PURE_EVIDENCE_SCRIPTS = {'scripts/verify_scoped_ci.py', 'scripts/verify_candidate.py'}
 
-def dependencies(test):
+
+def dependencies(test, body=None):
+    if test in BODY_PROFILES:
+        expected_body, games = BODY_PROFILES[test]
+        if isinstance(body, str) and hashlib.sha256(body.encode()).hexdigest() == expected_body:
+            return set().union(*(GAME_FILES[game] for game in games))
+        return ALL_GAME_FILES
     method = test.split('/')[-1].lower()
     if method.startswith('testboardgamethinking'):
         return GAME_FILES['tictactoe'] | GAME_FILES['connectfour']
@@ -51,8 +111,10 @@ def digest(value):
 def fingerprints(tree):
     """Include literal assertions, shared helpers/resources/prefs/clocks and project/runtime tooling.
 
-    Only known game-local files may be omitted for an unrelated journey. Unknown source
-    files are shared by default. Other test bodies are masked; all signatures/setup/helper
+    Only known game-local views may be omitted for an unrelated journey. Every Core file
+    remains shared because startup restores all games. Reviewed mixed profiles require
+    their exact test body. Pure evidence tools are independently rebuilt,
+    not application runtime; all other unknown source files are shared by default. Other test bodies are masked; all signatures/setup/helper
     bytes remain shared, so editing C's test body alone does not invalidate unchanged A/B.
     """
     methods, scaffolds, shared = {}, [], []
@@ -69,13 +131,13 @@ def fingerprints(tree):
                     methods[identity] = source[start:end]
                     scaffold = scaffold[:start] + '{TEST_BODY}' + scaffold[end:]
             scaffolds.append((path, mode, hashlib.sha256(scaffold.encode()).hexdigest()))
-        elif path not in ALL_GAME_FILES and not path.startswith(('docs/', 'tests/')) and path != 'README.md':
+        elif (path not in ALL_GAME_FILES or path.startswith('Core/')) and path not in PURE_EVIDENCE_SCRIPTS and not path.startswith(('docs/', 'tests/')) and path != 'README.md':
             shared.append((path, mode, hashlib.sha256(data).hexdigest()))
     require(methods, 'No declared UI tests available for fingerprints.')
     result = {}
     for test, body in sorted(methods.items()):
         local = [(path, tree[path][0], hashlib.sha256(tree[path][1]).hexdigest())
-                 for path in sorted(dependencies(test)) if path in tree]
+                 for path in sorted(dependencies(test, body)) if path in tree]
         result[test] = digest({'version': 1, 'shared': shared, 'helpers': scaffolds, 'local': local, 'test_body': body})
     return result
 

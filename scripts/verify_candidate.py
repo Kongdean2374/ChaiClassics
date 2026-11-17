@@ -33,6 +33,7 @@ WORKFLOWS = {'ci': 'ci.yml', 'visual': 'visual-smoke.yml', 'ipad': 'ipad-screens
 JOBS = {'ci': {'test', 'codesign-extraction', 'release-tooling'}, 'visual': {'visual-smoke'}, 'ipad': {'ipad-screenshots'}}
 MAX_EVIDENCE_BYTES = 2 * 1024 * 1024
 TRUSTED_BRANCHES = ('main', 'develop/0.2.0', 'develop/0.2.1')
+PURE_EVIDENCE_SCRIPTS = {'scripts/verify_candidate.py', 'scripts/verify_scoped_ci.py'}
 
 
 class CandidateError(ValueError):
@@ -178,6 +179,38 @@ def validate_run(run, jobs, kind, repo, sha, branch='main', ui_step='Run all iOS
                 'CI did not successfully execute its required UI test step.')
 
 
+def verify_tooling_only_equivalence(source_sha, target_sha, root=ROOT, *, tree_reader=None, ancestor=None):
+    """Retain screenshots only when *every* runtime and XCTest byte is identical.
+
+    The two evidence readers run outside the application. Altering any application,
+    test/helper, asset, project, workflow, signing or execution script rejects reuse.
+    The source run, original ZIP and its source SHA are still validated separately.
+    """
+    from verify_incremental_ci import git_tree
+    require(all(isinstance(value, str) and re.fullmatch(r'[0-9a-f]{40}', value) for value in (source_sha, target_sha)), 'Invalid equivalent source SHA.')
+    ancestor = ancestor or (lambda: subprocess.run(['git', 'merge-base', '--is-ancestor', source_sha, target_sha], cwd=root,
+                                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0)
+    require(ancestor(), 'Screenshot source is not an ancestor of the candidate.')
+    reader = tree_reader or (lambda commit: git_tree(commit, root))
+    try:
+        before, after = reader(source_sha), reader(target_sha)
+    except (OSError, subprocess.SubprocessError):
+        raise CandidateError('Equivalent screenshot source trees are unavailable.') from None
+    changed = sorted(path for path in set(before) | set(after) if before.get(path) != after.get(path))
+    allowed = lambda path: path in PURE_EVIDENCE_SCRIPTS or path.startswith(('docs/', 'tests/')) or path == 'README.md'
+    require(changed and all(allowed(path) for path in changed), 'Screenshot reuse permits pure evidence/documentation changes only; runtime or XCTest changed.')
+    required = {'App/Info.plist', 'Core/SaveStore.swift', 'Package.swift', 'ChaiClassics.xcodeproj/project.pbxproj',
+                'scripts/ci.sh', 'fastlane/Fastfile'}
+    require(required.issubset(before) and required.issubset(after), 'Missing protected runtime source.')
+    records = []
+    for path, (mode, data) in sorted(after.items()):
+        require(mode in ('100644', '100755'), 'Source symlinks/submodules cannot establish screenshot equivalence.')
+        if not allowed(path):
+            records.append((path, mode, hashlib.sha256(data).hexdigest()))
+    return {'source_commit': source_sha, 'target_commit': target_sha, 'changed_paths': changed,
+            'runtime_digest': hashlib.sha256(json.dumps(records, separators=(',', ':')).encode()).hexdigest()}
+
+
 def artifact_evidence(artifacts, kind, read=github):
     expected = 'candidate-' + kind + '-evidence'
     require(isinstance(artifacts, dict) and isinstance(artifacts.get('artifacts'), list)
@@ -271,15 +304,21 @@ def verify(repo, sha, version, tag, runs, read=github, root=ROOT, branch='main')
                              'app_source_digest': evidence['app_source_digest'], 'test_methods_digest': evidence['test_methods_digest']}
             continue
         evidence_sha = sha
+        tooling_equivalence = None
         if kind != 'ci' and run.get('head_sha') != sha:
-            require(incremental is not None and run.get('head_sha') == incremental['baseline_commit'],
-                    'Cross-SHA evidence requires verified test-helper-only application-identical incremental coverage.')
-            evidence_sha = incremental['baseline_commit']
+            if incremental is not None and run.get('head_sha') == incremental['baseline_commit']:
+                evidence_sha = incremental['baseline_commit']
+            else:
+                require(scoped is not None, 'Cross-SHA evidence requires independently verified incremental coverage.')
+                evidence_sha = run.get('head_sha')
+                tooling_equivalence = verify_tooling_only_equivalence(evidence_sha, sha, root)
         validate_run(run, jobs, kind, repo, evidence_sha, evidence_branch)
         evidence = validate_evidence(kind, raw_evidence, evidence_sha, root)
         results[kind] = {'run_id': runs[kind], 'run_url': f'https://github.com/{repo}/actions/runs/{runs[kind]}',
                          'actor': run['actor']['login'], 'triggering_actor': run['triggering_actor']['login'],
                          'source_commit': evidence_sha, 'summary': evidence['summary'], 'executed_tests': evidence['executed_tests']}
+        if tooling_equivalence:
+            results[kind]['tooling_only_equivalence'] = tooling_equivalence
         if kind == 'ipad':
             results[kind]['device'] = evidence['ipad_report']['device']
             results[kind]['games_summary'] = evidence['games_summary']

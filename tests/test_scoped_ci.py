@@ -60,17 +60,17 @@ class FingerprintTests(unittest.TestCase):
         result[path] = (mode, data + b'\n// changed dependency\n')
         return scoped.fingerprints(result)
 
-    def test_c_game_only_change_preserves_actual_a_and_b_dependencies(self):
-        updated = self.edited('Core/Maze.swift')
+    def test_c_game_view_only_change_preserves_actual_a_and_b_dependencies(self):
+        updated = self.edited('App/MazeView.swift')
         self.assertEqual(self.fp[A], updated[A])
         self.assertEqual(self.fp[B], updated[B])
         self.assertNotEqual(self.fp[C], updated[C])
 
     def test_shared_preferences_clock_resources_bootstrap_and_generator_invalidate_all(self):
-        for path in ['Core/AppPreferences.swift', 'Core/Random.swift', 'App/AnimationFrameClock.swift', 'App/DesignSystem.swift', 'App/NewGameComponents.swift', 'App/UITestBootstrap.swift',
+        for path in ['Core/AppPreferences.swift', 'Core/MemoryMatch.swift', 'Core/Maze.swift', 'Core/Random.swift', 'App/AnimationFrameClock.swift', 'App/DesignSystem.swift', 'App/NewGameComponents.swift', 'App/UITestBootstrap.swift',
                      'App/Resources/en.lproj/Localizable.strings', 'App/Resources/game-maze.imageset/image.png',
                      'scripts/create_project.py', 'Package.swift', 'ChaiClassics.xcodeproj/project.pbxproj',
-                     'scripts/verify_scoped_ci.py', 'App/UnexpectedRuntime.swift']:
+                     'scripts/ci.sh', 'scripts/ui_test_scope.py', '.github/workflows/ci.yml', 'App/UnexpectedRuntime.swift']:
             with self.subTest(path=path):
                 updated = self.edited(path)
                 self.assertTrue(all(self.fp[test] != updated[test] for test in self.fp))
@@ -97,11 +97,113 @@ class FingerprintTests(unittest.TestCase):
         with self.assertRaises(candidate.CandidateError): scoped.fingerprints(updated)
 
 
+class ReviewedFlowProfileTests(unittest.TestCase):
+    def setUp(self):
+        self.base = tree()
+        root = Path(__file__).resolve().parents[1]
+        for path in (root / 'UITests').glob('*.swift'):
+            self.base[str(path.relative_to(root))] = ('100644', path.read_bytes())
+        for path in scoped.ALL_GAME_FILES:
+            file = root / path
+            if file.exists(): self.base[path] = ('100644', file.read_bytes())
+        self.bodies = {}
+        for path, (_mode, data) in self.base.items():
+            if path.startswith('UITests/') and path.endswith('.swift'):
+                source = data.decode()
+                for name, (start, end) in scoped.historical.functions(source).items():
+                    if name.startswith('test'): self.bodies[Path(path).stem + '/' + name] = source[start:end]
+        self.before = scoped.fingerprints(self.base)
+
+    def changed(self, path):
+        result = copy.deepcopy(self.base)
+        mode, data = result.get(path, ('100644', b''))
+        result[path] = (mode, data + b'\n// actual changed dependency\n')
+        return scoped.fingerprints(result)
+
+    def test_profiles_are_bound_to_reviewed_current_test_bodies(self):
+        self.assertGreaterEqual(len(scoped.BODY_PROFILES), 24)
+        for name, (expected, games) in scoped.BODY_PROFILES.items():
+            with self.subTest(test=name):
+                self.assertIn(name, self.bodies)
+                self.assertEqual(scoped.hashlib.sha256(self.bodies[name].encode()).hexdigest(), expected)
+                self.assertEqual(scoped.dependencies(name, self.bodies[name]), set().union(*(scoped.GAME_FILES[game] for game in games)))
+
+    def test_memory_play_change_preserves_unopened_flows_and_invalidates_six_real_dependents(self):
+        after = self.changed('App/MemoryView.swift')
+        changed = {test for test in self.before if self.before[test] != after[test]}
+        self.assertEqual(changed, {
+            'ChaiClassicsV020UITests/testAllEightPlayableCardsOpenRealMenus',
+            'ChaiClassicsV020UITests/testMemoryFlipMismatchGatesAndReducedMotionPreserveNativeCards',
+            'ChaiClassicsV020UITests/testMemoryRestoresMatchesHidesUnturnedCardsCompletesAndReplays',
+            'ChaiClassicsV020UITests/testNewPuzzleModesStartRealBoards',
+            'ChaiClassicsV020UITests/testCorruptNewSaveRecoveryPreservesAllThreeLegacySaves',
+            'ChaiClassicsV020UITests/testFutureSchemaRemainsProtectedAcrossRelaunch',
+        })
+        self.assertEqual(len(self.before) - len(changed), 35)
+        coverage = scoped.inherited_coverage(after, [record(self.base)])
+        self.assertEqual(set(coverage), set(self.before) - changed)
+
+    def test_core_changes_invalidate_every_flow_because_startup_restores_all_games(self):
+        for path in ['Core/MemoryMatch.swift', 'Core/Maze.swift', 'Core/TicTacToe.swift', 'Core/TwentyFour.swift']:
+            with self.subTest(path=path):
+                after = self.changed(path)
+                self.assertTrue(all(self.before[test] != after[test] for test in self.before))
+                self.assertNotEqual(self.before['ChaiClassicsUITests/testHomeHasExactlyThreeColumns'], after['ChaiClassicsUITests/testHomeHasExactlyThreeColumns'])
+                self.assertNotEqual(self.before['ChaiClassicsV020UITests/testTicTacToeLocalRoundRestoresWinsAndReplays'], after['ChaiClassicsV020UITests/testTicTacToeLocalRoundRestoresWinsAndReplays'])
+
+    def test_pad_and_visual_flows_keep_their_actual_game_dependencies(self):
+        sudoku_changed = self.changed('App/SudokuView.swift')
+        for name in ('testIPadSudokuScreenshot', 'testScreenshotGallery'):
+            key = 'ChaiClassicsVisualSmokeTests/' + name
+            self.assertNotEqual(self.before[key], sudoku_changed[key])
+        for name in ('testIPadHomeScreenshot', 'testIPadMinesweeperScreenshot', 'testIPadSlidingPuzzleScreenshot',
+                     'testFreshWinCelebratesOnceAndRestoredWinDoesNotReplay', 'testReducedMotionSuppressesCelebrationButStillCompletesGame',
+                     'testLowPowerSuppressesCelebrationButStillCompletesGame'):
+            key = 'ChaiClassicsVisualSmokeTests/' + name
+            self.assertEqual(self.before[key], sudoku_changed[key])
+        sliding_changed = self.changed('App/SlidingView.swift')
+        key = 'ChaiClassicsVisualSmokeTests/testFreshWinCelebratesOnceAndRestoredWinDoesNotReplay'
+        self.assertNotEqual(self.before[key], sliding_changed[key])
+
+    def test_edited_profile_body_and_unknown_identity_fall_back_to_all_games(self):
+        key = 'ChaiClassicsUITests/testHomeHasExactlyThreeColumns'
+        original = self.bodies[key]
+        edited = original.replace('let app = launch("base")', 'let app = launch("base"); app.buttons["game.memory"].tap(); app.buttons["memory.start"].tap()')
+        self.assertNotEqual(edited, original)
+        self.assertEqual(scoped.dependencies(key, original), set())
+        self.assertEqual(scoped.dependencies(key, edited), scoped.ALL_GAME_FILES)
+        self.assertEqual(scoped.dependencies('Unknown/testHomeHasExactlyThreeColumns', original), scoped.ALL_GAME_FILES)
+        target = copy.deepcopy(self.base)
+        path = 'UITests/ChaiClassicsUITests.swift'; mode, data = target[path]
+        target[path] = (mode, data.replace(original.encode(), edited.encode()))
+        changed_body = scoped.fingerprints(target)
+        target['App/MemoryView.swift'] = ('100644', target['App/MemoryView.swift'][1] + b'// Memory fix')
+        self.assertNotEqual(changed_body[key], scoped.fingerprints(target)[key])
+
+    def test_shared_clock_preferences_assets_helpers_and_runtime_tooling_still_invalidate_every_case(self):
+        for path in ['App/AnimationFrameClock.swift', 'Core/AppPreferences.swift', 'App/DesignSystem.swift',
+                     'App/Resources/Assets.xcassets/Memory.imageset/art.png', 'App/Resources/en.lproj/Localizable.strings',
+                     'scripts/create_project.py', 'scripts/ui_test_scope.py', 'scripts/ci.sh', '.github/workflows/ci.yml']:
+            with self.subTest(path=path):
+                after = self.changed(path)
+                self.assertTrue(all(self.before[test] != after[test] for test in self.before))
+        target = copy.deepcopy(self.base)
+        path = 'UITests/ChaiClassicsUITests.swift'; mode, data = target[path]
+        target[path] = (mode, data.replace(b'import XCTest', b'import XCTest\nfunc changedSharedHelper() {}'))
+        after = scoped.fingerprints(target)
+        self.assertTrue(all(self.before[test] != after[test] for test in self.before))
+
+    def test_only_two_pure_evidence_scripts_are_excluded(self):
+        self.assertEqual(scoped.PURE_EVIDENCE_SCRIPTS, {'scripts/verify_scoped_ci.py', 'scripts/verify_candidate.py'})
+        for path in scoped.PURE_EVIDENCE_SCRIPTS:
+            with self.subTest(path=path): self.assertEqual(self.before, self.changed(path))
+
+
 class CoverageTests(unittest.TestCase):
     def setUp(self):
         self.base = tree()
         self.target = copy.deepcopy(self.base)
-        self.target['Core/Maze.swift'] = ('100644', b'struct MazeBoard { let repaired = true }\n')
+        self.target['App/MazeView.swift'] = ('100644', b'struct MazeView { let repaired = true }\n')
         actual = passed(scoped.fingerprints(self.base)); actual[C] = 'failed'
         self.prior = record(self.base, actual)
 
@@ -163,7 +265,7 @@ class ProvenanceTests(unittest.TestCase):
     def setUp(self):
         self.repo = 'Kongdean2374/ChaiClassics'; self.sha = 'b' * 40
         self.base = tree(); self.target = copy.deepcopy(self.base)
-        self.target['Core/Maze.swift'] = ('100644', b'struct MazeBoard { let repaired = true }\n')
+        self.target['App/MazeView.swift'] = ('100644', b'struct MazeView { let repaired = true }\n')
         actual = passed(scoped.fingerprints(self.base)); actual[C] = 'failed'
         self.prior = record(self.base, actual)
         selected = scoped.planned_tests(scoped.fingerprints(self.target), [self.prior])
@@ -200,6 +302,17 @@ class ProvenanceTests(unittest.TestCase):
                        lambda e: e.update(complete=False), lambda e: e['executed_current_tests'].pop(C)]:
             forged = copy.deepcopy(self.evidence); change(forged)
             with self.assertRaises(candidate.CandidateError): self.verify(forged)
+
+    def test_excluding_pure_tool_bytes_cannot_forge_actual_raw_statuses(self):
+        for path in scoped.PURE_EVIDENCE_SCRIPTS:
+            self.base[path] = ('100644', b'previous evidence tool')
+            self.target[path] = ('100644', b'changed tool claiming every test passed')
+        self.assertEqual(self.verify(), self.evidence)
+        self.prior['actual'][A] = 'failed'
+        self.prior['summary'] = summary(self.prior['actual'])
+        # Even with equal fingerprints and an artifact claiming an inherited pass,
+        # the independently reloaded failure makes that case require execution.
+        with self.assertRaises(candidate.CandidateError): self.verify()
 
     def test_failed_build_skipped_core_wrong_workflow_untrusted_branch_and_nonancestor_are_rejected(self):
         prefix = f'repos/{self.repo}/actions/runs/10'
