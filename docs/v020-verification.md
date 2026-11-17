@@ -19,7 +19,7 @@ requires fresh complete verification. A development-mode proof always records
 | iPad Screenshots | Four original gallery captures, plus five separate new-game journeys, using the same built bundle and selected native 13-inch iPad | Original screenshot/report artifact, two separate XCTest artifacts, `candidate-ipad-evidence` |
 
 The full iPhone test list is read from the committed `UITests/*.swift` files.
-Currently there are 35 declared cases. Exactly the four existing iPad-only
+Currently there are 37 declared cases. Exactly the four existing iPad-only
 gallery cases must report `skipped` on iPhone; all other cases must report
 `passed`. The four gallery cases and five new-game journeys must all pass on
 iPad, in independent result bundles. No new-game journey may be skipped.

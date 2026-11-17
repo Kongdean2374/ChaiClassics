@@ -88,7 +88,9 @@ final class ChaiClassicsV020UITests: XCTestCase {
     }
 
     private func tap(_ id: String, app: XCUIApplication) {
-        let button = app.buttons[id]
+        // Native confirmation popovers can expose the same action more than
+        // once on iPad. Resolve one element before reading its frame or tapping.
+        let button = app.buttons.matching(identifier: id).firstMatch
         show(button, app: app); button.tap()
     }
 
@@ -255,6 +257,104 @@ final class ChaiClassicsV020UITests: XCTestCase {
         XCTAssertTrue(app.buttons["connectfour.column.0"].isEnabled)
     }
 
+    private func expectMoves(_ count: Int, game: String, app: XCUIApplication, timeout: TimeInterval = 20) {
+        let metric = app.staticTexts.matching(identifier: game + ".moves").firstMatch
+        let expected = "\(count) moves"
+        let completed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            metric.exists && metric.label == expected
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [completed], timeout: timeout), .completed,
+                       "\(game) must report exactly \(expected) after real player/AI input.")
+    }
+
+    private func expectHumanTurn(_ game: String, computerFirst: Bool, app: XCUIApplication) {
+        let turn = app.staticTexts.matching(identifier: game + ".turn").firstMatch
+        let expected = game == "tictactoe" ? "You to play · \(computerFirst ? "O" : "X")" : "Your turn"
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            turn.exists && turn.label == expected
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 20), .completed,
+                       "The actual AI reply must return control to the human player.")
+    }
+
+    private func assertMovesStay(_ count: Int, game: String, app: XCUIApplication) {
+        let metric = app.staticTexts.matching(identifier: game + ".moves").firstMatch
+        let unexpected = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            metric.exists && metric.label != "\(count) moves"
+        }, object: nil)
+        unexpected.isInverted = true
+        XCTAssertEqual(XCTWaiter.wait(for: [unexpected], timeout: 1), .completed,
+                       "Pausing or navigating must not submit an extra AI move.")
+    }
+
+    /// No seeds or AI overrides are used: each configuration starts through the
+    /// real single-player menu, then waits for the production background task.
+    private func inspectSinglePlayerAI(_ game: String) {
+        executionTimeAllowance = 600
+        let cellPrefix = game == "tictactoe" ? "tictactoe.cell." : "connectfour.column."
+        let cellCount = game == "tictactoe" ? 9 : 7
+        for difficulty in ["Easy", "Normal", "Hard"] {
+            for computerFirst in [false, true] {
+                let app = launch("v020-" + game)
+                open(game, app: app)
+                choose(game + ".mode", option: "Play the computer", app: app)
+                choose(game + ".difficulty", option: difficulty, app: app)
+                let first = game == "tictactoe"
+                    ? (computerFirst ? "Computer first (X)" : "You first (X)")
+                    : (computerFirst ? "Computer first · star" : "You first · star")
+                choose(game + ".first", option: first, app: app)
+                tap(game + ".start", app: app)
+
+                // In a computer-first round this cannot pass until a genuine
+                // opening move has been computed, saved, and rendered.
+                expectMoves(computerFirst ? 1 : 0, game: game, app: app)
+                expectHumanTurn(game, computerFirst: computerFirst, app: app)
+                let controls = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", cellPrefix))
+                let hasLegalInput = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                    controls.allElementsBoundByIndex.contains { $0.exists && $0.isEnabled }
+                }, object: nil)
+                XCTAssertEqual(XCTWaiter.wait(for: [hasLegalInput], timeout: 10), .completed)
+                guard let legal = controls.allElementsBoundByIndex.first(where: { $0.exists && $0.isEnabled }) else {
+                    XCTFail("No legal human input after AI opening: \(game), \(difficulty)")
+                    app.terminate()
+                    return
+                }
+                show(legal, app: app); legal.tap()
+
+                let replyMoves = computerFirst ? 3 : 2
+                expectMoves(replyMoves, game: game, app: app)
+                expectHumanTurn(game, computerFirst: computerFirst, app: app)
+                XCTAssertFalse(app.staticTexts[game + ".result"].exists)
+                let board = (0..<cellCount).map { app.buttons[cellPrefix + String($0)].label }
+                pauseResume(game, app: app)
+                expectMoves(replyMoves, game: game, app: app)
+                expectHumanTurn(game, computerFirst: computerFirst, app: app)
+                assertMovesStay(replyMoves, game: game, app: app)
+                XCTAssertEqual(board, (0..<cellCount).map { app.buttons[cellPrefix + String($0)].label })
+
+                back(app)
+                let resume = app.buttons.matching(identifier: game + ".continue").firstMatch
+                XCTAssertTrue(resume.waitForExistence(timeout: 5))
+                XCTAssertTrue(resume.label.contains("\(replyMoves) moves"))
+                tap(game + ".continue", app: app)
+                expectMoves(replyMoves, game: game, app: app)
+                expectHumanTurn(game, computerFirst: computerFirst, app: app)
+                assertMovesStay(replyMoves, game: game, app: app)
+                XCTAssertEqual(board, (0..<cellCount).map { app.buttons[cellPrefix + String($0)].label })
+                capture(app, "v020-\(game)-ai-\(difficulty.lowercased())-\(computerFirst ? "computer-first" : "human-first")")
+                app.terminate()
+            }
+        }
+    }
+
+    func testTicTacToeAIRepliesAtEveryDifficultyWithEitherFirstPlayer() {
+        inspectSinglePlayerAI("tictactoe")
+    }
+
+    func testConnectFourAIRepliesAtEveryDifficultyWithEitherFirstPlayer() {
+        inspectSinglePlayerAI("connectfour")
+    }
+
     func testTwentyFourRestoresExactCardsCompletesAndStartsNextPuzzle() {
         let app = launch("v020-twentyfour", fixture: "twentyfour")
         open("twentyfour", app: app)
@@ -357,7 +457,8 @@ final class ChaiClassicsV020UITests: XCTestCase {
         show(app.buttons["memory.start"], app: app, requireHittable: false)
         XCTAssertFalse(app.buttons["memory.start"].isEnabled)
         tap("storage.recover.memory", app: app)
-        app.buttons["storage.confirmRecovery.memory"].tap()
+        let confirm = app.buttons.matching(identifier: "storage.confirmRecovery.memory").firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5)); confirm.tap()
         XCTAssertFalse(app.buttons["storage.recover.memory"].exists)
         XCTAssertTrue(app.buttons["memory.start"].isEnabled)
         tap("memory.start", app: app)
