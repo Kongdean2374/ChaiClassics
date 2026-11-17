@@ -1,0 +1,84 @@
+name: iPad Screenshots
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: Standard macOS runner (no paid larger runners)
+        type: choice
+        options:
+          - macos-15-intel
+          - macos-15
+        default: macos-15-intel
+      device_name:
+        description: Exact installed 13-inch iPad Pro name, or auto
+        type: string
+        default: auto
+permissions:
+  contents: read
+jobs:
+  ipad-screenshots:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    # Map inputs to standard hosted pools; arbitrary labels cannot select paid hosts.
+    runs-on: ${{ inputs.runner == 'macos-15' && 'macos-15' || 'macos-15-intel' }}
+    timeout-minutes: 40
+    env:
+      CHAI_IPAD_REQUESTED_RUNNER: ${{ inputs.runner }}
+      CHAI_IPAD_DEVICE_NAME: ${{ inputs.device_name }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Validate standard hosted runner selection
+        run: |
+          case "$CHAI_IPAD_REQUESTED_RUNNER" in
+            macos-15-intel|macos-15) ;;
+            *) echo 'Unsupported runner. Choose macos-15-intel or macos-15.' >&2; exit 64 ;;
+          esac
+      - name: Select installed stable Xcode
+        id: xcode
+        run: bash scripts/select_xcode.sh
+      - name: List iPad inventory and select a native 13-inch iPad Pro
+        id: device
+        run: python3 scripts/select_ipad_simulator.py --output build/ipad-screenshots/device.json --device-name "$CHAI_IPAD_DEVICE_NAME"
+      - name: Build unsigned iPad Simulator test bundle
+        id: build
+        timeout-minutes: 15
+        run: bash scripts/ipad_screenshots.sh build
+      - name: Boot portrait iPad and run four real UI screenshot tests
+        id: ui
+        timeout-minutes: 20
+        run: bash scripts/ipad_screenshots.sh test
+      - name: Export XCTest screenshots and diagnostics
+        id: export
+        if: always()
+        run: bash scripts/ipad_screenshots.sh export
+      - name: Verify original PNG sizes and write the result report
+        if: always()
+        env:
+          CHAI_IPAD_BUILD_STATUS: ${{ steps.build.outcome }}
+          CHAI_IPAD_TEST_STATUS: ${{ steps.ui.outcome }}
+          CHAI_IPAD_EXPORT_STATUS: ${{ steps.export.outcome }}
+        run: |
+          python3 scripts/collect_ipad_screenshots.py \
+            --attachments build/ipad-screenshots/attachments \
+            --device build/ipad-screenshots/device.json \
+            --output build/ipad-screenshots \
+            --build-status "$CHAI_IPAD_BUILD_STATUS" \
+            --test-status "$CHAI_IPAD_TEST_STATUS" \
+            --export-status "$CHAI_IPAD_EXPORT_STATUS"
+      - name: Publish device, PNG dimensions and test summary
+        if: always()
+        run: |
+          if [ -f build/ipad-screenshots/REPORT.md ]; then
+            cat build/ipad-screenshots/REPORT.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'iPad validation report was not produced; inspect the uploaded diagnostics.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Preserve all available iPad screenshots and test results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ChaiClassics-iPad-AppStore-Screenshots
+          path: build/ipad-screenshots
+          if-no-files-found: error
+          retention-days: 14

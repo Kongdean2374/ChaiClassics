@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 /// Focused 0.1.3 smoke selection; the existing full game/regression suite remains intact.
 final class ChaiClassicsVisualSmokeTests: XCTestCase {
@@ -155,5 +156,245 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
             }
             back(app); back(app)
         }
+    }
+
+    // These independent, manually selected cases preserve the other screenshots
+    // if one game's iPad assertions fail. The original phone smoke cases above
+    // remain unchanged and never execute these iPad-only interactions.
+    private func launchIPadGallery() throws -> XCUIApplication {
+        executionTimeAllowance = 600
+        XCUIDevice.shared.orientation = .portrait
+        let app = try launch(profile: "visual-gallery", allGames: true)
+        XCTAssertGreaterThan(app.frame.height, app.frame.width)
+        app.buttons["settings.open"].tap()
+        let chinese = app.segmentedControls["settings.language"].buttons["繁體中文"]
+        XCTAssertTrue(chinese.waitForExistence(timeout: 5)); chinese.tap()
+        XCTAssertTrue(chinese.isSelected)
+        let dark = app.segmentedControls["settings.appearance"].buttons["深色"]
+        XCTAssertTrue(dark.isHittable); dark.tap()
+        XCTAssertTrue(dark.isSelected)
+        XCTAssertTrue(app.staticTexts["settings.resolvedAppearance"].label.contains("深色"))
+        back(app)
+        XCTAssertTrue(app.buttons["game.sudoku"].waitForExistence(timeout: 5))
+        return app
+    }
+
+    private func assertIPadVisible(_ element: XCUIElement, app: XCUIApplication, toolbar: Bool = false, interactive: Bool = true) {
+        XCTAssertTrue(element.waitForExistence(timeout: 5), element.identifier)
+        let window = app.frame
+        let navigation = app.navigationBars.firstMatch
+        let top = toolbar || !navigation.exists ? window.minY : navigation.frame.maxY
+        let usable = CGRect(x: window.minX, y: top - 1, width: window.width,
+                            height: window.maxY - 20 - top)
+        let frame = element.frame
+        XCTAssertGreaterThan(frame.width, 0, element.identifier)
+        XCTAssertGreaterThan(frame.height, 0, element.identifier)
+        XCTAssertTrue(usable.contains(frame), "Control is clipped: " + element.identifier)
+        if interactive { XCTAssertTrue(element.isHittable, element.identifier) }
+    }
+
+    private func openIPadSavedGame(_ app: XCUIApplication, game: String, prefix: String, firstCell: String) {
+        assertIPadVisible(app.buttons["game." + game], app: app)
+        app.buttons["game." + game].tap()
+        let resume = app.buttons[prefix + ".continue"]
+        // No blind app.swipe here: on iPad the center is the interactive board.
+        assertIPadVisible(resume, app: app); resume.tap()
+        XCTAssertTrue(app.buttons[firstCell].waitForExistence(timeout: 5))
+    }
+
+    private func assertIPadPauseResume(_ app: XCUIApplication, prefix: String, firstCell: String) {
+        let pause = app.buttons[prefix + ".pause"]
+        assertIPadVisible(pause, app: app)
+        XCTAssertTrue(pause.isEnabled); pause.tap()
+        let resume = app.buttons["game.resume"]
+        assertIPadVisible(resume, app: app)
+        XCTAssertFalse(app.buttons[firstCell].exists)
+        resume.tap()
+        XCTAssertTrue(app.buttons[firstCell].waitForExistence(timeout: 5))
+        XCTAssertTrue(pause.isEnabled)
+    }
+
+    private func cancelIPadRestart(_ app: XCUIApplication, prefix: String) {
+        let restart = app.buttons[prefix + ".restart"]
+        assertIPadVisible(restart, app: app, toolbar: true); restart.tap()
+        let confirm = app.buttons[prefix + ".confirmRestart"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        // iPad confirmation popovers may omit the Cancel action. Dismiss from
+        // the empty lower-left margin, outside both popover and game board.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.04, dy: 0.94)).tap()
+        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: confirm)
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed)
+        XCTAssertFalse(confirm.exists)
+    }
+
+    private func assertIPadCaptureReady(_ app: XCUIApplication, prefix: String? = nil) {
+        if let prefix {
+            assertIPadVisible(app.buttons[prefix + ".restart"], app: app, toolbar: true)
+            assertIPadVisible(app.buttons["navigation.back"], app: app, toolbar: true)
+        } else {
+            assertIPadVisible(app.buttons["settings.open"], app: app, toolbar: true)
+        }
+        XCTAssertEqual(app.alerts.count, 0)
+        XCTAssertEqual(app.sheets.count, 0)
+        XCTAssertEqual(app.popovers.count, 0)
+        XCTAssertEqual(app.keyboards.count, 0)
+        XCTAssertGreaterThan(app.frame.height, app.frame.width)
+    }
+
+    private func attachIPadLayout(_ app: XCUIApplication, page: String, grid: [XCUIElement], controls: [XCUIElement], viewport: XCUIElement? = nil) throws {
+        func rectangle(_ frame: CGRect) -> [String: Double] {
+            ["x": Double(frame.minX), "y": Double(frame.minY),
+             "width": Double(frame.width), "height": Double(frame.height)]
+        }
+        func elementGeometry(_ element: XCUIElement) -> [String: Any] {
+            ["identifier": element.identifier, "exists": element.exists,
+             "frame": element.exists ? rectangle(element.frame) : [:]]
+        }
+        let bounds = grid.filter(\.exists).reduce(CGRect.null) { $0.union($1.frame) }
+        var warnings = [String]()
+        if !bounds.isNull && bounds.width < app.frame.width * 0.65 {
+            warnings.append("BOARD_HAS_WIDE_SIDE_MARGINS_ON_13_INCH")
+        }
+        if !bounds.isNull && app.frame.maxY - bounds.maxY > app.frame.height * 0.20 {
+            warnings.append("SPACE_BELOW_BOARD_EXCEEDS_20_PERCENT_OF_WINDOW")
+        }
+        if page == "Minesweeper" {
+            warnings.append("COMPACT_9X9_VIEWPORT_HEIGHT_IS_CAPPED_AT_520_2_POINTS_BY_EXISTING_APP")
+        }
+        var report: [String: Any] = [
+            "page": page, "orientation": "portrait", "language": "zh-Hant", "appearance": "dark",
+            "screen": rectangle(app.frame), "navigation": elementGeometry(app.navigationBars.firstMatch),
+            "table": elementGeometry(app.tables.firstMatch), "scrollContent": elementGeometry(app.scrollViews.firstMatch),
+            "gridBounds": bounds.isNull ? [:] : rectangle(bounds),
+            "gridSamples": grid.map(elementGeometry), "controls": controls.map(elementGeometry),
+            "warnings": warnings,
+            "scope": "Synthetic saved games; functional visibility assertions and measured layout, not a claim that all layouts have been reviewed."
+        ]
+        if let viewport { report["zoomViewport"] = elementGeometry(viewport) }
+        let data = try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys])
+        let attachment = XCTAttachment(string: String(decoding: data, as: UTF8.self))
+        attachment.name = "iPad_" + page + "_layout_diagnostics"
+        attachment.lifetime = .keepAlways; add(attachment)
+    }
+
+    func testIPadHomeScreenshot() throws {
+        try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "Requires the dedicated 13-inch iPad simulator.")
+        let app = try launchIPadGallery()
+        let cards = ["game.sudoku", "game.minesweeper", "game.sliding"].map { app.buttons[$0] }
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier IN %@", cards.map(\.identifier))).count, 3)
+        for card in cards {
+            assertIPadVisible(card, app: app)
+            XCTAssertTrue(card.label.contains("進行中"))
+        }
+        XCTAssertEqual(cards[0].frame.minY, cards[1].frame.minY, accuracy: 2)
+        XCTAssertEqual(cards[1].frame.minY, cards[2].frame.minY, accuracy: 2)
+        XCTAssertLessThan(cards[0].frame.minX, cards[1].frame.minX)
+        XCTAssertLessThan(cards[1].frame.minX, cards[2].frame.minX)
+        assertIPadCaptureReady(app)
+        try attachIPadLayout(app, page: "Home", grid: cards, controls: [app.buttons["settings.open"]])
+        screenshot(app, name: "01_iPad_Home")
+    }
+
+    func testIPadSudokuScreenshot() throws {
+        try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "Requires the dedicated 13-inch iPad simulator.")
+        let app = try launchIPadGallery()
+        openIPadSavedGame(app, game: "sudoku", prefix: "sudoku", firstCell: "sudoku.cell.0")
+        let corners = [0, 8, 72, 80].map { app.buttons["sudoku.cell.\($0)"] }
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "sudoku.cell.")).count, 81)
+        for corner in corners { assertIPadVisible(corner, app: app) }
+        let digits = (1...9).map { app.buttons["sudoku.digit.\($0)"] }
+        for digit in digits { assertIPadVisible(digit, app: app); XCTAssertTrue(digit.isEnabled) }
+        let seededBlueDigit = app.buttons["sudoku.cell.2"]
+        XCTAssertEqual(seededBlueDigit.value as? String, "4")
+        app.segmentedControls["sudoku.tools"].buttons["答案筆"].tap()
+        let empty = app.buttons["sudoku.cell.3"]
+        XCTAssertEqual(empty.value as? String, "空白"); empty.tap()
+        app.buttons["sudoku.digit.6"].tap()
+        XCTAssertEqual(empty.value as? String, "6")
+        app.buttons["sudoku.erase"].tap()
+        XCTAssertEqual(empty.value as? String, "空白")
+        assertIPadPauseResume(app, prefix: "sudoku", firstCell: "sudoku.cell.0")
+        cancelIPadRestart(app, prefix: "sudoku")
+        XCTAssertEqual(seededBlueDigit.value as? String, "4")
+        XCTAssertEqual(empty.value as? String, "空白")
+        XCTAssertFalse(app.staticTexts["sudoku.complete"].exists)
+        assertIPadCaptureReady(app, prefix: "sudoku")
+        try attachIPadLayout(app, page: "Sudoku", grid: corners,
+                             controls: digits + [app.segmentedControls["sudoku.tools"], app.buttons["sudoku.erase"], app.buttons["sudoku.pause"], app.buttons["sudoku.restart"], app.buttons["navigation.back"]])
+        screenshot(app, name: "02_iPad_Sudoku")
+        back(app); XCTAssertTrue(app.buttons["sudoku.continue"].waitForExistence(timeout: 5))
+        back(app); XCTAssertTrue(app.buttons["game.sudoku"].waitForExistence(timeout: 5))
+    }
+
+    func testIPadMinesweeperScreenshot() throws {
+        try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "Requires the dedicated 13-inch iPad simulator.")
+        let app = try launchIPadGallery()
+        openIPadSavedGame(app, game: "minesweeper", prefix: "mines", firstCell: "mines.cell.0")
+        let viewport = app.scrollViews["mines.zoomBoard"]
+        XCTAssertTrue(viewport.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "mines.cell.")).count, 81)
+        let corners = [0, 8, 72, 80].map { app.buttons["mines.cell.\($0)"] }
+        for corner in corners {
+            assertIPadVisible(corner, app: app)
+            XCTAssertTrue(viewport.frame.insetBy(dx: -1, dy: -1).contains(corner.frame))
+        }
+        XCTAssertEqual((corners[0].frame.minX + corners[1].frame.maxX) / 2, viewport.frame.midX, accuracy: 3)
+        XCTAssertEqual(viewport.frame.midX, app.frame.midX, accuracy: 3)
+        let flag = app.buttons["mines.cell.30"]
+        assertIPadVisible(flag, app: app)
+        XCTAssertTrue(flag.label.contains("旗標"))
+        flag.press(forDuration: 0.8); XCTAssertTrue(flag.label.contains("未揭開"))
+        flag.press(forDuration: 0.8); XCTAssertTrue(flag.label.contains("旗標"))
+        assertIPadPauseResume(app, prefix: "mines", firstCell: "mines.cell.0")
+        cancelIPadRestart(app, prefix: "mines")
+        XCTAssertTrue(flag.label.contains("旗標"))
+        XCTAssertFalse(app.staticTexts["mines.won"].exists)
+        XCTAssertFalse(app.staticTexts["mines.lost"].exists)
+        assertIPadCaptureReady(app, prefix: "mines")
+        try attachIPadLayout(app, page: "Minesweeper", grid: corners,
+                             controls: [app.staticTexts["mines.timer"], app.buttons["mines.pause"], app.buttons["mines.restart"], app.buttons["navigation.back"]], viewport: viewport)
+        screenshot(app, name: "03_iPad_Minesweeper")
+        back(app); XCTAssertTrue(app.buttons["mines.continue"].waitForExistence(timeout: 5))
+        back(app); XCTAssertTrue(app.buttons["game.minesweeper"].waitForExistence(timeout: 5))
+    }
+
+    func testIPadSlidingPuzzleScreenshot() throws {
+        try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "Requires the dedicated 13-inch iPad simulator.")
+        let app = try launchIPadGallery()
+        openIPadSavedGame(app, game: "sliding", prefix: "sliding", firstCell: "sliding.tile.0")
+        let corners = [0, 2, 6, 8].map { app.buttons["sliding.tile.\($0)"] }
+        // Nonadjacent and blank tiles are correctly disabled by the game.
+        // Their geometry, rather than enabled/hittable state, proves visibility.
+        for corner in corners { assertIPadVisible(corner, app: app, interactive: false) }
+        XCTAssertEqual(app.staticTexts["sliding.moves"].label, "35 步")
+        XCTAssertEqual(app.buttons["sliding.tile.7"].label, "空格")
+        let firstMove = app.buttons["sliding.tile.6"]
+        assertIPadVisible(firstMove, app: app); XCTAssertTrue(firstMove.isEnabled)
+        firstMove.swipeRight()
+        XCTAssertEqual(app.buttons["sliding.tile.7"].label, "方塊 7")
+        XCTAssertEqual(app.buttons["sliding.tile.6"].label, "空格")
+        XCTAssertEqual(app.staticTexts["sliding.moves"].label, "36 步")
+        XCTAssertFalse(app.staticTexts["sliding.complete"].exists)
+        assertIPadPauseResume(app, prefix: "sliding", firstCell: "sliding.tile.0")
+        cancelIPadRestart(app, prefix: "sliding")
+        XCTAssertEqual(app.staticTexts["sliding.moves"].label, "36 步")
+        app.buttons["sliding.restart"].tap()
+        let confirm = app.buttons["sliding.confirmRestart"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5)); confirm.tap()
+        XCTAssertFalse(confirm.exists)
+        XCTAssertEqual(app.staticTexts["sliding.moves"].label, "0 步")
+        XCTAssertEqual(app.buttons["sliding.tile.6"].label, "空格")
+        let restartedMove = app.buttons["sliding.tile.7"]
+        assertIPadVisible(restartedMove, app: app); XCTAssertTrue(restartedMove.isEnabled)
+        restartedMove.swipeLeft()
+        XCTAssertEqual(app.staticTexts["sliding.moves"].label, "1 步")
+        XCTAssertEqual(app.buttons["sliding.tile.7"].label, "空格")
+        XCTAssertFalse(app.staticTexts["sliding.complete"].exists)
+        assertIPadCaptureReady(app, prefix: "sliding")
+        try attachIPadLayout(app, page: "SlidingPuzzle", grid: corners,
+                             controls: [app.staticTexts["sliding.moves"], app.staticTexts["sliding.timer"], app.buttons["sliding.pause"], app.buttons["sliding.restart"], app.buttons["navigation.back"]])
+        screenshot(app, name: "04_iPad_SlidingPuzzle")
+        back(app); XCTAssertTrue(app.buttons["sliding.continue"].waitForExistence(timeout: 5))
+        back(app); XCTAssertTrue(app.buttons["game.sliding"].waitForExistence(timeout: 5))
     }
 }
