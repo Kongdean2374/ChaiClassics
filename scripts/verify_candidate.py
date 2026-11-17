@@ -238,18 +238,20 @@ def verify_tooling_only_equivalence(source_sha, target_sha, root=ROOT, *, tree_r
     # Only exact audited boot/ceiling pairs may retain an already successful
     # whole screenshot run. App/runtime edits, helpers and protected test bodies
     # still fail below; this never supplies missing/failed XCTest results.
-    from verify_scoped_ci import APPROVED_TIMEOUT_CEILINGS, shared_content_digest
+    from verify_scoped_ci import APPROVED_TIMEOUT_CEILINGS, APPROVED_CI_JOB_TIMEOUT, shared_content_digest
     execution_equivalence = {}
+    canonical_execution = {path: pair[0] for path, pair in APPROVED_TIMEOUT_CEILINGS.items()}
+    canonical_execution['.github/workflows/ci.yml'] = APPROVED_CI_JOB_TIMEOUT[0]
     if tested_cases is not None:
         for path in changed:
-            if path not in APPROVED_TIMEOUT_CEILINGS or path not in before or path not in after:
+            if path not in canonical_execution or path not in before or path not in after:
                 continue
             old_mode, old_data = before[path]; new_mode, new_data = after[path]
             if old_mode != '100644' or new_mode != '100644':
                 continue
             old_digest = shared_content_digest(path, old_mode, old_data)
             new_digest = shared_content_digest(path, new_mode, new_data)
-            if old_digest == new_digest == APPROVED_TIMEOUT_CEILINGS[path][0]:
+            if old_digest == new_digest == canonical_execution[path]:
                 execution_equivalence[path] = {
                     'source_sha256': hashlib.sha256(old_data).hexdigest(),
                     'target_sha256': hashlib.sha256(new_data).hexdigest(),

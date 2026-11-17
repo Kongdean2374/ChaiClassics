@@ -21,7 +21,12 @@ final class ChaiClassicsV030UITests: XCTestCase {
             let navigation = app.navigationBars.allElementsBoundByIndex.last(where: { $0.isHittable })
             let top = max(window.minY+45,navigation?.frame.maxY ?? window.minY)
             let safe = CGRect(x:window.minX+4,y:top,width:window.width-8,height:window.maxY-24-top)
-            if element.exists, element.isHittable, safe.contains(CGPoint(x:element.frame.midX,y:element.frame.midY)) { return }
+            if element.exists, element.isHittable {
+                let target = element.frame
+                // Navigation controls belong to the native bar, above scroll content.
+                if let navigation, navigation.frame.contains(target), window.contains(target) { return }
+                if safe.contains(CGPoint(x:target.midX,y:target.midY)) { return }
+            }
             let game = element.exists ? element.identifier.split(separator:".").first.map(String.init) ?? "" : ""
             let board = app.scrollViews.matching(identifier:game+".zoomBoard").firstMatch
             let origin = app.coordinate(withNormalizedOffset:.zero)

@@ -504,6 +504,8 @@ final class ChaiClassicsUITests: XCTestCase {
         XCTAssertTrue(app.buttons["sliding.continue"].label.contains("35 moves"))
     }
     func testEnglishIsAppliedToAllGamesAndAccessibility() {
+        // Intel measured the complete language tour at 451 seconds.
+        executionTimeAllowance = 600
         let app = launch("settings",legacy: true)
         app.buttons["settings.open"].tap(); app.segmentedControls["settings.language"].buttons["English"].tap(); back(app)
         app.buttons["game.sudoku"].tap(); app.buttons["sudoku.continue"].tap(); resumePausedGame("sudoku", app: app)

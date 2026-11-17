@@ -68,7 +68,14 @@ class TimeoutCaseEquivalenceTests(unittest.TestCase):
         sha=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
         old=scoped.historical.git_tree(sha); new=dict(old)
         for path,data in self.current.items():new[path]=('100644',data)
-        path='UITests/ChaiClassicsV030UITests.swift'; new[path]=('100644',(ROOT/path).read_bytes())
+        path='UITests/ChaiClassicsV030UITests.swift'
+        original=old[path][1].decode(); current=(ROOT/path).read_text()
+        name='testShogiCompleteSessionRestoresAndConfirmsDeletion'
+        old_start,old_end=scoped.historical.functions(original)[name]
+        new_start,new_end=scoped.historical.functions(current)[name]
+        # This fixture exercises only the Shogi allowance, independently of
+        # unrelated private-helper corrections currently in the checkout.
+        new[path]=('100644',(original[:old_start]+current[new_start:new_end]+original[old_end:]).encode())
         previous=scoped.fingerprints(old); current=scoped.fingerprints(new)
         changed={name for name in previous if previous[name]!=current[name]}
         # This holds before the change is committed; afterwards both trees
