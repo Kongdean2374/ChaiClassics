@@ -149,7 +149,7 @@ struct ContinueGameRow<Label: View>: View {
             } else {
                 continueButton.swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button(role: .destructive) { requestDeletion() } label: {
-                        Label(model.t("session.delete.action"), systemImage: "trash")
+                        SwiftUI.Label(model.t("session.delete.action"), systemImage: "trash")
                     }.accessibilityIdentifier(game.rawValue + ".continue.delete")
                 }
             }
