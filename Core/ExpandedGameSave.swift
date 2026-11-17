@@ -102,7 +102,11 @@ public struct ExpandedGameSave: Codable, Equatable, Sendable {
     public init?(game: GameID, seed: UInt64, difficulty: DuelDifficulty = .normal, mode: DuelMode = .singlePlayer,
                  humanPlayer: DuelPlayer = .first, options: ExpandedGamePreferences = .init()) {
         guard game.isExpanded, options.isValid else { return nil }
-        gameID = game; self.seed = seed; self.difficulty = difficulty; self.mode = mode; self.humanPlayer = humanPlayer
+        gameID = game; self.seed = seed; self.mode = mode; self.humanPlayer = humanPlayer
+        if game == .spider { self.difficulty = options.spiderSuits==1 ? .easy : options.spiderSuits==2 ? .normal : .hard }
+        else if game == .klondike { self.difficulty = options.drawCount==1 ? .easy : .hard }
+        else if [.freecell,.pyramid,.tripeaks].contains(game) { self.difficulty = .normal }
+        else { self.difficulty = difficulty }
         let level = difficulty == .easy ? 0 : difficulty == .normal ? 1 : 2
         switch game {
         case .nonogram:state = .nonogram(.init(size:[5,10,15][level],seed:seed))

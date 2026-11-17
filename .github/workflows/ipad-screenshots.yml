@@ -20,7 +20,7 @@ jobs:
     if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop/0.2.0' || github.ref == 'refs/heads/develop/0.2.1' || github.ref == 'refs/heads/develop/0.2.2' || github.ref == 'refs/heads/develop/0.3.0') && github.event_name == 'workflow_dispatch'
     # Map inputs to standard hosted pools; arbitrary labels cannot select paid hosts.
     runs-on: ${{ inputs.runner == 'macos-15' && 'macos-15' || 'macos-15-intel' }}
-    timeout-minutes: 100
+    timeout-minutes: 150
     env:
       CHAI_IPAD_REQUESTED_RUNNER: ${{ inputs.runner }}
       CHAI_IPAD_DEVICE_NAME: ${{ inputs.device_name }}
@@ -52,12 +52,12 @@ jobs:
         id: ui
         timeout-minutes: 25
         run: bash scripts/ipad_screenshots.sh test
-      - name: Run all five new game journeys on the same iPad
+      - name: Run all 22 game journeys on the same iPad
         id: games
         # Preserve independent game evidence after a gallery assertion fails.
         # The failed gallery step still fails the job and candidate proof.
         if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.boot.outcome == 'success' }}
-        timeout-minutes: 35
+        timeout-minutes: 110
         run: bash scripts/ipad_screenshots.sh games
       - name: Export XCTest screenshots and diagnostics
         id: export
@@ -121,7 +121,7 @@ jobs:
           path: build/ipad-screenshots/IPadScreenshots.xcresult
           if-no-files-found: warn
           retention-days: 14
-      - name: Preserve the five iPad game journeys separately
+      - name: Preserve all iPad game journeys separately
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

@@ -789,3 +789,7 @@
 "expanded.undo" = "復原上一步";
 
 "expanded.shogi.declare" = "入玉宣言勝利";
+
+"catalog.status.folderAllPlayable" = "%d 款可遊玩";
+
+"expanded.settings.detail" = "模式與難度只套用新局；合法落點與落點輪廓的顯示偏好，會在返回遊戲後生效。";

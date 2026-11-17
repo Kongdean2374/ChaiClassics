@@ -1,12 +1,12 @@
 import Foundation
 
 public enum ExpandedStrategyAction: Codable, Equatable, Sendable {
-    case place(Int), banqi(BanqiAction), chess(ChessMove), xiangqi(ChessMove), shogi(ShogiMove)
+    case place(Int), banqi(BanqiAction), chess(ChessMove), xiangqi(ChessMove), shogi(ShogiMove), shogiDeclare
     public var from: Int? {
         switch self { case .chess(let m),.xiangqi(let m):return m.from; case .shogi(let m):return m.from; case .banqi(.move(let from,_)):return from; default:return nil }
     }
     public var to: Int {
-        switch self { case .place(let i),.banqi(.reveal(let i)):return i; case .banqi(.move(_,let i)):return i; case .chess(let m),.xiangqi(let m):return m.to; case .shogi(let m):return m.to }
+        switch self { case .place(let i),.banqi(.reveal(let i)):return i; case .banqi(.move(_,let i)):return i; case .chess(let m),.xiangqi(let m):return m.to; case .shogi(let m):return m.to; case .shogiDeclare:return -1 }
     }
     public var promotion: Int? {
         switch self { case .chess(let m):return m.promotion; case .shogi(let m):return m.promote ? 1 : nil; default:return nil }
@@ -23,7 +23,7 @@ public extension ExpandedGameState {
         case .reversi(let b):return b.isFinished ? [] : b.legalMoves(for:b.currentPlayer).map(ExpandedStrategyAction.place)
         case .chess(let b):return b.result == .playing ? b.legalMoves().map(ExpandedStrategyAction.chess) : []
         case .xiangqi(let b):return b.result == .playing ? b.legalMoves().map(ExpandedStrategyAction.xiangqi) : []
-        case .shogi(let b):return b.result == .playing ? b.legalMoves().map(ExpandedStrategyAction.shogi) : []
+        case .shogi(let b):return b.result == .playing ? b.legalMoves().map(ExpandedStrategyAction.shogi) + (b.canDeclareEnteringKing ? [.shogiDeclare] : []) : []
         case .banqi(let b):return b.result == .playing ? b.legalActions().map(ExpandedStrategyAction.banqi) : []
         default:return []
         }
@@ -35,6 +35,7 @@ public extension ExpandedGameState {
         case (.chess(var b),.chess(let m)):guard b.play(m) else { return false }; self = .chess(b)
         case (.xiangqi(var b),.xiangqi(let m)):guard b.play(m) else { return false }; self = .xiangqi(b)
         case (.shogi(var b),.shogi(let m)):guard b.play(m) else { return false }; self = .shogi(b)
+        case (.shogi(var b),.shogiDeclare):guard b.declareEnteringKing() else { return false }; self = .shogi(b)
         case (.banqi(var b),.banqi(let m)):guard b.play(m) else { return false }; self = .banqi(b)
         default:return false
         }; return true
@@ -45,7 +46,7 @@ public extension ExpandedGameState {
         case .reversi(let b):return b.recommendedMove(difficulty:difficulty,seed:seed).map(ExpandedStrategyAction.place)
         case .chess(let b):return b.recommendedMove(difficulty:difficulty,seed:seed).map(ExpandedStrategyAction.chess)
         case .xiangqi(let b):return b.recommendedMove(difficulty:difficulty,seed:seed).map(ExpandedStrategyAction.xiangqi)
-        case .shogi(let b):return b.recommendedMove(difficulty:difficulty,seed:seed).map(ExpandedStrategyAction.shogi)
+        case .shogi(let b):return b.canDeclareEnteringKing ? .shogiDeclare : b.recommendedMove(difficulty:difficulty,seed:seed).map(ExpandedStrategyAction.shogi)
         case .banqi(let b):return b.recommendedAction(difficulty:difficulty,randomSeed:seed).map(ExpandedStrategyAction.banqi)
         default:return nil
         }

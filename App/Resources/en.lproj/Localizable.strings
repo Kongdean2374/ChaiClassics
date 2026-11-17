@@ -789,3 +789,7 @@
 "expanded.undo" = "Undo";
 
 "expanded.shogi.declare" = "Declare entering-king win";
+
+"catalog.status.folderAllPlayable" = "%d playable";
+
+"expanded.settings.detail" = "Mode and difficulty apply to new games. Legal destinations and the landing outline apply when you return to play.";

@@ -42,6 +42,16 @@ GAME_FILES = {
     'memory': {'Core/MemoryMatch.swift', 'App/MemoryView.swift'},
     'maze': {'Core/Maze.swift', 'Core/MazeMotion.swift', 'App/MazeView.swift'},
 }
+# Reviewed 0.3.0 views expose no global extensions or static hooks. Family
+# renderers and the shared new-game menu belong to every consuming game.
+for game, engine, family in (
+    ('nonogram','Nonogram','Puzzle'),('kakuro','Kakuro','Puzzle'),('klotski','Klotski','Puzzle'),
+    ('gomoku','Gomoku','Strategy'),('reversi','Reversi','Strategy'),('xiangqi','Xiangqi','Strategy'),
+    ('banqi','Banqi','Strategy'),('chess','Chess','Strategy'),('shogi','Shogi','Strategy'),
+    ('klondike','Solitaire','Solitaire'),('spider','Solitaire','Solitaire'),('freecell','Solitaire','Solitaire'),
+    ('pyramid','Solitaire','Solitaire'),('tripeaks','Solitaire','Solitaire'),('snake','Snake','Arcade'),
+    ('fallingblocks','FallingBlocks','Arcade'),('brickbreaker','BrickBreaker','Arcade')):
+    GAME_FILES[game] = {'Core/' + engine + '.swift', 'App/Expanded' + family + 'View.swift', 'App/ExpandedGameMenuView.swift'}
 ALL_GAME_FILES = set().union(*GAME_FILES.values())
 SHARED_SESSION_FILES = {
     'App/AppModel.swift', 'App/ChaiClassicsApp.swift', 'App/GameSessionComponents.swift',
@@ -57,23 +67,23 @@ BODY_PROFILES = {
     'ChaiClassicsUITests/testHomeHasExactlyThreeColumns': (
         '927bb66520b4a9b6b8f266592efd0e33775b6b9754e3802566ce5b39c558ecd0', ()),
     'ChaiClassicsUITests/testLegacyFlagModeStillRevealsOnSingleTap': (
-        'd8aac8222c34998ecc03f9b3c4dd4608742dcad6783d9efb87dad3b5b051ce47', ('sudoku', 'mines', 'sliding')),
+        '6c58baae7146279029c2026199016aaeb7bdabb5ee70009f17f5e835f80f9ad1', ('sudoku', 'mines', 'sliding')),
     'ChaiClassicsUITests/testThemeLanguagePreferencesAndLegacySummariesPersist': (
         '6205cb7e0011e46bdcb7eba4369c41fdd2b816afd7780acac8e3ce8d1d3995d3', ('sudoku', 'mines', 'sliding')),
     'ChaiClassicsUITests/testEnglishIsAppliedToAllGamesAndAccessibility': (
-        'cf05b833ed6ebee5a52d6b9b40eba5fe77d0ff19423d7b86905d45b930a022c3', ('sudoku', 'mines', 'sliding')),
+        '3bb3ee5d9d4505574d479f1731032805e3772d507318d6ecb131ea7ea47de454', ('sudoku', 'mines', 'sliding')),
     'ChaiClassicsUITests/testBundledLegalAndSupportInBothLanguages': (
-        'd5c227fdaf438ce86b6af0386035a3565cd1e98306aed6abf965bf6a1b698f8e', ()),
+        'a0018b96c51886fcedc78981a5fb31cc67223a2c591e7d7fa7bd7a9a8e483d58', ()),
     'ChaiClassicsV020UITests/testCompleteCatalogAndThirteenComingSoonPagesInEnglish': (
-        'efb196fb65141eb89d33a365a76e44865a680c822600206f9eec5acc601df9fe', ()),
+        'efb196fb65141eb89d33a365a76e44865a680c822600206f9eec5acc601df9fe', ('nonogram', 'kakuro', 'klotski', 'gomoku', 'reversi', 'xiangqi', 'banqi', 'chess', 'shogi', 'klondike', 'spider', 'freecell', 'pyramid', 'tripeaks', 'snake', 'fallingblocks', 'brickbreaker')),
     'ChaiClassicsV020UITests/testCompleteCatalogAndThirteenComingSoonPagesInTraditionalChinese': (
-        '49bae2235581390c0a5e46680bb9f687424c105a42f164d56944dc7f7653adda', ()),
+        '49bae2235581390c0a5e46680bb9f687424c105a42f164d56944dc7f7653adda', ('nonogram', 'kakuro', 'klotski', 'gomoku', 'reversi', 'xiangqi', 'banqi', 'chess', 'shogi', 'klondike', 'spider', 'freecell', 'pyramid', 'tripeaks', 'snake', 'fallingblocks', 'brickbreaker')),
     'ChaiClassicsV020UITests/testAllEightPlayableCardsOpenRealMenus': (
-        '61175c35f72d63954d937f92788b78f578bea5e611df30590f930557ea779341', ('sudoku', 'mines', 'sliding', 'tictactoe', 'connectfour', 'twentyfour', 'memory', 'maze')),
+        '6eec36cee283ee14ba5fef2b7325880d65b2625a29cc48b9df942a6a9bab7559', ('sudoku', 'mines', 'sliding', 'tictactoe', 'connectfour', 'twentyfour', 'memory', 'maze', 'nonogram', 'kakuro', 'klotski', 'gomoku', 'reversi', 'xiangqi', 'banqi', 'chess', 'shogi', 'klondike', 'spider', 'freecell', 'pyramid', 'tripeaks', 'snake', 'fallingblocks', 'brickbreaker')),
     'ChaiClassicsV020UITests/testNewPuzzleModesStartRealBoards': (
-        '9606b4c1b08030466f58eedf4109ed2d4e4e0768fa140b037032ec01e4adabca', ('twentyfour', 'memory', 'maze')),
+        '660c3dd75917b4f42f62093f1bcec423a0196a425d5b1ae31072d1ad71168f13', ('twentyfour', 'memory', 'maze')),
     'ChaiClassicsV020UITests/testCorruptNewSaveRecoveryPreservesAllThreeLegacySaves': (
-        '3420966b46c6e381cac9e7e68e965c5f88b705eb1f75b4eb8cf767d532621620', ('sudoku', 'mines', 'sliding', 'memory')),
+        '5a3b6f9296906861f9b3ef46d72f8462675d5834ed1f6d2ffb5be3fa225a534a', ('sudoku', 'mines', 'sliding', 'memory')),
     'ChaiClassicsV020UITests/testFutureSchemaRemainsProtectedAcrossRelaunch': (
         '76e37e79752b099450f43f29905948adb73f9d86265074a86465ca723d8214d8', ('memory', 'sliding')),
     'ChaiClassicsV020UITests/testCatalogLayoutAt320PointViewport': (
@@ -87,28 +97,28 @@ BODY_PROFILES = {
     'ChaiClassicsV020UITests/testAccessibilityTypeAdaptsCatalogAndSupportsReducedMotion': (
         '3f4bc97949c1db678c664a3e3b8590abc865fc0561ed0aa7162299b54d82593b', ()),
     'ChaiClassicsVisualSmokeTests/testFreshWinCelebratesOnceAndRestoredWinDoesNotReplay': (
-        'cd007d0736badd2f3c2907836ae77107177b9fabd0aeb685496d702ca7524e00', ('sliding',)),
+        'ab8fb0bcfdd3660120c3ec452c77a9e2e6d0962a33238eef079ae068258baf4e', ('sliding',)),
     'ChaiClassicsVisualSmokeTests/testReducedMotionSuppressesCelebrationButStillCompletesGame': (
         '70c41d41386e486704ba65b90e4d642b01d43d6cd44c0dd9a7606b29296139eb', ('sliding',)),
     'ChaiClassicsVisualSmokeTests/testLowPowerSuppressesCelebrationButStillCompletesGame': (
         'd61c0385dafb936cc689eb2a99a09bfa0054600f25f224fa476b2d9e75893cba', ('sliding',)),
     'ChaiClassicsVisualSmokeTests/testScreenshotGallery': (
-        'b15165766e7bb259fb470b6e835542ec1a803ae4b33eb2d98189e88fe767bc4b', ('sudoku', 'mines', 'sliding')),
+        'f8a38dbe244404a8be9bfc98697845333bb4994c013953c3a02b56b3b8782a01', ('sudoku', 'mines', 'sliding')),
     'ChaiClassicsVisualSmokeTests/testIPadHomeScreenshot': (
-        'd847e98d7e53138a9aa8bbccd1ef3a954481cdb36d95921404f31f105de7d918', ()),
+        '0a295220bc79d7c54d99c7bad3f761924e0e9323d078a717e6fe4c4b5ba69397', ('klondike',)),
     'ChaiClassicsVisualSmokeTests/testIPadSudokuScreenshot': (
-        '8b6d8e134e018014f95f5d01cf45974e8694aa190050c34bbd0828990eeb0191', ('sudoku',)),
+        '4d9a5ef4e6cb0700fedb363d282e73def865c5840ca194bc3370bb0ccbe403e9', ('sudoku',)),
     'ChaiClassicsVisualSmokeTests/testIPadMinesweeperScreenshot': (
-        '9bd9829a3fb25156121a0417973708afff8ce96d5cd645b9b1cd8a4d6a7b7f0d', ('mines',)),
+        '6ee463fcd1df8d56d3a9017cc64c0c1148cb5f9120333beab2db18d0f1bbdb52', ('mines',)),
     'ChaiClassicsVisualSmokeTests/testIPadSlidingPuzzleScreenshot': (
-        '5f88849a45c0237a1624d6a7e2a4c8c5d9823ad8b1b30a8fac20cd18a02dd816', ('sliding',)),
+        'dc44b6a2007ac9c0642246cdeef782a9dea80a7ead2fc3125db02618d8d67516', ('sliding',)),
 }
 PURE_EVIDENCE_SCRIPTS = {'scripts/verify_scoped_ci.py', 'scripts/verify_candidate.py'}
 
 
 # Reviewed v0.2.2 Visual flows: a case body AND all shared helpers must match.
 # The previous helper digest retains genuine pre-migration source provenance.
-VISUAL_SCAFFOLD_DIGEST = '3e2c25589adc902d17e51727c5f0b4d70c4fd688a8aac1fcc373f25caaaffacf'
+VISUAL_SCAFFOLD_DIGEST = '81180374b9c31439659b48a1cdac1e27cec990e3d31397766c6e54f5ce877ba1'
 PREVIOUS_VISUAL_SCAFFOLD_DIGEST = '40dfb0eaa2ebcf7f8e10b2b438ea41d25517d46af3a59128d65b3e2c0c5e397d'
 SESSION_BODY_PROFILES = {
     'ChaiClassicsVisualSmokeTests/testConnectFourCommonSessionLifecycleAndContinueDeletion': (
@@ -116,7 +126,7 @@ SESSION_BODY_PROFILES = {
     'ChaiClassicsVisualSmokeTests/testFreshWinCelebratesOnceAndRestoredWinDoesNotReplay': (
         'ab8fb0bcfdd3660120c3ec452c77a9e2e6d0962a33238eef079ae068258baf4e', ('sliding',)),
     'ChaiClassicsVisualSmokeTests/testIPadHomeScreenshot': (
-        'd847e98d7e53138a9aa8bbccd1ef3a954481cdb36d95921404f31f105de7d918', ()),
+        '0a295220bc79d7c54d99c7bad3f761924e0e9323d078a717e6fe4c4b5ba69397', ('klondike',)),
     'ChaiClassicsVisualSmokeTests/testIPadMinesweeperScreenshot': (
         '6ee463fcd1df8d56d3a9017cc64c0c1148cb5f9120333beab2db18d0f1bbdb52', ('mines',)),
     'ChaiClassicsVisualSmokeTests/testIPadSlidingPuzzleScreenshot': (

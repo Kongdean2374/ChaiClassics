@@ -61,9 +61,12 @@ private struct GameActionConfirmation: ViewModifier {
     @EnvironmentObject private var model: AppModel
     @State private var decision: Bool?
     func body(content: Content) -> some View {
-        content.disabled(isPresented).allowsHitTesting(!isPresented).fullScreenCover(isPresented: $isPresented, onDismiss: {
+        content.disabled(isPresented || model.navigationTouchLocked)
+            .allowsHitTesting(!isPresented && !model.navigationTouchLocked)
+            .fullScreenCover(isPresented: $isPresented, onDismiss: {
             let accepted = decision == true
             decision = nil
+            model.protectNavigationTransition()
             if accepted { onConfirm() } else { onCancel() }
         }) {
             GameConfirmationDialog(title:title,message:message,confirmTitle:confirmTitle,

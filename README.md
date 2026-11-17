@@ -5,7 +5,7 @@
 SwiftUI 原生 iPhone／iPad 離線合集，iOS 17+。免費、無廣告、帳號、訂閱、追蹤或遊戲後端。
 Bundle ID：`cc.chaihome.chaiclassics`。Public 原始碼，未另授予開源授權。
 
-0.2.2 實作包含 **8 款可玩、17 款尚未推出，共 25 款邏輯遊戲**：
+0.3.0 開發候選版實作 **25 款可玩遊戲**；實際發布驗證見 [0.3.0 紀錄](docs/RELEASE_0.3.0.md)：
 
 | 可玩 | 規則與模式 |
 | --- | --- |
@@ -18,14 +18,16 @@ Bundle ID：`cc.chaihome.chaiclassics`。Public 原始碼，未另授予開源�
 | 記憶翻牌 | 4×4／4×5／6×6、兩張翻牌狀態機、配對鎖定與未配對延遲翻回 |
 | 迷宮 | 9×9／15×15／21×21 可重現隨機完美迷宮、360° 類比搖桿、輔助方向鍵、碰牆限制 |
 
-尚未推出：數織、數和、華容道、五子棋、黑白棋、象棋、暗棋、西洋棋、將棋、貪吃蛇、俄羅斯方塊、打磚塊，
-以及接龍資料夾內的經典接龍、蜘蛛接龍、新接龍、金字塔接龍、三峰接龍。
-這些入口清楚顯示尚未推出，不偽裝成可玩遊戲。
+| 數織／數和／華容道 | 唯一解數織與數和、合法反向打亂華容道；選格、填寫及真實滑動 |
+| 五子棋／黑白棋 | 五連勝、八方向翻子與自動讓步；離線 AI／同機雙人 |
+| 象棋／暗棋／西洋棋／將棋 | 各自合法走法、王將安全、升變／持駒／翻棋等專屬規則；離線 AI／同機雙人 |
+| 經典／蜘蛛／新／金字塔／三峰接龍 | 五套真實牌序與移牌規則、種子牌局、復原、無法繼續時結算 |
+| 貪吃蛇／落塊拼圖／打磚塊 | 即時操作、碰撞、計分、暫停與恢復；顯示更新與存檔分離 |
 
 首頁一般字級維持三欄，共 14 張卡片；棋類目錄 8 款、接龍目錄 5 款。首頁只顯示名稱、玩法與可玩狀態，
 進度留在遊戲選單。輔助大字級會調整欄數，並以多行顯示完整標題。
 
-棋類集中於同一入口：井字棋、四子棋可玩，其餘六款清楚標示即將推出。
+棋類集中於同一入口，八款均有實際遊戲；接龍資料夾內五款均可開局。
 [棋類開發規格](docs/BOARD_GAMES_ROADMAP.md) 記錄離線 AI、本機雙人與 2D 棋子要求。
 
 所有遊戲獨立存檔、可恢復及重玩。沿用 0.1.x 三款遊戲的存檔命名空間、格式與原有 150 題數獨；
@@ -38,14 +40,14 @@ Bundle ID：`cc.chaihome.chaiclassics`。Public 原始碼，未另授予開源�
 GitHub Actions → **CI → Run workflow** 可選 `ui_scope`：
 `full` 是完整整合，`memory`、`sliding` 等只測受影響遊戲及相關流程。
 先局部修正、局部重驗，發布前再做必要整合，避免每個小修都重跑所有遊戲。
-局部驗證明確標示範圍；測試工具修復的跨 Run 證據須通過 App 未變、斷言未變及逐案例來源驗證。
+局部驗證明確標示範圍；可用四個分組或個別遊戲驗證。跨 Run 只承認來源雜湊及相依檔案相符的真實通過案例，受影響項目仍須重跑。
 詳見 [選擇性測試](docs/INCREMENTAL_UI.md)。
 
 [iPad Screenshots](https://github.com/Kongdean2374/ChaiClassics/actions/workflows/ipad-screenshots.yml)
-會執行真正的 13 吋 iPad 模擬器，保留四張原生直向 PNG、五款新遊戲路徑、尺寸報告與 XCTest 結果。
+會執行真正的 13 吋 iPad 模擬器，保留四張原生直向 PNG、22 款新增／既有遊戲路徑、尺寸報告與 XCTest 結果。
 以 Actions 的實際通過數和原始產物為準；不能以編譯成功或局部測試代替整體驗收。
 
-0.2.2 的 TestFlight 由受信任候選版及驗證門檻控制，完成後可由 Codex 代為觸發並追蹤 Apple 處理。
+0.3.0 的 TestFlight 必須具備完整 CI、iPhone Visual 與 iPad 證據；不允許沿用 0.2.x 的手動 QA 捷徑。使用者已授權驗證後代為觸發，送出後提供連結並結束，不追蹤 Apple 處理。
 普通提交不自動上傳。簽署沿用私人倉庫的 **match readonly** 資產；不要重新初始化或撤銷憑證。
 不自動正式提交 App Store 或公開上架；上傳、處理完成、內部可用與外部 Beta 審核分開回報。
 
@@ -59,6 +61,7 @@ CHAI_UI_SCOPE=memory bash scripts/ci.sh ui  # macOS 指定 UI 範圍
 Xcode 26+ 開啟 `ChaiClassics.xcodeproj` 的 `ChaiClassics` scheme。
 新增 Swift 檔案後執行 `python3 scripts/create_project.py`。
 
+- [0.3.0 改版與驗證紀錄](docs/RELEASE_0.3.0.md)
 - [0.2.2 改版與驗證方法](docs/RELEASE_0.2.2.md)
 - [0.2.0 進度](docs/V020_PROGRESS.md)、[發布規格](docs/v020-release.md)、[驗證證據](docs/v020-verification.md)
 - [存檔與架構](docs/ARCHITECTURE.md)、[題庫規格](docs/SUDOKU_PUZZLES.md)

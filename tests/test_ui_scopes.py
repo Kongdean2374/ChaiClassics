@@ -29,12 +29,12 @@ class UIScopeTests(unittest.TestCase):
 
     def test_four_partitions_are_disjoint_source_sorted_complete_and_exact_cli_filters(self):
         declared = scope.declared_tests(ROOT)
-        self.assertEqual(len(declared), 50)
+        self.assertEqual(len(declared), 67)
         partitions = []
         for name, index in scope.PART_SCOPES.items():
             selected = scope.resolve(name, reversed(declared), include_sessions=False)
             self.assertEqual(selected, declared[index::4])
-            self.assertEqual(len(selected), 13 if index < 2 else 12)
+            self.assertEqual(len(selected), 17 if index < 3 else 16)
             result = subprocess.run(['python3', str(ROOT / 'scripts/ui_test_scope.py'), name], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout.splitlines(), ['-only-testing:ChaiClassicsUITests/' + test for test in selected])

@@ -180,23 +180,28 @@ class ReviewedFlowProfileTests(unittest.TestCase):
             # Every journey intentionally visits another saved menu after deletion.
             self.assertNotEqual(self.before[key], sliding[key])
 
-    def test_zoom_board_audits_git_tree_and_scopes_only_the_actual_mines_consumers(self):
-        self.assertTrue(scoped.zoom_board_is_mines_only(self.base))
+    def test_zoom_board_audits_actual_multiple_consumers_and_keeps_shared_fallback(self):
+        self.assertFalse(scoped.zoom_board_is_mines_only(self.base))
         with mock.patch.object(Path, 'read_bytes', side_effect=AssertionError('Use the supplied Git tree, never the checkout')):
-            self.assertTrue(scoped.zoom_board_is_mines_only(self.base))
-        for path in ('App/MinesView.swift', scoped.ZOOM_BOARD_FILE):
-            with self.subTest(path=path):
-                after = self.changed(path)
-                invalidated = {name for name in self.before if self.before[name] != after[name]}
-                self.assertEqual(len(invalidated), 14)
-                self.assertEqual(len(self.before) - len(invalidated), 36)
-                self.assertIn('ChaiClassicsVisualSmokeTests/testMinesweeperCommonSessionLifecycleAndContinueDeletion', invalidated)
-                # This journey deliberately opens a saved Mines menu after deletion.
-                self.assertIn('ChaiClassicsVisualSmokeTests/testSlidingCommonSessionLifecycleAndContinueDeletion', invalidated)
-                self.assertNotIn('ChaiClassicsVisualSmokeTests/testMazeCommonSessionLifecycleAndContinueDeletion', invalidated)
+            self.assertFalse(scoped.zoom_board_is_mines_only(self.base))
+        shared = self.changed(scoped.ZOOM_BOARD_FILE)
+        self.assertEqual({name for name in self.before if self.before[name] != shared[name]},set(self.before))
+        after = self.changed('App/MinesView.swift')
+        invalidated = {name for name in self.before if self.before[name] != after[name]}
+        self.assertGreater(len(invalidated),0);self.assertLess(len(invalidated),len(self.before))
+        self.assertIn('ChaiClassicsVisualSmokeTests/testMinesweeperCommonSessionLifecycleAndContinueDeletion',invalidated)
+        self.assertIn('ChaiClassicsVisualSmokeTests/testSlidingCommonSessionLifecycleAndContinueDeletion',invalidated)
+        self.assertNotIn('ChaiClassicsVisualSmokeTests/testMazeCommonSessionLifecycleAndContinueDeletion',invalidated)
+        self.assertNotIn('ChaiClassicsV030UITests/testGomokuCompleteSessionRestoresAndConfirmsDeletion',invalidated)
+        legacy = {path:entry for path,entry in self.base.items() if path not in {'App/ExpandedPuzzleView.swift','App/ExpandedStrategyView.swift','App/ExpandedSolitaireView.swift'}}
+        self.assertTrue(scoped.zoom_board_is_mines_only(legacy),'An actual historical sole-consumer tree retains its scoped behavior')
 
     def test_zoom_board_unknown_consumer_and_global_or_shared_declarations_restore_shared_fallback(self):
-        mode, original = self.base[scoped.ZOOM_BOARD_FILE]
+        # Exercise the historical sole-consumer-to-shared transition; the current
+        # multi-consumer tree is independently checked above.
+        base = {path:entry for path,entry in self.base.items() if path not in {'App/ExpandedPuzzleView.swift','App/ExpandedStrategyView.swift','App/ExpandedSolitaireView.swift'}}
+        before = scoped.fingerprints(base)
+        mode, original = base[scoped.ZOOM_BOARD_FILE]
         variants = {
             'global': original + b'\nvar globallySharedZoom = 0\n',
             'shared extension': original + b'\nextension Color { static var sharedZoom: Int { 0 } }\n',
@@ -209,22 +214,22 @@ class ReviewedFlowProfileTests(unittest.TestCase):
         }
         for label, data in variants.items():
             with self.subTest(change=label):
-                target = copy.deepcopy(self.base); target[scoped.ZOOM_BOARD_FILE] = (mode, data)
+                target = copy.deepcopy(base); target[scoped.ZOOM_BOARD_FILE] = (mode, data)
                 self.assertFalse(scoped.zoom_board_is_mines_only(target))
                 after = scoped.fingerprints(target)
-                self.assertTrue(all(self.before[name] != after[name] for name in self.before))
+                self.assertTrue(all(before[name] != after[name] for name in before))
         for consumer in ('App/SudokuView.swift', 'App/UnexpectedView.swift'):
-            target = copy.deepcopy(self.base)
+            target = copy.deepcopy(base)
             mode, data = target.get(consumer, ('100644', b''))
             target[consumer] = (mode, data + b'\ntypealias AnotherZoomConsumer = ZoomBoard\n')
             self.assertFalse(scoped.zoom_board_is_mines_only(target))
             after = scoped.fingerprints(target)
-            self.assertTrue(all(self.before[name] != after[name] for name in self.before))
-        target = copy.deepcopy(self.base)
+            self.assertTrue(all(before[name] != after[name] for name in before))
+        target = copy.deepcopy(base)
         target[scoped.ZOOM_BOARD_FILE] = ('100755', original)
         self.assertFalse(scoped.zoom_board_is_mines_only(target))
         after = scoped.fingerprints(target)
-        self.assertTrue(all(self.before[name] != after[name] for name in self.before))
+        self.assertTrue(all(before[name] != after[name] for name in before))
 
     def privacy_fixture(self):
         path = scoped.PRIVACY_MANIFEST_FILE

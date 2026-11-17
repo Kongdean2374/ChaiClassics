@@ -1,3 +1,9 @@
+# 0.3.0 implementation update
+
+All eight board games now have real menus, offline AI, local two-player rules, legal targets and independent saves. The six formerly planned engines are implemented in `Core`, with a shared native board view and the existing session/history/settings architecture. Rule tests cover legal and rejected moves, check safety, promotion, drops, cannon screens and hidden-information isolation. Actual iPhone/iPad candidate results are tracked in [RELEASE_0.3.0.md](RELEASE_0.3.0.md); implementation is not a claim of final UI validation.
+
+The original design requirements below remain as historical scope.
+
 # Board games roadmap
 
 Version 0.2.1 organizes eight entries in the Board Games folder. Tic-Tac-Toe and Connect Four remain the two playable games. Gomoku, Reversi, Xiangqi, Banqi, Chess, and Shogi are previews with a localized coming-soon page; they have no start action, board, AI, or save namespace yet.

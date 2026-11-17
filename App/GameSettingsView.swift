@@ -127,7 +127,7 @@ struct GameSettingsView: View {
         } header: {
             Text(model.t("gameSettings.preferences"))
         } footer: {
-            Text(model.t(game == .memory || game == .maze ? "gameSettings.live.detail" : "gameSettings.nextRound.detail"))
+            Text(model.t(game.isStrategy || game == .fallingBlocks ? "expanded.settings.detail" : game == .memory || game == .maze ? "gameSettings.live.detail" : "gameSettings.nextRound.detail"))
         }
     }
 

@@ -80,7 +80,9 @@ puts 'PASS: existing-asset-only manual verification; no ASC key, certificate cre
 
 extraction_job = workflows.fetch('ci.yml').fetch('jobs').fetch('codesign-extraction')
 test_job = workflows.fetch('ci.yml').fetch('jobs').fetch('test')
-check(test_job['runs-on'] == 'macos-15', 'unsigned Simulator CI uses the standard ARM pool, without paid larger-runner labels')
+check(test_job['runs-on'] == "${{ inputs.runner == 'macos-15-intel' && 'macos-15-intel' || 'macos-15' }}", 'unsigned Simulator CI maps only the two standard hosted pools, without paid labels')
+check((workflows.fetch('ci.yml')['on'] || workflows.fetch('ci.yml')[true]).dig('workflow_dispatch','inputs','runner','options') == %w[macos-15 macos-15-intel], 'manual CI can choose an available standard Mac pool')
+check((workflows.fetch('ci.yml')['on'] || workflows.fetch('ci.yml')[true]).dig('workflow_dispatch','inputs','runner','default') == 'macos-15', 'ordinary CI retains the standard ARM default')
 intel_jobs = [extraction_job, flight.fetch('jobs').fetch('upload')]
 intel_jobs.each do |entry|
   check(entry['runs-on'] == 'macos-15-intel', 'real codesign regression and signed TestFlight retain the explicit standard Intel pool')
@@ -128,7 +130,7 @@ check(flight.dig('jobs','upload','needs') == 'preflight', 'real signed archive/u
 flight.fetch('jobs').each_value do |entry|
   check(entry.fetch('if').include?("github.ref == 'refs/heads/main'") && entry.fetch('if').include?("github.event_name == 'workflow_dispatch'"), 'both release jobs remain trusted main/manual only')
 end
-check((flight['on'] || flight[true]).dig('workflow_dispatch','inputs','version','default') == '0.2.2', 'manual upload defaults to the current app version')
+check((flight['on'] || flight[true]).dig('workflow_dispatch','inputs','version','default') == '0.3.0', 'manual upload defaults to the current app version')
 puts 'PASS: fast credential-free preflight, trusted manual/main upload, current version default and opt-in full UI.'
 check(!extraction_job.key?('environment') && !extraction_job.key?('env'), 'extraction regression receives no signing environment or secrets')
 extraction_runs = extraction_job.fetch('steps').map { |step| step.fetch('run', '') }.join("\n")
@@ -222,16 +224,17 @@ check(ci_script.include?('Pro Max') && ci_script.include?('Plus'), 'full UI pref
   check(entry.fetch('if').include?("github.ref == 'refs/heads/develop/0.2.2'"), '0.2.2 supports exact-SHA unsigned visual/iPad evidence')
 end
 candidate_gate = preflight.fetch('steps').find { |step| step['name'] == 'Verify exact-SHA TestFlight candidate' }
-check(candidate_gate && candidate_gate['if'] == "startsWith(inputs.version, '0.2.')", '0.2.x TestFlight signing requires an exact-SHA candidate gate')
+check(candidate_gate && candidate_gate['if'] == "startsWith(inputs.version, '0.2.') || startsWith(inputs.version, '0.3.')", '0.2.x TestFlight signing requires an exact-SHA candidate gate')
 check(flight.fetch('permissions') == {'contents' => 'read', 'actions' => 'read'}, 'candidate reads receive no repository or Actions write permission')
 check(candidate_gate.dig('env', 'GH_TOKEN') == '${{ github.token }}', 'candidate metadata reads use the short-lived read-only workflow token')
 validation_mode = (flight['on'] || flight[true]).dig('workflow_dispatch', 'inputs', 'validation_mode')
-check(validation_mode['type'] == 'choice' && validation_mode['options'] == %w[beta full] && validation_mode['default'] == 'beta', 'explicit user-selected TestFlight policy defaults to manual Beta QA and retains optional full regression')
-check(candidate_gate.dig('env', 'CHAI_VALIDATION_MODE') == "${{ inputs.validation_mode || 'beta' }}", 'candidate gate receives the explicit Beta/full policy')
+check(validation_mode['type'] == 'choice' && validation_mode['options'] == %w[beta full] && validation_mode['default'] == 'full', 'explicit user-selected TestFlight policy defaults to complete regression for 0.3.0')
+check(candidate_gate.dig('env', 'CHAI_VALIDATION_MODE') == "${{ inputs.validation_mode || 'full' }}", 'candidate gate receives the explicit Beta/full policy')
 gate_run = candidate_gate.fetch('run')
 beta_case = gate_run.match(/beta\)\n(.*?)\n\s*;;/m)&.captures&.first
 full_case = gate_run.match(/full\)\n(.*?)\n\s*;;/m)&.captures&.first
 check(beta_case && beta_case.include?('scripts/verify_beta_candidate.py') && beta_case.include?('--sha "$GITHUB_SHA"') && beta_case.include?('--tag "$CHAI_CANDIDATE_TAG"') && beta_case.include?('--branch main') && beta_case.include?('--manual-qa'), 'manual-QA Beta independently verifies the exact main/tag/source SHA')
+check(beta_case.include?('"$CHAI_CANDIDATE_VERSION" == 0.3.*') && beta_case.include?('exit 64'), '0.3.x cannot bypass complete regression through manual-QA Beta')
 check(!beta_case.include?('--ci-run') && !beta_case.include?('--visual-run') && !beta_case.include?('--ipad-run'), 'manual-QA Beta defers UI checks to testers without requiring CI/Visual/iPad run inputs')
 check(full_case && full_case.include?('scripts/verify_candidate.py verify') && full_case.include?('--sha "$GITHUB_SHA"') && full_case.include?('--ci-run "$CHAI_CANDIDATE_CI_RUN"') && full_case.include?('--visual-run "$CHAI_CANDIDATE_VISUAL_RUN"') && full_case.include?('--ipad-run "$CHAI_CANDIDATE_IPAD_RUN"') && !full_case.include?('--manual-qa'), 'Full mode retains all three exact-SHA workflow evidence requirements')
 check(gate_run.include?('case "$CHAI_VALIDATION_MODE" in') && gate_run.include?("*) echo 'Unknown candidate validation mode.' >&2; exit 64"), 'unknown validation modes fail instead of bypassing verification')
@@ -249,7 +252,7 @@ games_step = ipad_steps.find { |step| step['id'] == 'games' }
 check(games_step && games_step['run'] == 'bash scripts/ipad_screenshots.sh games', 'all five new journeys run on the selected iPad')
 check(games_step['if'] == "${{ !cancelled() && steps.build.outcome == 'success' && steps.boot.outcome == 'success' }}" && !games_step.key?('continue-on-error'), 'independent iPad journeys survive gallery failure only after successful build and boot, without ignoring failure')
 check(ipad_script.include?('IPadGames.xcresult') && ipad_script.include?('games-summary.json'), 'iPad game journeys retain an independent result and actual summary')
-check(ipad_script.scan('-only-testing:ChaiClassicsUITests/ChaiClassicsV020UITests/').length == 5, 'exactly five new game journeys are selected separately from four gallery tests')
+check(ipad_script.scan('-only-testing:ChaiClassicsUITests/ChaiClassicsV020UITests/').length == 5 && ipad_script.scan('-only-testing:ChaiClassicsUITests/ChaiClassicsV030UITests').length == 1, 'five released and all seventeen expanded game journeys run separately from four gallery tests')
 check(ipad_steps.any? { |step| step.dig('with', 'path') == 'build/ipad-screenshots/IPadGames.xcresult' }, 'all five iPad journey results remain reviewable')
 check(ipad_script.include?('--output-path "$CHAI_IPAD_OUTPUT/game-attachments"'), 'new iPad game result attachments are actually exported')
 %w[png json txt].each do |extension|

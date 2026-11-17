@@ -34,7 +34,7 @@
 
 ## 測試與失敗診斷
 
-重用 ChaiClassicsVisualSmokeTests、visual-gallery sandbox、v010 三款既有種子和 XCTAttachment。四個新 iPad 方法在 iPhone 上明確略過；原有 iPhone 四項測試保留。iPad 工作流程只選取這四個方法，不執行整套 iPhone 測試。
+重用 ChaiClassicsVisualSmokeTests、visual-gallery sandbox、v010 三款既有種子和 XCTAttachment。四個新 iPad 方法在 iPhone 上明確略過；原有 iPhone 四項測試保留。iPad 工作流程先執行這四個方法，再獨立執行既有五款與新增十七款共 22 條遊戲路徑；不執行整套 iPhone 版面測試。
 
 檢查涵蓋首頁三欄、數獨數字輸入／擦除、踩地雷旗標與棋盤可見性、滑塊真實移動、返回、暫停／繼續、重新開始及 iPad popover。截圖前確認主要控制項與棋盤在畫面內，無鍵盤或確認選單遮擋。
 

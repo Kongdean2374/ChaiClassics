@@ -113,4 +113,26 @@ final class V030StrategyTests: XCTestCase {
             let reversi = ReversiBoard(); XCTAssertTrue(reversi.legalMoves(for:.first).contains(try XCTUnwrap(reversi.recommendedMove(difficulty:difficulty,seed:1))))
         }
     }
+    func testBanqiHardAIAvoidsAVisibleLosingExchangeAndCannonNeedsOneScreen() throws {
+        var cells = Array(repeating:0,count:32)
+        cells[0] = 5; cells[1] = -7; cells[5] = -2; cells[8] = 1
+        let board = try v030Fixture(BanqiBoard(seed:0),["pieces":cells,"revealed":Array(repeating:true,count:32),"firstPlayerColor":1,"moves":40])
+        XCTAssertTrue(board.isValidSave)
+        // The rook may take the soldier, but an adjacent guard recaptures it.
+        XCTAssertTrue(board.legalActions().contains(.move(8,9)))
+        XCTAssertEqual(board.recommendedAction(difficulty:.normal,randomSeed:7),.move(0,1))
+        XCTAssertNotEqual(board.recommendedAction(difficulty:.hard,randomSeed:7),.move(0,1))
+        cells = Array(repeating:0,count:32); cells[0] = 6; cells[3] = -1; cells[4] = 1
+        var cannon = try v030Fixture(board,["pieces":cells])
+        XCTAssertFalse(cannon.legalActions().contains(.move(0,3)))
+        cells[1] = 7; cannon = try v030Fixture(board,["pieces":cells])
+        XCTAssertTrue(cannon.legalActions().contains(.move(0,3)))
+        XCTAssertEqual(cannon.recommendedAction(difficulty:.hard,randomSeed:7),.move(0,3))
+        cells = Array(repeating:0,count:32); cells[0] = 5; cells[1] = -4; cells[4] = 1
+        let rook = try v030Fixture(board,["pieces":cells])
+        XCTAssertTrue(rook.legalActions().contains(.move(0,1)),"A rook outranks a horse even though its artwork ID is larger.")
+        cells[0] = 4; cells[1] = -5
+        let horse = try v030Fixture(board,["pieces":cells])
+        XCTAssertFalse(horse.legalActions().contains(.move(0,1)))
+    }
 }

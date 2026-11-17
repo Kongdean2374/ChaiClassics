@@ -10,6 +10,7 @@ struct ExpandedArcadeView: View {
     @State private var local: ExpandedGameSave?
     @State private var accumulated = 0.0
     @State private var saveInterval = 0.0
+    @State private var countdown: Int?
     private var active: Bool { model.sessionIsPlaying(game) }
     var body: some View {
         GeometryReader { proxy in
@@ -17,7 +18,13 @@ struct ExpandedArcadeView: View {
                 header
                 let maxHeight = max(180,proxy.size.height-180)
                 let width = game == .fallingBlocks ? min(300,maxHeight/2) : min(520,proxy.size.width-24,maxHeight)
-                field.frame(width:width,height:game == .fallingBlocks ? width*2 : width)
+                field.overlay {
+                    if let countdown {
+                        Text(String(countdown)).font(.system(size:56,weight:.bold,design:.rounded))
+                            .foregroundStyle(GameMaterial.ivory).padding(20).background(.ultraThinMaterial,in:Circle())
+                            .accessibilityIdentifier(game.rawValue+".countdown").allowsHitTesting(false)
+                    }
+                }.frame(width:width,height:game == .fallingBlocks ? width*2 : width)
                     .frame(maxWidth:.infinity)
                 controls
             }.padding(12).frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.top)
@@ -25,10 +32,20 @@ struct ExpandedArcadeView: View {
         .onAppear { local = model.expandedGames[game] }
         .onChange(of:active) { _,value in
             accumulated = 0; saveInterval = 0
-            if value { if local==nil { local = model.expandedGames[game] }; clock.start() }
+            if value { if local==nil { local = model.expandedGames[game] } }
             else { persist(); clock.stop() }
         }
-        .task { if active { clock.start() } }
+        .task(id:active) {
+            guard active else { return }
+            if game != .brickBreaker {
+                for value in (1...3).reversed() {
+                    countdown = value
+                    do { try await Task.sleep(for:.seconds(1)) } catch { return }
+                    guard !Task.isCancelled, active else { return }
+                }
+            }
+            countdown = nil; clock.start()
+        }
         .onReceive(clock.$frame) { frame in advance(frame.delta) }
         .onDisappear { persist(); clock.stop() }
     }
@@ -115,7 +132,7 @@ struct ExpandedArcadeView: View {
     }
     private func control(_ key: String,symbol: String,id: String,action:@escaping ()->Void) -> some View {
         Button(action:action) { Image(systemName:symbol).font(.title3).frame(minWidth:46,minHeight:44) }
-            .buttonStyle(.bordered).disabled(!active || local?.outcome != nil)
+            .buttonStyle(.bordered).disabled(!active || countdown != nil || local?.outcome != nil)
             .accessibilityLabel(model.t(key)).accessibilityIdentifier(game.rawValue+"."+id)
     }
     private func block(_ change: (inout FallingBlocksBoard)->Bool) {
@@ -129,7 +146,7 @@ struct ExpandedArcadeView: View {
         local = value; if persistImmediately { persist() }
     }
     private func advance(_ delta: TimeInterval) {
-        guard active, var value = local, value.outcome==nil, delta>0, delta<=0.1 else { return }
+        guard active, countdown==nil, var value = local, value.outcome==nil, delta>0, delta<=0.1 else { return }
         accumulated += delta; saveInterval += delta
         switch value.state {
         case .snake(var board):

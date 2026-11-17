@@ -3,16 +3,16 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version (e.g. 0.2.2)'
+        description: 'Version (e.g. 0.3.0)'
         required: true
-        default: '0.2.2'
+        default: '0.3.0'
       validation_mode:
         description: 'Beta: compile and upload for manual testing; Full: complete release regression'
         type: choice
         options: [beta, full]
-        default: beta
+        default: full
       candidate_tag:
-        description: 'Required for 0.2.x: explicit vVERSION-rc.N tag at this main SHA'
+        description: 'Required for 0.2.x/0.3.x: explicit vVERSION-rc.N tag at this main SHA'
         required: false
         type: string
       ci_run:
@@ -51,7 +51,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Verify exact-SHA TestFlight candidate
-        if: startsWith(inputs.version, '0.2.')
+        if: startsWith(inputs.version, '0.2.') || startsWith(inputs.version, '0.3.')
         env:
           GH_TOKEN: ${{ github.token }}
           CHAI_CANDIDATE_TAG: ${{ inputs.candidate_tag }}
@@ -59,10 +59,14 @@ jobs:
           CHAI_CANDIDATE_VISUAL_RUN: ${{ inputs.visual_run }}
           CHAI_CANDIDATE_IPAD_RUN: ${{ inputs.ipad_run }}
           CHAI_CANDIDATE_VERSION: ${{ inputs.version }}
-          CHAI_VALIDATION_MODE: ${{ inputs.validation_mode || 'beta' }}
+          CHAI_VALIDATION_MODE: ${{ inputs.validation_mode || 'full' }}
         run: |
           case "$CHAI_VALIDATION_MODE" in
             beta)
+              if [[ "$CHAI_CANDIDATE_VERSION" == 0.3.* ]]; then
+                echo 'Version 0.3.x requires complete regression evidence; manual-QA Beta is unavailable.' >&2
+                exit 64
+              fi
               python3 scripts/verify_beta_candidate.py --manual-qa --repo "$GITHUB_REPOSITORY" \
                 --sha "$GITHUB_SHA" --version "$CHAI_CANDIDATE_VERSION" --tag "$CHAI_CANDIDATE_TAG" \
                 --branch main --output build/candidate-proof.json
@@ -76,7 +80,7 @@ jobs:
             *) echo 'Unknown candidate validation mode.' >&2; exit 64 ;;
           esac
       - name: Preserve verified release candidate proof
-        if: startsWith(inputs.version, '0.2.')
+        if: startsWith(inputs.version, '0.2.') || startsWith(inputs.version, '0.3.')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: candidate-release-proof

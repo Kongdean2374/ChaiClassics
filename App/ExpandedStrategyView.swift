@@ -36,6 +36,7 @@ struct ExpandedStrategyView: View {
                     }
                     Spacer()
                     Text(model.t("expanded.moves",save?.state.moves ?? 0)).font(.caption).monospacedDigit()
+                        .accessibilityIdentifier(game.rawValue+".moves").accessibilityValue(String(save?.state.moves ?? 0))
                 }
                 Text(model.t("connectfour.thinking")).font(.caption).foregroundStyle(.secondary)
                     .opacity(save?.isComputerTurn == true ? 1 : 0).accessibilityHidden(save?.isComputerTurn != true)
@@ -108,7 +109,11 @@ struct ExpandedStrategyView: View {
                 if hidden { RoundedRectangle(cornerRadius:9).fill(GameMaterial.teal).overlay { Image(systemName:"sparkle").foregroundStyle(GameMaterial.gold) }.padding(4) }
                 else if piece != 0 { strategyPiece(piece).padding(game == .gomoku ? 4 : 3) }
                 if model.gameSettings(for:game).expanded?.showLegalMoves ?? true, legalTargets.contains(index), !hidden {
-                    Circle().fill(Color.blue.opacity(0.65)).frame(width:8,height:8).allowsHitTesting(false)
+                    if piece==0 {
+                        Circle().fill(Color.blue.opacity(0.65)).frame(width:8,height:8).allowsHitTesting(false)
+                    } else {
+                        RoundedRectangle(cornerRadius:5).strokeBorder(Color.blue.opacity(0.8),lineWidth:2).padding(2).allowsHitTesting(false)
+                    }
                 }
                 if selected==index { RoundedRectangle(cornerRadius:5).strokeBorder(Color.blue,lineWidth:3).padding(1) }
             }.frame(width:CGFloat(unit),height:CGFloat(unit)).contentShape(Rectangle())
@@ -161,17 +166,19 @@ struct ExpandedStrategyView: View {
     }
     @ViewBuilder private func shogiHand(_ player: DuelPlayer) -> some View {
         if case .shogi(let board) = save?.state {
-            HStack(spacing:5) {
+            ScrollView(.horizontal) {
+                HStack(spacing:5) {
                 Text(model.t("expanded.hand",player.rawValue)).font(.caption)
                 ForEach(1...7,id:\.self) { kind in
                     let count = board.hands[player.rawValue-1][kind]
                     if count>0 {
                         Button { selected = nil; drop = drop==kind ? nil : kind } label: {
-                            Text(model.t("piece.shogi.\(kind)" )+" ×\(count)").font(.caption.bold()).padding(8)
+                            Text(model.t("piece.shogi.\(kind)" )+" ×\(count)").font(.caption.bold()).padding(.horizontal,8).frame(minWidth:44,minHeight:44)
                         }.buttonStyle(.bordered).tint(drop==kind ? .blue : GamePalette.tint(game))
                             .disabled(!humanTurn || board.currentPlayer != player)
                             .accessibilityIdentifier("shogi.hand.\(player.rawValue).\(kind)")
                     }
+                }
                 }
             }.frame(maxWidth:.infinity).rotationEffect(.degrees(save?.mode == .localTwoPlayer && player == .second ? 180 : 0))
         }

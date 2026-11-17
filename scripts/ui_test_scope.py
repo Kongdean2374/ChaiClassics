@@ -22,6 +22,17 @@ SESSION_LIFECYCLE_TESTS = {
 HISTORY_TEST = 'testPlayHistorySearchDismissesKeyboardWithoutSwallowingActions'
 SESSION_VISUAL_TESTS = tuple(SESSION_LIFECYCLE_TESTS.values()) + (HISTORY_TEST,)
 SESSION_RUNTIME_FILES = ('App/GameSessionComponents.swift', 'Core/GameSessionData.swift')
+EXPANDED_RUNTIME_FILES = ('App/ExpandedGameMenuView.swift', 'Core/ExpandedGameSave.swift')
+EXPANDED_SESSION_TESTS = {
+    game: 'test' + title + 'CompleteSessionRestoresAndConfirmsDeletion'
+    for game, title in (
+        ('nonogram','Nonogram'),('kakuro','Kakuro'),('klotski','Klotski'),
+        ('gomoku','Gomoku'),('reversi','Reversi'),('xiangqi','Xiangqi'),
+        ('banqi','Banqi'),('chess','Chess'),('shogi','Shogi'),
+        ('klondike','Klondike'),('spider','Spider'),('freecell','Freecell'),
+        ('pyramid','Pyramid'),('tripeaks','Tripeaks'),('snake','Snake'),
+        ('fallingblocks','FallingBlocks'),('brickbreaker','BrickBreaker'))
+}
 PART_SCOPES = {f'part_{name}': index for index, name in enumerate('abcd')}
 SCOPES = {
     'full': [],
@@ -49,15 +60,22 @@ for game, method in SESSION_LIFECYCLE_TESTS.items():
     if game in ('sudoku', 'mines', 'sliding'):
         SCOPES['legacy'].append(S + method)
 SCOPES['catalog'].append(S + HISTORY_TEST)
+SCOPES['expanded'] = ['ChaiClassicsUITests/ChaiClassicsV030UITests/' + name for name in EXPANDED_SESSION_TESTS.values()]
+for game,name in EXPANDED_SESSION_TESTS.items():
+    SCOPES[game] = ['ChaiClassicsUITests/ChaiClassicsV030UITests/' + name]
 
 
 def required_session_tests(root):
     """Keep released source fixtures verifiable, but require every new runtime journey."""
-    return required_session_tests_for_paths(path for path in SESSION_RUNTIME_FILES if (root / path).is_file())
+    return required_session_tests_for_paths(path for path in SESSION_RUNTIME_FILES + EXPANDED_RUNTIME_FILES if (root / path).is_file())
 
 
 def required_session_tests_for_paths(paths):
-    return {'ChaiClassicsVisualSmokeTests/' + name for name in SESSION_VISUAL_TESTS} if set(SESSION_RUNTIME_FILES).intersection(paths) else set()
+    present = set(paths)
+    required = {'ChaiClassicsVisualSmokeTests/' + name for name in SESSION_VISUAL_TESTS} if set(SESSION_RUNTIME_FILES).intersection(present) else set()
+    if set(EXPANDED_RUNTIME_FILES).intersection(present):
+        required.update('ChaiClassicsV030UITests/' + name for name in EXPANDED_SESSION_TESTS.values())
+    return required
 
 def resolve(scope, tests, *, include_sessions=True):
     if scope == 'beta' and not include_sessions:

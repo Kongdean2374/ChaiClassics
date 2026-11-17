@@ -39,7 +39,7 @@ if [[ "$CHAI_IPAD_PHASE" == export ]]; then
       CHAI_IPAD_EXPORT_EXIT=1
     fi
   else
-    echo 'The five new iPad game journeys did not produce an xcresult.' >&2
+    echo 'The required iPad game journeys did not produce an xcresult.' >&2
     CHAI_IPAD_EXPORT_EXIT=1
   fi
   exit "$CHAI_IPAD_EXPORT_EXIT"
@@ -71,13 +71,14 @@ if [[ "$CHAI_IPAD_PHASE" == build ]]; then
   xcodebuild "${CHAI_IPAD_ARGS[@]}" build-for-testing 2>&1 | tee "$CHAI_IPAD_OUTPUT/build.log"
 elif [[ "$CHAI_IPAD_PHASE" == games ]]; then
   # Reuse the same unsigned bundle and selected physical-size Simulator. Keep
-  # these five journeys separate so the original gallery collector stays strict4.
+  # all 22 journeys separate so the original gallery collector stays strict4.
   xcodebuild "${CHAI_IPAD_ARGS[@]}" -resultBundlePath "$CHAI_IPAD_OUTPUT/IPadGames.xcresult" \
     -only-testing:ChaiClassicsUITests/ChaiClassicsV020UITests/testTicTacToeLocalRoundRestoresWinsAndReplays \
     -only-testing:ChaiClassicsUITests/ChaiClassicsV020UITests/testConnectFourLocalRoundRestoresWinsAndReplays \
     -only-testing:ChaiClassicsUITests/ChaiClassicsV020UITests/testTwentyFourRestoresExactCardsCompletesAndStartsNextPuzzle \
     -only-testing:ChaiClassicsUITests/ChaiClassicsV020UITests/testMemoryRestoresMatchesHidesUnturnedCardsCompletesAndReplays \
     -only-testing:ChaiClassicsUITests/ChaiClassicsV020UITests/testMazeRestoresPositionResumesCompletesAndGeneratesNextMaze \
+    -only-testing:ChaiClassicsUITests/ChaiClassicsV030UITests \
     -parallel-testing-enabled NO -test-timeouts-enabled YES \
     -default-test-execution-time-allowance 600 -maximum-test-execution-time-allowance 720 \
     test-without-building 2>&1 | tee "$CHAI_IPAD_OUTPUT/games.log"

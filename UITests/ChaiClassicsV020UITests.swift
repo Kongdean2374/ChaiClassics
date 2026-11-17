@@ -10,14 +10,14 @@ final class ChaiClassicsV020UITests: XCTestCase {
         XCUIDevice.shared.orientation = .portrait
     }
 
-    private let playable = ["sudoku", "minesweeper", "sliding", "tictactoe", "connectfour", "twentyfour", "memory", "maze"]
-    private let boardPlayable = ["tictactoe", "connectfour"]
+    private let playable = ["sudoku", "minesweeper", "sliding", "tictactoe", "connectfour", "twentyfour", "memory", "maze", "nonogram", "kakuro", "klotski", "gomoku", "reversi", "xiangqi", "banqi", "chess", "shogi", "klondike", "spider", "freecell", "pyramid", "tripeaks", "snake", "fallingblocks", "brickbreaker"]
+    private let boardPlayable = ["tictactoe", "connectfour", "gomoku", "reversi", "xiangqi", "banqi", "chess", "shogi"]
     private let boardPreviews = ["gomoku", "reversi", "xiangqi", "banqi", "chess", "shogi"]
     private let singlePreviews = ["nonogram", "kakuro", "klotski", "snake", "fallingblocks", "brickbreaker"]
     private let solitaire = ["klondike", "spider", "freecell", "pyramid", "tripeaks"]
     private var homeIDs: Set<String> {
-        Set(playable.filter { !boardPlayable.contains($0) }.map { "game." + $0 }
-            + singlePreviews.map { "catalog." + $0 } + ["catalog.boardgames", "catalog.solitaire"])
+        Set(playable.filter { !boardPlayable.contains($0) && !solitaire.contains($0) }.map { "game."+$0 }
+            + ["catalog.boardgames","catalog.solitaire"])
     }
 
     private func launch(_ profile: String, fixture: String? = nil, language: String = "en", appearance: String = "light", extra: [String] = [], seeds: [String: Data] = [:], storageNotice: Bool = false) -> XCUIApplication {
@@ -90,17 +90,12 @@ final class ChaiClassicsV020UITests: XCTestCase {
     }
 
     private func open(_ game: String, app: XCUIApplication) {
-        let directory = app.descendants(matching: .any).matching(identifier: "catalog.folder.boardgames").firstMatch
-        if boardPlayable.contains(game) {
-            if !directory.exists {
-                tap("catalog.boardgames", app: app)
-                XCTAssertTrue(directory.waitForExistence(timeout: 10))
-            }
-        } else if directory.exists {
-            back(app)
-        }
-        let card = app.buttons["game." + game]
-        show(card, app: app); card.tap()
+        let board = app.descendants(matching:.any).matching(identifier:"catalog.folder.boardgames").firstMatch
+        let cards = app.descendants(matching:.any).matching(identifier:"catalog.folder.solitaire").firstMatch
+        if board.exists && !boardPlayable.contains(game) || cards.exists && !solitaire.contains(game) { back(app) }
+        if boardPlayable.contains(game) && !board.exists { tap("catalog.boardgames",app:app) }
+        if solitaire.contains(game) && !cards.exists { tap("catalog.solitaire",app:app) }
+        let card = app.buttons["game."+game]; show(card,app:app); card.tap()
     }
 
     private func tap(_ id: String, app: XCUIApplication) {
@@ -244,9 +239,11 @@ final class ChaiClassicsV020UITests: XCTestCase {
                 XCTAssertTrue(homeIDs.contains(card.identifier), "Unexpected Home card: " + card.identifier)
                 assertNoHomeProgress(card)
                 if card.identifier == "catalog.boardgames" {
-                    XCTAssertTrue(card.label.contains(language == "en" ? "2 playable · 6 coming soon" : "2 款可遊玩 · 6 款尚未推出"))
+                    XCTAssertTrue(card.label.contains(language == "en" ? "8 playable" : "8 款可遊玩"))
+                } else if card.identifier == "catalog.solitaire" {
+                    XCTAssertTrue(card.label.contains(language == "en" ? "5 playable" : "5 款可遊玩"))
                 } else {
-                    XCTAssertTrue(card.label.contains(language == "en" ? (card.identifier.hasPrefix("game.") ? "Playable" : "Coming soon") : (card.identifier.hasPrefix("game.") ? "可遊玩" : "尚未推出")))
+                    XCTAssertTrue(card.label.contains(language == "en" ? "Playable" : "可遊玩"))
                 }
                 seen.insert(card.identifier)
             }
@@ -271,26 +268,22 @@ final class ChaiClassicsV020UITests: XCTestCase {
         ]
         var visitedPreviews: Set<String> = []
         func visit(_ id: String) {
-            tap("catalog." + id, app: app)
-            let title = app.staticTexts["comingSoon.title"]
-            XCTAssertTrue(title.waitForExistence(timeout: 5))
-            XCTAssertEqual(title.label, language == "en" ? names[id]!.0 : names[id]!.1)
-            let status = app.descendants(matching: .any).matching(identifier: "comingSoon.status").firstMatch
-            XCTAssertTrue(status.waitForExistence(timeout: 5))
-            XCTAssertTrue(status.label.contains(language == "en" ? "Coming soon" : "尚未推出"))
-            XCTAssertFalse(app.buttons["menu.start"].exists)
-            visitedPreviews.insert(id)
-            app.buttons["comingSoon.back"].tap()
+            tap("game."+id,app:app)
+            XCTAssertTrue(app.navigationBars[language == "en" ? names[id]!.0 : names[id]!.1].waitForExistence(timeout:10))
+            let start = app.buttons[id+".start"]; show(start,app:app); XCTAssertTrue(start.isEnabled)
+            XCTAssertFalse(app.staticTexts["comingSoon.title"].exists)
+            visitedPreviews.insert(id); back(app)
         }
+
         for id in singlePreviews.prefix(3) { visit(id) }
         tap("catalog.boardgames", app: app)
         XCTAssertTrue(app.navigationBars[language == "en" ? "Board Games" : "棋類遊戲"].waitForExistence(timeout: 10))
-        assertThreeColumns(app, prefix: "", ids: ["game.tictactoe", "game.connectfour", "catalog.gomoku"])
+        assertThreeColumns(app, prefix: "", ids: ["game.tictactoe", "game.connectfour", "game.gomoku"])
         let availability = app.staticTexts.matching(identifier: "catalog.folder.availability").firstMatch
-        XCTAssertEqual(availability.label, language == "en" ? "2 playable · 6 coming soon" : "2 款可遊玩 · 6 款尚未推出")
-        let boardIDs = Set(boardPlayable.map { "game." + $0 } + boardPreviews.map { "catalog." + $0 })
+        XCTAssertEqual(availability.label, language == "en" ? "8 playable" : "8 款可遊玩")
+        let boardIDs = Set(boardPlayable.map { "game."+$0 })
         var seenBoard: Set<String> = []
-        for id in boardPlayable.map({ "game." + $0 }) + boardPreviews.map({ "catalog." + $0 }) {
+        for id in boardPlayable.map({ "game."+$0 }) {
             let card = app.buttons[id]
             show(card, app: app)
             XCTAssertTrue(card.isHittable)
@@ -303,12 +296,12 @@ final class ChaiClassicsV020UITests: XCTestCase {
         capture(app, "v021-boardgames-" + language)
         back(app)
         tap("catalog.solitaire", app: app)
-        assertThreeColumns(app, prefix: "catalog.", ids: Array(solitaire.prefix(3)))
+        assertThreeColumns(app, prefix: "game.", ids: Array(solitaire.prefix(3)))
         var children: Set<String> = []
         for id in solitaire {
-            let card = app.buttons["catalog." + id]
+            let card = app.buttons["game." + id]
             show(card, app: app)
-            XCTAssertTrue(card.label.contains(language == "en" ? "Coming soon" : "尚未推出"))
+            XCTAssertTrue(card.label.contains(language == "en" ? "Playable" : "可遊玩"))
             children.insert(id); visit(id)
         }
         XCTAssertEqual(children.count, 5)
@@ -328,7 +321,7 @@ final class ChaiClassicsV020UITests: XCTestCase {
                         "tictactoe": "tictactoe.start", "connectfour": "connectfour.start", "twentyfour": "twentyfour.start", "memory": "memory.start", "maze": "maze.start"]
         for game in playable {
             open(game, app: app)
-            let start = app.buttons[controls[game]!]
+            let start = app.buttons[controls[game] ?? game+".start"]
             show(start, app: app); XCTAssertTrue(start.isEnabled)
             XCTAssertFalse(app.staticTexts["comingSoon.title"].exists)
             back(app)
@@ -854,7 +847,7 @@ final class ChaiClassicsV020UITests: XCTestCase {
                 for id in playable.prefix(3) { assertNoHomeProgress(app.buttons["game." + id]) }
                 capture(app, "v020-viewport-\(width)-\(language)-\(appearance)-home-top")
                 tap("catalog.boardgames", app: app)
-                assertThreeColumns(app, width: CGFloat(width), prefix: "", ids: ["game.tictactoe", "game.connectfour", "catalog.gomoku"])
+                assertThreeColumns(app, width: CGFloat(width), prefix: "", ids: ["game.tictactoe", "game.connectfour", "game.gomoku"])
                 capture(app, "v021-viewport-\(width)-\(language)-\(appearance)-boardgames")
                 back(app)
                 tap("catalog.solitaire", app: app)

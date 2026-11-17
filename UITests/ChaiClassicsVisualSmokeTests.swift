@@ -25,6 +25,8 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         }
         app.launch()
         app.launchArguments = arguments // A second launch must retain the actual won save.
+        // Re-launch must prove disk preservation, never recreate a deleted save.
+        for namespace in namespaces { app.launchEnvironment["CHAI_UI_SEED_"+namespace.uppercased()] = nil }
         XCTAssertTrue(app.buttons["game.sliding"].waitForExistence(timeout: 10))
         return app
     }
@@ -197,9 +199,6 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         let shield = node(game + ".session.reviewBoard", app: app)
         XCTAssertTrue(shield.waitForExistence(timeout: 10))
         XCTAssertFalse(node(game + ".session.result", app: app).exists)
-        current.swipeRight()
-        XCTAssertTrue(current.exists,"A rightward swipe must stay on the menu.")
-        XCTAssertFalse(app.buttons[game+".session.pause"].exists)
         shield.tap()
         assertResult(game, app: app)
         XCTAssertEqual(node(game + ".session.result.elapsed", app: app).value as? String, elapsed)
@@ -538,8 +537,7 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         screenshot(app, name: "01_iPad_Home")
         try attachIPadLayout(app, page: "Home", grid: cards, controls: [app.buttons["settings.open"]])
 
-        let expected = Set(["sudoku", "minesweeper", "sliding", "twentyfour", "memory", "maze"].map { "game." + $0 }
-            + ["nonogram", "kakuro", "klotski", "boardgames", "solitaire", "snake", "fallingblocks", "brickbreaker"].map { "catalog." + $0 })
+        let expected = Set(["sudoku", "minesweeper", "sliding", "twentyfour", "memory", "maze", "nonogram", "kakuro", "klotski", "snake", "fallingblocks", "brickbreaker"].map { "game."+$0 } + ["catalog.boardgames","catalog.solitaire"])
         var seen: Set<String> = []
         for _ in 0..<8 {
             let visible = app.frame.insetBy(dx: 0, dy: 50)
@@ -547,9 +545,11 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
             for entry in entries.allElementsBoundByIndex where visible.contains(CGPoint(x: entry.frame.midX, y: entry.frame.midY)) {
                 XCTAssertFalse(entry.label.contains("進行中"))
                 if entry.identifier == "catalog.boardgames" {
-                    XCTAssertTrue(entry.label.contains("2 款可遊玩 · 6 款尚未推出"))
+                    XCTAssertTrue(entry.label.contains("8 款可遊玩"))
+                } else if entry.identifier == "catalog.solitaire" {
+                    XCTAssertTrue(entry.label.contains("5 款可遊玩"))
                 } else {
-                    XCTAssertTrue(entry.label.contains(entry.identifier.hasPrefix("game.") ? "可遊玩" : "尚未推出"))
+                    XCTAssertTrue(entry.label.contains("可遊玩"))
                 }
                 seen.insert(entry.identifier)
             }
@@ -567,42 +567,41 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         attachUIEvidence(app, name: "v020-iPad-solitaire-arrival")
         XCTAssertTrue(arrived, "The folder's own navigation title must arrive before inspecting card geometry.")
         XCTAssertTrue(directoryExists)
-        let solitaire = ["klondike", "spider", "freecell", "pyramid", "tripeaks"].map { app.buttons["catalog." + $0] }
+        let solitaire = ["klondike", "spider", "freecell", "pyramid", "tripeaks"].map { app.buttons["game." + $0] }
         for card in solitaire {
             scrollFullyIntoView(card, app: app)
             assertIPadVisible(card, app: app)
-            XCTAssertTrue(card.label.contains("尚未推出"))
+            XCTAssertTrue(card.label.contains("可遊玩"))
         }
         XCTAssertEqual(solitaire[0].frame.minY, solitaire[1].frame.minY, accuracy: 2)
         XCTAssertEqual(solitaire[1].frame.minY, solitaire[2].frame.minY, accuracy: 2)
         XCTAssertLessThan(solitaire[0].frame.minX, solitaire[1].frame.minX)
         XCTAssertLessThan(solitaire[1].frame.minX, solitaire[2].frame.minX)
         screenshot(app, name: "v020-iPad-solitaire")
-        solitaire[0].tap()
-        XCTAssertTrue(app.staticTexts["comingSoon.title"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.staticTexts["comingSoon.title"].label, "經典接龍")
-        let status = app.descendants(matching: .any).matching(identifier: "comingSoon.status").firstMatch
-        XCTAssertTrue(status.label.contains("尚未推出"))
-        screenshot(app, name: "v020-iPad-coming-soon")
-        app.buttons["comingSoon.back"].tap(); back(app)
+        scrollFullyIntoView(solitaire[0],app:app); solitaire[0].tap()
+        XCTAssertTrue(app.buttons["klondike.menu.settings"].waitForExistence(timeout:10))
+        let start = app.buttons["klondike.start"]; scrollFullyIntoView(start,app:app); XCTAssertTrue(start.isEnabled)
+        XCTAssertFalse(app.staticTexts["comingSoon.title"].exists)
+        screenshot(app,name:"v030-iPad-klondike-menu")
+        back(app); back(app)
 
         let boardFolder = app.buttons["catalog.boardgames"]
         scrollFullyIntoView(boardFolder, app: app); boardFolder.tap()
         XCTAssertTrue(app.navigationBars["棋類遊戲"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "catalog.folder.boardgames").firstMatch.waitForExistence(timeout: 5))
-        let boardIDs = ["game.tictactoe", "game.connectfour", "catalog.gomoku", "catalog.reversi", "catalog.xiangqi", "catalog.banqi", "catalog.chess", "catalog.shogi"]
+        let boardIDs = ["game.tictactoe", "game.connectfour", "game.gomoku", "game.reversi", "game.xiangqi", "game.banqi", "game.chess", "game.shogi"]
         var boardEntries: Set<String> = []
         for id in boardIDs {
             let card = app.buttons[id]
             scrollFullyIntoView(card, app: app)
             assertIPadVisible(card, app: app)
-            XCTAssertTrue(card.label.contains(id.hasPrefix("game.") ? "可遊玩" : "尚未推出"))
+            XCTAssertTrue(card.label.contains("可遊玩"))
             XCTAssertFalse(card.label.contains("進行中"))
             boardEntries.insert(card.identifier)
         }
         XCTAssertEqual(boardEntries, Set(boardIDs))
         XCTAssertEqual(boardEntries.count, 8)
-        XCTAssertEqual(app.staticTexts.matching(identifier: "catalog.folder.availability").firstMatch.label, "2 款可遊玩 · 6 款尚未推出")
+        XCTAssertEqual(app.staticTexts.matching(identifier: "catalog.folder.availability").firstMatch.label, "8 款可遊玩")
         let boardFirstRow = Array(boardIDs.prefix(3)).map { app.buttons[$0] }
         for card in boardFirstRow { scrollFullyIntoView(card, app: app) }
         XCTAssertEqual(boardFirstRow[0].frame.minY, boardFirstRow[1].frame.minY, accuracy: 2)
@@ -816,6 +815,9 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         done.doubleTap()
         let current = app.buttons.matching(identifier: continueID(game)).firstMatch
         XCTAssertTrue(current.waitForExistence(timeout: 10), "Done must return to the game's menu.")
+        current.swipeRight()
+        XCTAssertTrue(current.exists,"A rightward swipe must stay on the menu.")
+        XCTAssertFalse(app.buttons[game+".session.pause"].exists)
         XCTAssertFalse(node(game + ".session.result", app: app).exists)
         let savedDetailBeforeRequest = current.label
         tapContinueDelete(game, current: current, app: app)

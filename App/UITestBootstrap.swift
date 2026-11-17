@@ -43,6 +43,7 @@ enum UITestBootstrap {
                        "v021-tictactoe", "v021-connectfour", "v021-memory", "v021-twentyfour", "v021-maze",
                        "v022-session-sudoku", "v022-session-minesweeper", "v022-session-sliding", "v022-session-tictactoe",
                        "v022-session-connectfour", "v022-session-twentyfour", "v022-session-memory", "v022-session-maze", "v022-history"]
+            + GameID.allCases.filter(\.isExpanded).map { "v030-"+$0.rawValue }
         let index = args.firstIndex(of: "--ui-profile")
         let requested = index.flatMap { args.indices.contains($0 + 1) ? args[$0 + 1] : nil } ?? "base"
         let profile = allowed.contains(requested) ? requested : "base"

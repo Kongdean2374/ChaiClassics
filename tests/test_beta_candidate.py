@@ -28,7 +28,7 @@ class BetaCandidateTests(unittest.TestCase):
         self.prefix = f'repos/{self.repo}/actions/runs/{self.run_id}'
         self.tree = {path: ('100644', (candidate.ROOT / path).read_bytes()) for path in beta.SOURCE_FILES}
         self.tree.update({str(path.relative_to(candidate.ROOT)): ('100644', path.read_bytes())
-                          for path in (candidate.ROOT / 'UITests').glob('*.swift')})
+                          for path in (candidate.ROOT / 'UITests').glob('*.swift') if path.stem != 'ChaiClassicsV030UITests'})
         # This suite preserves the released 0.2.2 Beta contract, independently of the current marketing version.
         project = 'ChaiClassics.xcodeproj/project.pbxproj'
         mode, data = self.tree[project]

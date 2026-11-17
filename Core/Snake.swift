@@ -23,7 +23,7 @@ public struct SnakeBoard: Codable, Equatable, Sendable {
     }
     public var isValidSave: Bool {
         guard [16,20,24].contains(size), (3...(size*size)).contains(body.count), Set(body).count==body.count,
-              body.allSatisfy({(0..<(size*size)).contains($0)}), (0...100_000_000).contains(ticks), queued.count<=2,
+              body.allSatisfy({(0..<(size*size)).contains($0)}), (0...100_000_000).contains(ticks), ticks>=score, queued.count<=2,
               food == nil ? isComplete : (0..<(size*size)).contains(food!) && !body.contains(food!) else { return false }
         for index in 1..<body.count {
             let a = body[index-1], b = body[index]

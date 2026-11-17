@@ -123,14 +123,14 @@ class AppResourceTests(unittest.TestCase):
     def test_testflight_preserves_manual_header_and_signing_job(self):
         actual=(ROOT/'.github/workflows/testflight.yml').read_bytes()
         header=actual.split(b'jobs:\n',1)[0]
-        self.assertEqual(header.count(b"'Version (e.g. 0.2.2)'"),1)
-        self.assertEqual(header.count(b"        default: '0.2.2'\n"),1)
-        # v0.2.2's reviewed header makes UI run inputs optional for manual-QA Beta.
+        self.assertEqual(header.count(b"'Version (e.g. 0.3.0)'"),1)
+        self.assertEqual(header.count(b"        default: '0.3.0'\n"),1)
+        # v0.3.0 defaults to complete regression; released 0.2.x manual QA stays explicit.
         # The actual signing/upload job below stays byte-frozen to the released
         # pipeline; normalize only the documented current-version label/default.
-        stable_header=header.replace(b"'Version (e.g. 0.2.2)'", b"'Version (e.g. 0.2.1)'")
-        stable_header=stable_header.replace(b"        default: '0.2.2'\n", b"        default: '0.2.1'\n")
-        self.assertEqual(hashlib.sha256(stable_header).hexdigest(),'7e445d5b3b238d0b3b0f904a1134f40ded830ade90f1349ee446424972384507')
+        stable_header=header.replace(b"'Version (e.g. 0.3.0)'", b"'Version (e.g. 0.2.1)'")
+        stable_header=stable_header.replace(b"        default: '0.3.0'\n", b"        default: '0.2.1'\n")
+        self.assertEqual(hashlib.sha256(stable_header).hexdigest(),'fe9a221224b46e6ca0ff6accb197b604737121ae72162742a875c94bc7316d94')
         upload=b'  upload:\n'+actual.split(b'  upload:\n',1)[1]
         self.assertEqual(upload.count(b'    needs: preflight\n'),1)
         self.assertEqual(upload.count(b'    runs-on: macos-15-intel\n'),1)

@@ -30,7 +30,10 @@ public struct BanqiBoard: Codable, Equatable, Sendable {
         guard attacker*target<0 else { return false }
         let a = abs(attacker), b = abs(target)
         if a==6 { return true }; if a==1 && b==7 { return false }; if a==7 { return b==7 || b==1 }
-        return a<=b
+        // Piece IDs match the shared Xiangqi artwork (horse=4, rook=5),
+        // whereas dark-chess rank puts the rook above the horse.
+        let ranks = [0,1,2,3,5,4,6,7]
+        return ranks[a]<=ranks[b]
     }
     public func legalActions() -> [BanqiAction] {
         guard pieces.count==32, revealed.count==32 else { return [] }
@@ -75,7 +78,35 @@ public struct BanqiBoard: Codable, Equatable, Sendable {
         var random = SeededRandom(seed:randomSeed &+ UInt64(moves))
         if difficulty == .easy { return actions.randomElement(using:&random) }
         // Never inspect the identity of an unrevealed piece when choosing AI.
-        let values = [0,1000,600,500,450,400,350,150]
+        let values = [0,1000,600,500,400,450,350,150]
+        if difficulty == .hard, let color {
+            // A one-ply exchange estimate uses only public pieces and occupied
+            // squares. Hidden identities never enter either side's evaluation.
+            let visible = pieces.indices.map { revealed[$0] ? pieces[$0] : 0 }
+            let occupied = pieces.map { $0 != 0 }
+            func threatened(_ target: Int,_ cells: [Int],_ occupied: [Bool]) -> Bool {
+                for from in cells.indices where cells[from]*color<0 {
+                    let dx = abs(from%4-target%4), dy = abs(from/4-target/4)
+                    guard canCapture(cells[from],cells[target]) else { continue }
+                    if abs(cells[from]) != 6 { if dx+dy==1 { return true }; continue }
+                    guard dx==0 || dy==0 else { continue }
+                    let stride = dx==0 ? (target>from ? 4 : -4) : (target>from ? 1 : -1)
+                    var screens = 0, index = from+stride
+                    while index != target { if occupied[index] { screens += 1 }; index += stride }
+                    if screens==1 { return true }
+                }
+                return false
+            }
+            func score(_ action: BanqiAction) -> Int {
+                guard case .move(let from,let to) = action else { return 10 }
+                var cells = visible, spaces = occupied
+                let captured = values[abs(cells[to])]
+                cells[to] = cells[from]; cells[from] = 0; spaces[to] = true; spaces[from] = false
+                let loss = cells.indices.filter { cells[$0]*color>0 && threatened($0,cells,spaces) }.map { values[abs(cells[$0])] }.max() ?? 0
+                return captured*4-loss*3
+            }
+            return actions.shuffled(using:&random).max { score($0)<score($1) }
+        }
         let captures = actions.compactMap { action -> (BanqiAction,Int)? in
             if case .move(_,let to) = action, revealed[to], pieces[to] != 0 { return (action,values[abs(pieces[to])]) }; return nil
         }

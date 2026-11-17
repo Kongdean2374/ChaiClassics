@@ -60,8 +60,13 @@ def expected_tests(kind, root=ROOT):
     require(tests and len(tests) == len(set(tests)), 'Missing or duplicate declared UI tests.')
     declared_ipad = {name.split('/')[-1] for name in tests} & IPAD_TESTS
     require(declared_ipad == IPAD_TESTS, 'All four original iPad screenshot tests must remain declared.')
-    if kind != 'ipad':
-        require(scopes.required_session_tests(root).issubset(tests), 'All eight session lifecycle journeys and the history interaction journey must remain declared.')
+    if kind == 'ci':
+        require(scopes.required_session_tests(root).issubset(tests), 'All playable session lifecycle journeys and history interaction must remain declared.')
+    elif kind == 'visual' and scopes.required_session_tests(root):
+        require({'ChaiClassicsVisualSmokeTests/' + name for name in scopes.SESSION_VISUAL_TESTS}.issubset(tests),
+                'All original shared-session and history journeys must remain declared in the visual test source.')
+        require(scopes.required_session_tests(root).issubset(scopes.declared_tests(root)),
+                'Focused visual capture cannot remove the complete mandatory CI session journeys.')
     if kind == 'visual' and scopes.required_session_tests(root):
         script = root / 'scripts/visual_smoke.sh'
         text = script.read_text() if script.is_file() else ''
@@ -126,7 +131,14 @@ def ipad_game_tests(root=ROOT):
     source = root / 'UITests/ChaiClassicsV020UITests.swift'
     declared = set(re.findall(r'\bfunc\s+(test\w+)\s*\(', source.read_text()))
     require(IPAD_GAME_TESTS.issubset(declared), 'All five new game journeys must remain declared.')
-    return sorted('ChaiClassicsV020UITests/' + name for name in IPAD_GAME_TESTS)
+    games = ['ChaiClassicsV020UITests/' + name for name in IPAD_GAME_TESTS]
+    if any((root / path).is_file() for path in scopes.EXPANDED_RUNTIME_FILES):
+        expanded = root / 'UITests/ChaiClassicsV030UITests.swift'
+        require(expanded.is_file(), 'All 17 expanded game journeys must remain declared.')
+        declared_new = set(re.findall(r'\bfunc\s+(test\w+)\s*\(', expanded.read_text()))
+        require(set(scopes.EXPANDED_SESSION_TESTS.values()) == declared_new, 'Expanded iPad coverage must contain exactly all 17 game journeys.')
+        games += ['ChaiClassicsV030UITests/' + name for name in scopes.EXPANDED_SESSION_TESTS.values()]
+    return sorted(games)
 
 
 def make_evidence(kind, summary, sha, *, report=None, games_summary=None, test_log=None, games_log=None,
@@ -141,7 +153,7 @@ def make_evidence(kind, summary, sha, *, report=None, games_summary=None, test_l
     if kind == 'ipad':
         result['ipad_report'] = validate_ipad(report, sha)
         result['expected_game_tests'] = ipad_game_tests(root)
-        result['games_summary'] = validate_summary(games_summary, 5, 0)
+        result['games_summary'] = validate_summary(games_summary, len(result['expected_game_tests']), 0)
         actual_games = parse_test_log(games_log) if games_log is not None else executed_game_tests
         result['executed_game_tests'] = validate_execution(actual_games, result['expected_game_tests'], phone=False)
     return result

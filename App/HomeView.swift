@@ -227,6 +227,7 @@ private extension CatalogItem {
         let children = GameCatalog.children(of: id)
         let playable = children.filter { $0.gameID != nil }.count
         guard playable > 0 else { return model.t(availabilityKey) }
+        if playable==children.count { return model.t("catalog.status.folderAllPlayable",playable) }
         return model.t(availabilityKey, playable, children.filter { $0.kind == .comingSoon }.count)
     }
 }
