@@ -29,6 +29,7 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
     private func openSavedSliding(_ app: XCUIApplication) {
         app.buttons["game.sliding"].tap()
         let resume = app.buttons["sliding.continue"]
+        XCTAssertTrue(resume.waitForExistence(timeout: 10))
         scrollFullyIntoView(resume, app: app); resume.tap()
         XCTAssertTrue(app.buttons["sliding.tile.8"].waitForExistence(timeout: 5))
     }
@@ -69,9 +70,7 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
             let window = app.frame
             let navigation = app.navigationBars.firstMatch
             let top = navigation.exists ? navigation.frame.maxY : window.minY
-            var usable = CGRect(x: window.minX + 10, y: top, width: window.width - 20, height: window.maxY - 20 - top)
-            let viewport = app.scrollViews.firstMatch
-            if viewport.exists { usable = usable.intersection(viewport.frame) }
+            let usable = CGRect(x: window.minX + 10, y: top, width: window.width - 20, height: window.maxY - 20 - top)
             if element.exists {
                 let frame = element.frame
                 if frame.width > 0 && frame.height > 0 && usable.contains(frame) { return }

@@ -7,9 +7,18 @@ on:
   workflow_dispatch:
     inputs:
       full_ui:
-        description: Run all Simulator UI tests
+        description: Run Simulator UI tests using the selected scope
         type: boolean
         default: true
+      ui_scope:
+        description: Full integration, or only the affected game UI
+        type: choice
+        options: [full, sliding, memory, tictactoe, connectfour, twentyfour, maze, catalog, legacy]
+        default: full
+      baseline_run:
+        description: Optional full CI evidence for a test-helper-only repair (otherwise scoped results only)
+        type: string
+        default: ''
   workflow_call:
     inputs:
       full_ui:
@@ -20,39 +29,69 @@ env:
   FASTLANE_SKIP_UPDATE_CHECK: '1'
 permissions:
   contents: read
+  actions: read
 jobs:
   test:
     runs-on: macos-15
     timeout-minutes: 90
     env:
       COMPATIBILITY_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+      CHAI_UI_SCOPE: ${{ inputs.ui_scope || 'full' }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Reject an empty selected test request
+        if: env.CHAI_UI_SCOPE != 'full' && inputs.full_ui != true
+        run: |
+          echo 'A selected UI scope requires full_ui=true; refusing an empty green result.' >&2
+          exit 64
       - name: Select installed Xcode 26 or newer
         run: bash scripts/select_xcode.sh
+      - name: Record actual validation scope
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          Path('ui-selection.json').write_text(json.dumps({'scope': os.environ['CHAI_UI_SCOPE'], 'source_commit': os.environ['GITHUB_SHA']}) + '\n')
+          PY
       - name: Verify puzzles, save compatibility and generated project
+        if: env.CHAI_UI_SCOPE == 'full'
         run: bash scripts/ci.sh verify
       - name: Run Swift game and save tests
+        if: env.CHAI_UI_SCOPE == 'full'
         run: bash scripts/ci.sh unit
       - name: Build iOS Simulator app
+        if: env.CHAI_UI_SCOPE == 'full'
         run: bash scripts/ci.sh build
       - name: Run all iOS UI tests
-        if: inputs.full_ui == true
+        if: inputs.full_ui == true && env.CHAI_UI_SCOPE == 'full'
+        run: bash scripts/ci.sh ui
+      - name: Run selected iOS UI tests
+        if: inputs.full_ui == true && env.CHAI_UI_SCOPE != 'full'
         run: bash scripts/ci.sh ui
       - name: Validate complete candidate XCTest evidence
-        if: inputs.full_ui == true
+        if: inputs.full_ui == true && env.CHAI_UI_SCOPE == 'full'
         run: python3 scripts/verify_candidate.py capture --kind ci --summary build/UITests-summary.json --log build/UITests.log --output build/candidate-ci-evidence.json
+      - name: Validate incremental candidate XCTest evidence
+        if: inputs.full_ui == true && env.CHAI_UI_SCOPE != 'full' && inputs.baseline_run != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHAI_BASELINE_RUN: ${{ inputs.baseline_run }}
+        run: python3 scripts/verify_incremental_ci.py --baseline-run "$CHAI_BASELINE_RUN" --summary build/UITests-summary.json --log build/UITests.log --output build/candidate-ci-evidence.json
       - name: Preserve bounded candidate CI evidence
-        if: inputs.full_ui == true
+        if: inputs.full_ui == true && (env.CHAI_UI_SCOPE == 'full' || inputs.baseline_run != '')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: candidate-ci-evidence
           path: build/candidate-ci-evidence.json
           if-no-files-found: error
           retention-days: 14
+      - name: Explain selected verification scope
+        if: always() && inputs.full_ui == true && env.CHAI_UI_SCOPE != 'full'
+        run: |
+          echo "Selected UI scope: $CHAI_UI_SCOPE. These are targeted results; full or independently verified incremental evidence is required for release." >> "$GITHUB_STEP_SUMMARY"
       - name: Export full UI screenshots for visual review
         if: always()
         run: |
@@ -65,6 +104,7 @@ jobs:
         with:
           name: test-results
           path: |
+            ui-selection.json
             sudoku-verification.json
             build/UITests.xcresult
             build/UITests-summary.json

@@ -11,7 +11,7 @@ on:
         required: false
         type: string
       ci_run:
-        description: 'Required for 0.2.0: successful full_ui CI workflow run ID'
+        description: 'Required for 0.2.0: verified full or test-helper-only incremental CI run ID'
         required: false
         type: string
       visual_run:
@@ -43,6 +43,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
+          fetch-depth: 0
           persist-credentials: false
       - name: Require complete exact-SHA candidate verification before 0.2.0 signing
         if: inputs.version == '0.2.0'

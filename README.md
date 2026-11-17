@@ -2,44 +2,61 @@
 
 [![CI](https://github.com/Kongdean2374/ChaiClassics/actions/workflows/ci.yml/badge.svg)](https://github.com/Kongdean2374/ChaiClassics/actions/workflows/ci.yml)
 
-SwiftUI 原生離線合集，iPhone / iPad，iOS 17+。永久免費，無廣告、帳號、追蹤、內購或執行期網路服務。Bundle ID：`cc.chaihome.chaiclassics`。Public 原始碼，未附開源授權。
+SwiftUI 原生 iPhone／iPad 離線合集，iOS 17+。免費、無廣告、帳號、訂閱、追蹤或遊戲後端。
+Bundle ID：`cc.chaihome.chaiclassics`。Public 原始碼，未另授予開源授權。
 
-目前實作的可操作遊戲：
+0.2.0 實作包含 **8 款可玩、13 款尚未推出，共 21 款邏輯遊戲**：
 
-- 數獨：三種難度各 50 題、順序解鎖、答案筆／鉛筆／擦除、無答案提示或錯誤標示。只有完整合法盤面顯示完成。
-- 踩地雷：9×9／16×16／30×16、自訂 5～40 邊長、首點安全、連鎖、單點揭開／長按插旗、勝敗、原生平移縮放。先選棋盤尺寸與雷數，再顯示密度估計的參考難度；每局隨機生成，不設關卡。
-- 滑塊拼圖：3×3／4×4／5×5、三種打亂程度、只准移動相鄰塊、四方向滑動／點擊相鄰塊、步數、計時、完成判定。
+| 可玩 | 規則與模式 |
+| --- | --- |
+| 數獨 | 簡單／中等／困難各 50 題，已獨立驗證唯一解；答案筆、鉛筆、擦除，玩家藍色字跡；無答案提示或錯誤標示 |
+| 踩地雷 | 隨機盤面、自訂尺寸與雷數、首點安全、單點揭開／長按插旗、原生平移縮放 |
+| 滑塊拼圖 | 3×3／4×4／5×5、四方向滑動與相鄰點擊、合法打亂、計時與步數 |
+| 井字棋 | 本機雙人或電腦、三種 AI 難度、先後手；困難使用完整 minimax |
+| 四子棋 | 7×6 重力落子、四向四連、雙人或有運算上限的三種 AI |
+| 24 點 | 精確分數運算、所有括號組合、復原／重設／新題；1,362 組獨立驗證可解題目 |
+| 記憶翻牌 | 4×4／4×5／6×6、兩張翻牌狀態機、配對鎖定與未配對延遲翻回 |
+| 迷宮 | 9×9／15×15／21×21 可重現隨機完美迷宮、方向鍵與滑動、碰牆限制 |
 
-首頁固定三欄，遊戲獨立存檔；每步同步原子寫入，保留上一份備份。退出、切換遊戲、背景和重啟可恢復最近成功寫入狀態。首頁依真實存檔顯示狀態。0.1.1 新增系統／淺色／深色、繁中／英文、觸覺回饋與遊玩時螢幕喚醒設定，內建雙語離線隱私政策／使用條款／支援頁；玩家數獨字跡為藍色。
+尚未推出：數織、數和、華容道、五子棋、黑白棋、貪吃蛇、俄羅斯方塊、打磚塊，
+以及接龍資料夾內的經典接龍、蜘蛛接龍、新接龍、金字塔接龍、三峰接龍。
+這些入口清楚顯示尚未推出，不偽裝成可玩遊戲。
 
-## 實際驗證與限制
+首頁一般字級維持三欄，共 17 張卡片；接龍二級目錄是 5 張卡片。首頁只顯示名稱、玩法與可玩狀態，
+進度留在遊戲選單。輔助大字級會調整欄數，並以多行顯示完整標題。
 
-150 題均已用獨立 Exact Cover 驗證唯一解，三類各 50，0 失敗。第一階段 [修正後 CI](https://github.com/Kongdean2374/ChaiClassics/actions/runs/43805302202) 已成功通過 7 項 Swift 測試、Xcode 26.3 App 編譯與數獨模擬器測試。踩地雷、滑塊與發布流程的最新實測請查看 Actions 與 [階段紀錄](docs/STATUS.md)，不要把「已寫好 workflow」當成已通過或已上傳。
+所有遊戲獨立存檔、可恢復及重玩。沿用 0.1.x 三款遊戲的存檔命名空間、格式與原有 150 題數獨；
+不因更新清除進度。系統／淺色／深色、繁中／英文、觸覺回饋、遊玩時保持螢幕喚醒，
+及雙語離線隱私政策／條款／支援入口維持共用。官方網站：https://classics.chaihome.cc/ 。
 
-0.1.0 的 [TestFlight workflow](https://github.com/Kongdean2374/ChaiClassics/actions/runs/43871465080) 已成功。0.1.1 的變更與驗收範圍見 [本版紀錄](docs/RELEASE_0.1.1.md)，實際 CI 結果以最新 main Actions 為準；本次不自動執行 TestFlight，仍需手動上傳與真機驗收。GitHub Secrets 的值不應貼在聊天或公開 repo。
+## 驗證與發布
 
-## 開發與 CI
+普通 push／PR 執行無 Apple 憑證的程式、相容性及工具檢查。
+GitHub Actions → **CI → Run workflow** 可選 `ui_scope`：
+`full` 是完整整合，`memory`、`sliding` 等只測受影響遊戲及相關流程。
+先局部修正、局部重驗，發布前再做必要整合，避免每個小修都重跑所有遊戲。
+局部驗證明確標示範圍；測試工具修復的跨 Run 證據須通過 App 未變、斷言未變及逐案例來源驗證。
+詳見 [選擇性測試](docs/INCREMENTAL_UI.md)。
+
+[iPad Screenshots](https://github.com/Kongdean2374/ChaiClassics/actions/workflows/ipad-screenshots.yml)
+會執行真正的 13 吋 iPad 模擬器，保留四張原生直向 PNG、五款新遊戲路徑、尺寸報告與 XCTest 結果。
+以 Actions 的實際通過數和原始產物為準；不能以編譯成功或局部測試代替整體驗收。
+
+0.2.0 的 TestFlight 由受信任候選版及驗證門檻控制，完成後可由 Codex 代為觸發並追蹤 Apple 處理。
+普通提交不自動上傳。簽署沿用私人倉庫的 **match readonly** 資產；不要重新初始化或撤銷憑證。
+不自動正式提交 App Store 或公開上架；上傳、處理完成、內部可用與外部 Beta 審核分開回報。
 
 ```sh
-python3 scripts/verify_sudoku.py  # 獨立唯一解／分類／immutable manifest
-swift test                      # 純 Swift 引擎、存檔與種子測試
-bash scripts/ci.sh              # macOS：以上 + Xcode build + iOS Simulator XCUITest
+python3 scripts/verify_sudoku.py
+swift test
+bash scripts/ci.sh                 # macOS 完整路徑
+CHAI_UI_SCOPE=memory bash scripts/ci.sh ui  # macOS 指定 UI 範圍
 ```
 
-Xcode 26+ 開啟 `ChaiClassics.xcodeproj`，選 `ChaiClassics` scheme 與 iPhone Simulator。不需要第三方 iOS package，也不必在 CI 動態下載專案產生器。新增 SwiftUI 檔案後跑 `python3 scripts/create_project.py` 更新已提交工程。
+Xcode 26+ 開啟 `ChaiClassics.xcodeproj` 的 `ChaiClassics` scheme。
+新增 Swift 檔案後執行 `python3 scripts/create_project.py`。
 
-CI 每次 main push／PR 執行題庫、Swift、Simulator 編譯與工具檢查，無 Apple Secrets，任一步失敗會失敗。完整 UI 以 CI → Run workflow → full_ui=true 手動執行；TestFlight 只先做快速無憑證工具預檢，再直接正式簽署編譯／上傳，不重跑整輪模擬器 UI。TestFlight 與 App Store 為手動 main workflow，獨立 Initialize Signing 工作流程透過 match 加密保存資產至私人倉庫；TestFlight 只用 match readonly 簽署上傳。App Store 只選入已測 build、準備 release notes，**不自動送審／公開上架**。production environment 審核保護需在 GitHub Settings 設定。
-
-文件：
-
-- [0.1.1 改版、相容性與真機驗收](docs/RELEASE_0.1.1.md)
-- [未來網站接手規格（尚未建站）](docs/WEBSITE_HANDOFF.md)
-- [架構、新增遊戲、存檔與 migration](docs/ARCHITECTURE.md)
-- [題庫生成、驗證及追加 051](docs/SUDOKU_PUZZLES.md)
-- [測試與 iPhone 驗收](docs/TESTING.md)
-- [Secrets、TestFlight、App Store 發布](docs/RELEASING.md)
-- [公開倉庫安全](docs/SECURITY.md)
-
-下一階段依附件規格：使用者確認 TestFlight 穩定後，逐款加入五子棋、Klondike 與記憶翻牌，再準備 1.0。其餘經典遊戲保留模組擴充方式，不先做空殼。
-
-簽署資產已在私人 repo 建立。現有簽署入口全部鎖定 readonly，請勿重新初始化。可手動執行 **Verify Signing Assets (read only)** 驗證既有資產／私鑰配對，不會新建證書或上傳；詳見 [唯讀簽署資產驗證](docs/SIGNING_ASSET_VERIFICATION.md)。
+- [0.2.0 進度](docs/V020_PROGRESS.md)、[發布規格](docs/v020-release.md)、[驗證證據](docs/v020-verification.md)
+- [存檔與架構](docs/ARCHITECTURE.md)、[題庫規格](docs/SUDOKU_PUZZLES.md)
+- [發布與 Secrets](docs/RELEASING.md)、[簽署資產唯讀驗證](docs/SIGNING_ASSET_VERIFICATION.md)
+- [歷史 0.1.1 改版](docs/RELEASE_0.1.1.md)、[網站接手文件](docs/WEBSITE_HANDOFF.md)

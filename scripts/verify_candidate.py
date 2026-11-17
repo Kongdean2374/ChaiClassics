@@ -6,6 +6,7 @@ GitHub reads use the caller's existing gh authentication; no credential is print
 """
 import argparse
 import io
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -13,6 +14,11 @@ import re
 import subprocess
 import sys
 import zipfile
+
+# The incremental validator imports this module. Preserve one exception class
+# when this file is launched as a CLI rather than imported by unit tests.
+if __name__ == '__main__':
+    sys.modules['verify_candidate'] = sys.modules[__name__]
 
 ROOT = Path(__file__).resolve().parents[1]
 IPAD_TESTS = {f'testIPad{page}Screenshot' for page in ('Home', 'Sudoku', 'Minesweeper', 'SlidingPuzzle')}
@@ -145,25 +151,30 @@ def github(path, *, binary=False):
         raise CandidateError('GitHub returned invalid verification metadata.') from None
 
 
-def validate_run(run, jobs, kind, repo, sha, branch='main'):
+def validate_workflow_identity(run, kind, repo, sha, branch='main'):
     require(isinstance(run, dict) and isinstance(run.get('repository'), dict), 'Missing workflow repository provenance.')
     require(run['repository'].get('full_name', '').lower() == repo.lower(), 'Workflow belongs to a different repository.')
     require(run.get('head_sha') == sha and run.get('head_branch') == branch, 'Candidate workflows must run on the exact requested branch and SHA.')
-    require(run.get('event') == 'workflow_dispatch' and run.get('status') == 'completed' and run.get('conclusion') == 'success',
-            'Candidate verification must be explicitly dispatched and fully successful.')
+    require(run.get('event') == 'workflow_dispatch', 'Candidate verification must be explicitly dispatched.')
     require(run.get('path', '').split('@')[0] == '.github/workflows/' + WORKFLOWS[kind], 'Wrong candidate verification workflow.')
     for field in ('actor', 'triggering_actor'):
         actor = run.get(field, {})
         require(isinstance(actor, dict) and isinstance(actor.get('login'), str) and re.fullmatch(r'[A-Za-z0-9_-]+(?:\[bot\])?', actor['login']) is not None
                 and type(actor.get('id')) is int and actor['id'] > 0, 'Missing valid workflow actor provenance.')
+
+
+def validate_run(run, jobs, kind, repo, sha, branch='main', ui_step='Run all iOS UI tests'):
+    validate_workflow_identity(run, kind, repo, sha, branch)
+    require(run.get('status') == 'completed' and run.get('conclusion') == 'success',
+            'Candidate verification must be fully successful.')
     require(isinstance(jobs, dict) and isinstance(jobs.get('jobs'), list) and jobs.get('total_count') == len(jobs['jobs']), 'Incomplete workflow job metadata.')
     entries = jobs['jobs']
     require(JOBS[kind].issubset({job.get('name') for job in entries}) and all(job.get('conclusion') == 'success' for job in entries),
             'Every required verification job must pass without a skipped or failed job.')
     if kind == 'ci':
         test = next(job for job in entries if job.get('name') == 'test')
-        require(any(step.get('name') == 'Run all iOS UI tests' and step.get('conclusion') == 'success' for step in test.get('steps', [])),
-                'CI did not successfully execute the full_ui test step.')
+        require(any(step.get('name') == ui_step and step.get('conclusion') == 'success' for step in test.get('steps', [])),
+                'CI did not successfully execute its required UI test step.')
 
 
 def artifact_evidence(artifacts, kind, read=github):
@@ -175,7 +186,13 @@ def artifact_evidence(artifacts, kind, read=github):
     item = matches[0]
     require(type(item.get('id')) is int and item['id'] > 0, 'Invalid candidate artifact identity.')
     require(type(item.get('size_in_bytes')) is int and 0 < item['size_in_bytes'] <= MAX_EVIDENCE_BYTES, 'Invalid candidate evidence artifact size.')
-    archive = read('repos/' + artifacts['_repo'] + '/actions/artifacts/' + str(item['id']) + '/zip', binary=True)
+    cache = Path(os.environ['CHAI_VERIFICATION_CACHE']) / (str(item['id']) + '.zip') if os.environ.get('CHAI_VERIFICATION_CACHE') else None
+    if cache is not None and cache.exists():
+        require(not cache.is_symlink() and cache.stat().st_size <= MAX_EVIDENCE_BYTES, 'Invalid cached candidate artifact.')
+        archive = cache.read_bytes()
+        require(item.get('digest') == 'sha256:' + hashlib.sha256(archive).hexdigest(), 'Cached candidate ZIP differs from live GitHub artifact digest.')
+    else:
+        archive = read('repos/' + artifacts['_repo'] + '/actions/artifacts/' + str(item['id']) + '/zip', binary=True)
     try:
         with zipfile.ZipFile(io.BytesIO(archive)) as zipped:
             require(zipped.namelist() == [expected + '.json'], 'Unexpected candidate artifact contents.')
@@ -204,6 +221,7 @@ def verify(repo, sha, version, tag, runs, read=github, root=ROOT, branch='main')
         obj = read('repos/' + repo + '/git/tags/' + obj['sha']).get('object', {})
     require(obj.get('type') == 'commit' and obj.get('sha') == sha, 'Candidate tag does not resolve to the tested SHA.')
     results = {}
+    incremental = None
     evidence_branch = None
     for kind in WORKFLOWS:
         prefix = 'repos/' + repo + '/actions/runs/' + str(runs[kind])
@@ -217,22 +235,51 @@ def verify(repo, sha, version, tag, runs, read=github, root=ROOT, branch='main')
         # A fast-forward preserves the exact source tree and SHA. In release
         # mode the current main/tag checks above still bind all pre-merge runs
         # to that identical commit; a new merge SHA always needs fresh evidence.
-        validate_run(run, read(prefix + '/jobs?per_page=100&filter=latest'), kind, repo, sha, evidence_branch)
         artifacts = read(prefix + '/artifacts?per_page=100')
         require(artifacts.get('total_count') == len(artifacts.get('artifacts', [])), 'Incomplete candidate artifact list.')
         artifacts['_repo'] = repo
-        evidence = validate_evidence(kind, artifact_evidence(artifacts, kind, read), sha, root)
+        raw_evidence = artifact_evidence(artifacts, kind, read)
+        jobs = read(prefix + '/jobs?per_page=100&filter=latest')
+        if kind == 'ci' and raw_evidence.get('schema') == 2:
+            from verify_incremental_ci import validate_incremental_evidence
+            validate_run(run, jobs, kind, repo, sha, evidence_branch, ui_step='Run selected iOS UI tests')
+            test_job = next(job for job in jobs['jobs'] if job['name'] == 'test')
+            require(all(step.get('conclusion') in ('success', 'skipped') for step in test_job.get('steps', [])),
+                    'A targeted CI step failed or was cancelled.')
+            require(any(step.get('name') == 'Validate incremental candidate XCTest evidence' and step.get('conclusion') == 'success'
+                        for step in test_job.get('steps', [])), 'Current CI did not validate its incremental evidence.')
+            evidence = validate_incremental_evidence(raw_evidence, repo, sha, runs['ci'], read=read, root=root)
+            incremental = evidence
+            results[kind] = {'run_id': runs[kind], 'run_url': f'https://github.com/{repo}/actions/runs/{runs[kind]}',
+                             'actor': run['actor']['login'], 'triggering_actor': run['triggering_actor']['login'],
+                             'verification': evidence['verification'], 'source_commit': sha,
+                             'summary': evidence['current_summary'], 'executed_tests': evidence['executed_current_tests'],
+                             'baseline_run': evidence['baseline_run'], 'baseline_summary': evidence['baseline_summary'],
+                             'baseline_executed_tests': evidence['baseline_executed_tests'], 'coverage': evidence['coverage'],
+                             'app_source_digest': evidence['app_source_digest'], 'test_methods_digest': evidence['test_methods_digest']}
+            continue
+        evidence_sha = sha
+        if kind != 'ci' and run.get('head_sha') != sha:
+            require(incremental is not None and run.get('head_sha') == incremental['baseline_commit'],
+                    'Cross-SHA evidence requires verified test-helper-only application-identical incremental coverage.')
+            evidence_sha = incremental['baseline_commit']
+        validate_run(run, jobs, kind, repo, evidence_sha, evidence_branch)
+        evidence = validate_evidence(kind, raw_evidence, evidence_sha, root)
         results[kind] = {'run_id': runs[kind], 'run_url': f'https://github.com/{repo}/actions/runs/{runs[kind]}',
                          'actor': run['actor']['login'], 'triggering_actor': run['triggering_actor']['login'],
-                         'summary': evidence['summary'], 'executed_tests': evidence['executed_tests']}
+                         'source_commit': evidence_sha, 'summary': evidence['summary'], 'executed_tests': evidence['executed_tests']}
         if kind == 'ipad':
             results[kind]['device'] = evidence['ipad_report']['device']
             results[kind]['games_summary'] = evidence['games_summary']
             results[kind]['executed_game_tests'] = evidence['executed_game_tests']
-    return {'schema': 1, 'status': 'verified', 'version': version, 'source_commit': sha,
+    proof = {'schema': 2 if incremental else 1, 'status': 'verified', 'version': version, 'source_commit': sha,
             'candidate_tag': tag, 'branch': branch, 'evidence_branch': evidence_branch,
             'release_eligible': branch == 'main', 'workflows': results,
             'apple_upload': 'not_performed', 'apple_processing': 'not_checked'}
+    if incremental:
+        proof.update(verification='test-helper-only-incremental', app_source_digest=incremental['app_source_digest'],
+                     test_methods_digest=incremental['test_methods_digest'], baseline_commit=incremental['baseline_commit'])
+    return proof
 
 
 def main(argv=None):

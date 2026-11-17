@@ -112,9 +112,9 @@ final class ChaiClassicsUITests: XCTestCase {
             let window = app.frame
             let navigation = app.navigationBars.firstMatch
             let top = navigation.exists ? navigation.frame.maxY : window.minY
-            var usable = CGRect(x: window.minX + 10, y: top, width: window.width - 20, height: window.maxY - 20 - top)
-            let viewport = app.scrollViews.firstMatch
-            if viewport.exists { usable = usable.intersection(viewport.frame) }
+            // The destination may replace a ScrollView with a native Form while
+            // navigation is settling. Window/navigation bounds remain valid.
+            let usable = CGRect(x: window.minX + 10, y: top, width: window.width - 20, height: window.maxY - 20 - top)
             if element.exists {
                 let frame = element.frame
                 if frame.width > 0 && frame.height > 0 && usable.contains(frame) {

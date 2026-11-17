@@ -111,7 +111,7 @@ class AppResourceTests(unittest.TestCase):
         self.assertEqual(header.count(b"        default: '0.2.0'\n"),1)
         # v0.2.0 adds a read-only same-SHA candidate evidence gate. The actual
         # signing/upload job below remains byte-frozen to the released pipeline.
-        self.assertEqual(hashlib.sha256(header).hexdigest(),'7e609289159ac613cadbece8c851ddd1c7d5815ae6540158acf59573b820bd04')
+        self.assertEqual(hashlib.sha256(header).hexdigest(),'429107082fd02797bec6bfdb42ac03e4bac47d81e22e686a38a2efb9a166f8b4')
         upload=b'  upload:\n'+actual.split(b'  upload:\n',1)[1]
         self.assertEqual(upload.count(b'    needs: preflight\n'),1)
         self.assertEqual(upload.count(b'    runs-on: macos-15-intel\n'),1)

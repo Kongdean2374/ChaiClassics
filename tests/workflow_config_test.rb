@@ -90,16 +90,20 @@ end
 end
 puts 'PASS: unsigned Simulator CI uses standard ARM; real codesign regression and signed TestFlight retain Intel; all select Xcode 26+.'
 phase_runs = test_job.fetch('steps').map { |step| step.fetch('run', '') }.select { |run| run.start_with?('bash scripts/ci.sh') }
-check(phase_runs == %w[verify unit build ui].map { |phase| 'bash scripts/ci.sh ' + phase }, 'all four verification phases remain available and ordered')
+check(phase_runs == %w[verify unit build ui ui].map { |phase| 'bash scripts/ci.sh ' + phase }, 'full phases remain ordered and a separate selected UI step is available')
 ci_workflow = workflows.fetch('ci.yml')
 ci_triggers = ci_workflow['on'] || ci_workflow[true]
 check(ci_triggers.dig('workflow_dispatch','inputs','full_ui','type') == 'boolean' && ci_triggers.dig('workflow_dispatch','inputs','full_ui','default') == true, 'full UI remains available through explicit manual CI')
 check(ci_triggers.dig('workflow_call','inputs','full_ui','default') == false, 'reusable CI defaults to quick checks')
 ui_steps = test_job.fetch('steps').select { |step| step['run'] == 'bash scripts/ci.sh ui' }
-check(ui_steps.length == 1 && ui_steps.first['if'] == 'inputs.full_ui == true', 'only full UI is opt-in; no game assertions removed')
+check(ui_steps.length == 2 && ui_steps.map { |step| step['if'] } == ["inputs.full_ui == true && env.CHAI_UI_SCOPE == 'full'", "inputs.full_ui == true && env.CHAI_UI_SCOPE != 'full'"], 'full and targeted UI are explicit mutually exclusive modes')
 test_job.fetch('steps').select { |step| %w[verify unit build].any? { |phase| step['run'] == 'bash scripts/ci.sh ' + phase } }.each do |step|
-  check(!step.key?('if'), 'puzzle, Swift and Simulator build checks remain unconditional')
+  check(step['if'] == "env.CHAI_UI_SCOPE == 'full'", 'ordinary/full CI retain all checks; targeted mode compiles its selected UI without repeating unrelated unit suites')
 end
+check(test_job.dig('env', 'CHAI_UI_SCOPE') == "${{ inputs.ui_scope || 'full' }}", 'ordinary push, PR and release CI default to full checks')
+check(ci_workflow['permissions'] == {'contents' => 'read', 'actions' => 'read'}, 'baseline reads receive only read permission')
+scope_inputs = ci_triggers.dig('workflow_dispatch', 'inputs', 'ui_scope')
+check(scope_inputs['type'] == 'choice' && scope_inputs['default'] == 'full' && scope_inputs['options'].include?('memory') && scope_inputs['options'].include?('sliding'), 'manual CI exposes explicit game selections')
 check(test_job['timeout-minutes'] == 90, 'unsigned ARM CI has a bounded total runtime')
 ci_script = File.read(File.join(root, 'scripts/ci.sh'))
 check(ci_script.include?('-test-timeouts-enabled YES') && ci_script.include?('-default-test-execution-time-allowance 420') && ci_script.include?('-maximum-test-execution-time-allowance 600'), 'complete UI allowance stays enabled and bounded on ARM or Intel')
@@ -110,7 +114,13 @@ check(flight.fetch('jobs').keys.sort == %w[preflight upload], 'TestFlight has on
 preflight = flight.fetch('jobs').fetch('preflight')
 check(preflight['runs-on'] == 'ubuntu-24.04' && !preflight.key?('env') && !preflight.key?('environment') && !preflight.key?('secrets'), 'preflight runs without Apple/signing credentials')
 candidate_steps = preflight['steps'].reject { |step| ['Require complete exact-SHA candidate verification before 0.2.0 signing', 'Preserve verified release candidate proof'].include?(step['name']) }
-check(candidate_steps == ci_workflow.fetch('jobs').fetch('release-tooling').fetch('steps'), 'TestFlight retains all fast release-tooling security checks')
+check(candidate_steps.first.dig('with', 'fetch-depth') == 0, 'release proof can independently compare complete git trees')
+normalized_steps = candidate_steps.map do |step|
+  copy = Marshal.load(Marshal.dump(step))
+  copy['with'].delete('fetch-depth') if copy.fetch('uses', '').start_with?('actions/checkout@')
+  copy
+end
+check(normalized_steps == ci_workflow.fetch('jobs').fetch('release-tooling').fetch('steps'), 'TestFlight retains all fast release-tooling security checks')
 check(flight.dig('jobs','upload','needs') == 'preflight', 'real signed archive/upload follows successful quick preflight')
 flight.fetch('jobs').each_value do |entry|
   check(entry.fetch('if').include?("github.ref == 'refs/heads/main'") && entry.fetch('if').include?("github.event_name == 'workflow_dispatch'"), 'both release jobs remain trusted main/manual only')

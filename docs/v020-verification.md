@@ -5,6 +5,18 @@ The candidate is an exact commit, not the latest successful branch run. Ordinary
 The three manually dispatchable validation workflows accept trusted `main` or
 `develop/0.2.0`. They contain no Apple credentials.
 
+The standard release path uses all three exact-SHA runs. A separate, narrowly
+verified test-helper repair path can retain actual prior passes when every
+application, resource, project, package and signing byte is unchanged. All test
+method bodies and existing assertions must also remain unchanged; only the
+reviewed private scroll helpers and QA tooling may differ. Its schema 2 proof
+keeps the original failed full-run results and new selected results separate,
+and records the source run for each covered case. The verifier independently
+reopens both original result ZIPs and recomputes source hashes. It rejects any
+application change, missing case or unrepaired failure. See
+[incremental UI verification](INCREMENTAL_UI.md). Selected tests without this
+proof are ordinary scoped checks and cannot authorize TestFlight.
+
 A final-main proof may reuse all three development runs after a fast-forward
 puts the identical tested SHA on main. The three runs must use one common
 trusted evidence branch, recorded in `evidence_branch`; main's current tip and
