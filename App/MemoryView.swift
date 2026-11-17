@@ -8,7 +8,14 @@ struct MemoryMenuView: View {
     @State private var confirm = false
 
     private func start() {
-        if model.saveMemory(MemoryBoard(mode: mode)) { play = true }
+        if model.saveMemory(MemoryBoard(mode: mode)) {
+            model.startNewSession(.memory)
+            play = true
+        }
+    }
+
+    private func applyMenuDefaults() {
+        mode = MemoryBoard.Mode(rawValue: model.gameSettings(for: .memory).memoryMode) ?? .easy
     }
 
     var body: some View {
@@ -21,14 +28,17 @@ struct MemoryMenuView: View {
             }
             if let board = model.memory {
                 Section(model.t("menu.lastGame")) {
-                    Button { play = true } label: {
+                    ContinueGameRow(game: .memory, action: {
+                        model.beginContinuing(.memory)
+                        play = true
+                    }) {
                         ContinueCard(title: model.t(board.isComplete ? "menu.viewLast" : "menu.continue"),
                                      detail: model.t("memory.summary", board.mode.columns, board.mode.rows,
                                                      board.matchedPairCount, board.mode.pairCount, board.moves)
                                         + " · " + model.t("common.seconds", board.elapsedSeconds))
                             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                             .contentShape(Rectangle())
-                    }.buttonStyle(QuietPressStyle()).accessibilityIdentifier("memory.continue")
+                    }
                 }
             }
             Section(model.t("menu.newGame")) {
@@ -50,7 +60,7 @@ struct MemoryMenuView: View {
                         .accessibilityAddTraits(mode == option ? [.isSelected] : [])
                         .accessibilityIdentifier("memory.mode." + option.rawValue)
                 }
-                Button { if model.memory != nil { confirm = true } else { start() } } label: {
+                Button { confirm = true } label: {
                     Label(model.t("menu.start"), systemImage: "play.fill")
                         .font(.headline).frame(maxWidth: .infinity, minHeight: 44).padding(.vertical, 8)
                         .foregroundStyle(.primary)
@@ -66,10 +76,10 @@ struct MemoryMenuView: View {
         }.scrollContentBackground(.hidden).background(GameCanvas()).tint(GamePalette.tint(.memory))
             .localizedNavigation().navigationTitle(model.gameTitle(.memory)).navigationBarTitleDisplayMode(.inline)
             .navigationDestination(isPresented: $play) { MemoryPlayView() }
-            .confirmationDialog(model.t("memory.replace.confirm"), isPresented: $confirm, titleVisibility: .visible) {
-                Button(model.t("menu.startNew"), role: .destructive) { start() }.accessibilityIdentifier("memory.confirmNew")
-                Button(model.t("common.cancel"), role: .cancel) {}
-            }
+            .gameMenuSettings(.memory)
+            .newGameConfirmation(.memory, isPresented: $confirm) { start() }
+            .onAppear { applyMenuDefaults() }
+            .onChange(of: model.gameSettings(for: .memory).memoryMode) { _, _ in applyMenuDefaults() }
     }
 }
 
@@ -82,44 +92,30 @@ private struct MemoryMismatchTurn: Hashable {
 private struct MemoryHoldKey: Hashable {
     let token: UInt64
     let turn: MemoryMismatchTurn
+    let deadline: TimeInterval
 }
 
 struct MemoryPlayView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.scenePhase) private var scenePhase
-    @State private var paused = false
-    @State private var restart = false
-    @State private var newDeck = false
     @State private var presentation = MemoryTurnPresentation()
     @State private var mismatchTurn: MemoryMismatchTurn?
+    @State private var holdDeadline: TimeInterval?
+    @State private var turnRevealSeconds = MemoryTurnPresentation.mismatchHoldDuration
 
     private var presentationActive: Bool {
-        !paused && !restart && !newDeck && scenePhase == .active
+        model.sessionIsPlaying(.memory) && scenePhase == .active
     }
     private var active: Bool { presentationActive && model.memory?.isComplete == false }
-    private var finished: Bool { model.memory?.isComplete == true && presentation.acceptsSelection }
     private var holdKey: MemoryHoldKey? {
-        guard presentationActive, presentation.phase == .holding, let mismatchTurn else { return nil }
-        return MemoryHoldKey(token: presentation.token, turn: mismatchTurn)
+        guard presentationActive, presentation.phase == .holding, let mismatchTurn, let holdDeadline else { return nil }
+        return MemoryHoldKey(token: presentation.token, turn: mismatchTurn, deadline: holdDeadline)
     }
 
-    private func cancelPresentation() { presentation.cancel(); mismatchTurn = nil }
+    private func cancelPresentation() { presentation.cancel(); mismatchTurn = nil; holdDeadline = nil }
     private func settle() {
         cancelPresentation()
         model.editMemory { $0.settleUnmatchedCards() }
-    }
-    private func togglePause() {
-        if !paused { settle() }
-        paused.toggle()
-    }
-    private func restartDeck() {
-        guard var next = model.memory else { return }
-        next.restart()
-        if model.saveMemory(next) { cancelPresentation(); paused = false }
-    }
-    private func startNewDeck() {
-        guard let mode = model.memory?.mode else { return }
-        if model.saveMemory(MemoryBoard(mode: mode)) { cancelPresentation(); paused = false }
     }
     private func select(_ index: Int) {
         guard active, presentation.acceptsSelection, var next = model.memory else { return }
@@ -128,19 +124,25 @@ struct MemoryPlayView: View {
         if secondSelection {
             let mismatch = next.phase == .mismatch ? next.selectedIndices : []
             mismatchTurn = mismatch.isEmpty ? nil : MemoryMismatchTurn(seed: next.seed, moves: next.moves, selection: mismatch)
+            let configured = model.gameSettings(for: .memory).memoryRevealSeconds
+            turnRevealSeconds = configured.isFinite ? min(1.5, max(0.5, configured)) : 0.65
+            holdDeadline = nil
             presentation.beginPair(secondCard: index, mismatchedCards: mismatch)
         }
-        model.feedback()
+        model.feedback(for: .memory)
     }
     private func flipCompleted(card: Int, faceUp: Bool, token: UInt64) {
         guard presentationActive, token == presentation.token else { return }
         if faceUp {
-            presentation.revealCompleted(card: card, token: token, at: ProcessInfo.processInfo.systemUptime)
+            if presentation.revealCompleted(card: card, token: token, at: 0), presentation.phase == .holding {
+                holdDeadline = ProcessInfo.processInfo.systemUptime + turnRevealSeconds
+            }
         } else if presentation.closeCompleted(card: card, token: token), let turn = mismatchTurn {
             guard model.memory?.seed == turn.seed else { return }
             if model.editMemory({ $0.resolveMismatch(expectedMoves: turn.moves, expectedSelection: turn.selection) }) {
                 presentation.finishClosing(token: token)
                 mismatchTurn = nil
+                holdDeadline = nil
             }
         }
     }
@@ -149,80 +151,48 @@ struct MemoryPlayView: View {
         ScrollView {
             if let board = model.memory {
                 VStack(spacing: 16) {
-                    MemoryPlayHeader(board: board, paused: paused, togglePause: togglePause)
-                    if finished {
-                        GameResultBanner(game: .memory, title: model.t("status.completed"),
-                                         detail: model.t("memory.result.complete", board.moves, board.elapsedSeconds),
-                                         won: true, identifier: "memory.complete")
-                    }
-                    if paused || scenePhase != .active {
-                        PauseCard(game: .memory) { paused = false }.frame(minHeight: 280)
-                    } else {
-                        // At 320 pt: (320 - 24 outer - 8 inner - 20 gaps) / 6 = 44.7 pt.
-                        // At most 36 eager cards keep completion callbacks alive
-                        // when a selected card scrolls beyond the viewport.
-                        VStack(spacing: 4) {
-                            ForEach(0..<board.mode.rows, id: \.self) { row in
-                                HStack(spacing: 4) {
-                                    ForEach(0..<board.mode.columns, id: \.self) { column in
-                                        let index = row * board.mode.columns + column
-                                        MemoryCard(index: index, board: board,
-                                                   faceUp: board.isFaceUp(index) && !presentation.closingCards.contains(index),
-                                                   inputAllowed: active && presentation.acceptsSelection,
-                                                   token: presentation.token,
-                                                   reveal: { select(index) }, flipCompleted: flipCompleted)
-                                            .frame(minWidth: 44, maxWidth: .infinity)
-                                    }
+                    MemoryPlayHeader(board: board)
+                    // At 320 pt: (320 - 24 outer - 8 inner - 20 gaps) / 6 = 44.7 pt.
+                    // At most 36 eager cards keep completion callbacks alive
+                    // when a selected card scrolls beyond the viewport.
+                    VStack(spacing: 4) {
+                        ForEach(0..<board.mode.rows, id: \.self) { row in
+                            HStack(spacing: 4) {
+                                ForEach(0..<board.mode.columns, id: \.self) { column in
+                                    let index = row * board.mode.columns + column
+                                    MemoryCard(index: index, board: board,
+                                               faceUp: board.isFaceUp(index) && !presentation.closingCards.contains(index),
+                                               inputAllowed: active && presentation.acceptsSelection,
+                                               token: presentation.token,
+                                               reveal: { select(index) }, flipCompleted: flipCompleted)
+                                        .frame(minWidth: 44, maxWidth: .infinity)
                                 }
                             }
-                        }.id(board.seed).padding(4)
-                            .background(GameBoardSurface(game: .memory, cornerRadius: 18))
-                    }
+                        }
+                    }.id(board.seed).padding(4)
+                        .background(GameBoardSurface(game: .memory, cornerRadius: 18))
                     Text(model.t("memory.controls")).font(.caption).foregroundStyle(.secondary)
                         .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-                    Button {
-                        if board.isComplete { startNewDeck() } else { newDeck = true }
-                    } label: {
-                        Label(model.t(board.isComplete ? "memory.playAgain" : "memory.newDeck"), systemImage: "shuffle")
-                            .font(.headline).frame(maxWidth: .infinity, minHeight: 44).padding(.vertical, 5)
-                            .background(GamePalette.tint(.memory).opacity(0.12), in: RoundedRectangle(cornerRadius: 15))
-                            .contentShape(Rectangle())
-                    }.buttonStyle(QuietPressStyle()).accessibilityIdentifier("memory.newDeck")
                 }.padding(.horizontal, 12).padding(.vertical, 16)
                     .frame(maxWidth: 560).frame(maxWidth: .infinity)
             }
         }.background(GameCanvas()).tint(GamePalette.tint(.memory))
-            .localizedNavigation().navigationTitle(model.gameTitle(.memory)).navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                Button(model.t("common.restart")) { restart = true }.accessibilityIdentifier("memory.restart")
-            }
-            .confirmationDialog(model.t("memory.restart.confirm"), isPresented: $restart, titleVisibility: .visible) {
-                Button(model.t("common.restart"), role: .destructive) { restartDeck() }
-                    .accessibilityIdentifier("memory.confirmRestart")
-                Button(model.t("common.cancel"), role: .cancel) {}
-            }
-            .confirmationDialog(model.t("memory.newDeck.confirm"), isPresented: $newDeck, titleVisibility: .visible) {
-                Button(model.t("memory.newDeck"), role: .destructive) { startNewDeck() }
-                    .accessibilityIdentifier("memory.confirmNewDeck")
-                Button(model.t("common.cancel"), role: .cancel) {}
-            }
-            .gameCompletionCelebration(completed: finished)
-            .modifier(GameplayActivity(game: .memory, active: active))
-            .modifier(SessionTimer(active: active, tick: { model.editMemory { $0.elapsedSeconds += 1 } }))
+            .navigationTitle(model.gameTitle(.memory)).navigationBarTitleDisplayMode(.inline)
+            .gameSessionScreen(.memory, resultReady: presentation.acceptsSelection)
             .onAppear { settle() }
             .onDisappear { settle() }
             .onChange(of: scenePhase) { _, phase in
-                if phase != .active { settle(); paused = true }
+                if phase != .active { settle() }
             }
-            .onChange(of: restart) { _, showing in if showing { settle() } }
-            .onChange(of: newDeck) { _, showing in if showing { settle() } }
+            .onChange(of: model.sessionIsPlaying(.memory)) { _, playing in if !playing { settle() } }
             .task(id: holdKey) {
                 guard let expected = holdKey else { return }
-                // Reveal completion, rather than the second tap, starts this clock.
+                // Snapshot the configured real-time hold after the second reveal.
+                // The core's fixed logical deadline remains an animation gate.
                 while !Task.isCancelled, holdKey == expected {
-                    guard let remaining = presentation.remainingHold(at: ProcessInfo.processInfo.systemUptime) else { return }
-                    if remaining == 0 {
-                        presentation.beginClosing(token: expected.token, at: ProcessInfo.processInfo.systemUptime)
+                    let remaining = expected.deadline - ProcessInfo.processInfo.systemUptime
+                    if remaining <= 0 {
+                        presentation.beginClosing(token: expected.token, at: MemoryTurnPresentation.mismatchHoldDuration)
                         return
                     }
                     do { try await Task.sleep(for: .seconds(remaining)) } catch { return }
@@ -233,8 +203,6 @@ struct MemoryPlayView: View {
 
 private struct MemoryPlayHeader: View {
     let board: MemoryBoard
-    let paused: Bool
-    let togglePause: () -> Void
     @EnvironmentObject var model: AppModel
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     private var tint: Color { GamePalette.tint(.memory) }
@@ -246,20 +214,12 @@ private struct MemoryPlayHeader: View {
                 Text(model.t("memory.board.title", board.mode.columns, board.mode.rows))
                     .font(.system(.headline, design: .rounded)).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 4)
-                Button(action: togglePause) {
-                    Image(systemName: paused ? "play.fill" : "pause.fill")
-                        .font(.subheadline.weight(.semibold)).frame(width: 44, height: 44)
-                        .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
-                        .contentShape(Rectangle())
-                }.buttonStyle(QuietPressStyle()).accessibilityLabel(model.t(paused ? "common.resume" : "common.pause"))
-                    .accessibilityIdentifier("memory.pause").disabled(board.isComplete)
             }
             LazyVGrid(columns: [GridItem(dynamicTypeSize.isAccessibilitySize ? .flexible() : .adaptive(minimum: 138), spacing: 8)],
                       alignment: .leading, spacing: 8) {
                 GameMetric(symbol: "rectangle.on.rectangle", value: model.t("memory.pairs", board.matchedPairCount, board.mode.pairCount),
                            tint: tint, identifier: "memory.pairs")
                 GameMetric(symbol: "hand.tap", value: model.t("memory.moves", board.moves), tint: tint, identifier: "memory.moves")
-                GameMetric(symbol: "timer", value: model.t("common.seconds", board.elapsedSeconds), tint: tint, identifier: "memory.timer")
             }
         }
     }

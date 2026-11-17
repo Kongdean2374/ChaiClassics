@@ -113,6 +113,14 @@ class IncrementalCandidateIntegrationTests(unittest.TestCase):
         self.assertEqual(proof['workflows']['ipad']['source_commit'], incremental.BASELINE_SHA)
         for name in incremental.SELECTED_TESTS: self.assertEqual(ci['coverage'][name]['source_run'], self.runs['ci'])
 
+    def test_v022_current_run_keeps_the_original_historical_baseline_proof(self):
+        self.responses[f'repos/{self.repo}/actions/runs/{self.runs["ci"]}']['head_branch'] = 'develop/0.2.2'
+        with mock.patch.object(incremental, 'source_proof', return_value=self.source):
+            rebuilt = incremental.validate_incremental_evidence(self.evidence, self.repo, self.sha, self.runs['ci'],
+                read=self.read, root=self.root, results_reader=self.results)
+        self.assertEqual(rebuilt, self.evidence)
+        self.assertEqual(rebuilt['baseline_branch'], 'develop/0.2.0')
+
     def test_forged_coverage_digest_target_execution_and_source_are_rebuilt_and_rejected(self):
         for edit in (
             lambda e: e.update(app_source_digest='0' * 64),

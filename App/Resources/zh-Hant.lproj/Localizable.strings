@@ -430,3 +430,243 @@
 "twentyfour.history.start" = "原始四張牌：%@";
 
 "twentyfour.history.empty" = "每一步計算都會記錄在這裡；撤銷可移除最後一步。";
+
+"session.new.title" = "開始新遊戲？";
+
+"session.new.overwrite" = "開始後會取代這款遊戲目前的進度。既有遊玩紀錄會保留，是否繼續？";
+
+"session.new.detail" = "準備好了嗎？確認後開始計時，遊玩進度會自動保存。";
+
+"session.new.agree" = "同意並開始";
+
+"session.paused.detail" = "遊戲與計時已暫停。退出後仍會保留進度，下次可從這裡繼續。";
+
+"session.paused.resume" = "開始／繼續";
+
+"session.paused.exit" = "退出遊戲";
+
+"session.result.won" = "恭喜你，獲勝了！";
+
+"session.result.lost" = "這次落敗了";
+
+"session.result.completed" = "恭喜你完成！";
+
+"session.result.draw" = "這局平手";
+
+"session.result.abandoned" = "本局已結束";
+
+"session.result.review" = "查看原始遊戲畫面";
+
+"session.result.show" = "點一下查看完成通知";
+
+"session.delete.title" = "取消這次遊玩？";
+
+"session.delete.detail" = "只刪除這次進度，其他遊戲、已完成紀錄與個人設定都會保留。";
+
+"session.delete.action" = "刪除進度";
+
+"common.done" = "完成";
+
+"settings.playData" = "遊玩資料";
+
+"settings.individualGames" = "各款遊戲設定";
+
+"data.title" = "備份與移轉";
+
+"data.detail" = "以 JSON 檔保存遊戲進度、紀錄與設定；檔案由你自行保管，不會自動上傳。";
+
+"data.export.all" = "匯出所有遊戲資料";
+
+"data.export.game" = "匯出此遊戲資料";
+
+"data.import" = "匯入遊戲資料";
+
+"data.export.failed" = "無法匯出備份，請確認可用空間或儲存位置後重試。";
+
+"data.export.success" = "備份已儲存至你選擇的位置。";
+
+"data.import.failed" = "無法匯入這份備份，請確認檔案後重試。";
+
+"data.import.invalid" = "這份檔案不是可用的 ChaiClassics 備份。請選擇 App 匯出的 JSON 檔。";
+
+"data.import.success" = "資料已匯入。";
+
+"data.import.confirm.title" = "取代現有資料？";
+
+"data.import.confirm.detail" = "預覽所列資料將由這份備份取代。建議先匯出目前資料；確認後才會開始匯入。";
+
+"data.import.confirm" = "確認匯入";
+
+"data.import.reviewed" = "繼續匯入…";
+
+"data.preview.title" = "匯入前預覽";
+
+"data.preview.detail" = "目前尚未變更任何資料。請確認備份日期與取代範圍。";
+
+"data.preview.created" = "備份建立時間";
+
+"data.preview.games" = "包含遊戲";
+
+"data.preview.records" = "遊玩紀錄筆數";
+
+"data.preview.preferences" = "全域設定";
+
+"data.included" = "一併取代";
+
+"data.notIncluded" = "保留目前設定";
+
+"gameSettings.title" = "遊戲設定";
+
+"gameSettings.independent" = "偏好與紀錄各自保存";
+
+"gameSettings.haptics.detail" = "此遊戲的觸覺回饋也需要在全域設定中開啟。";
+
+"gameSettings.preferences" = "遊玩偏好";
+
+"gameSettings.sudoku.pencil" = "新題目預設使用鉛筆";
+
+"gameSettings.duel.mode" = "對局模式";
+
+"gameSettings.duel.first" = "先手";
+
+"gameSettings.duel.humanFirst" = "玩家先手";
+
+"gameSettings.duel.computerFirst" = "電腦先手";
+
+"gameSettings.memory.reveal" = "未配對卡片停留時間";
+
+"gameSettings.memory.seconds" = "%.2f 秒";
+
+"gameSettings.maze.speed" = "移動速度";
+
+"gameSettings.speed.slow" = "較慢";
+
+"gameSettings.speed.normal" = "標準";
+
+"gameSettings.speed.fast" = "較快";
+
+"gameSettings.live.detail" = "操作偏好立即生效，盤面難度於下一局套用。";
+
+"gameSettings.nextRound.detail" = "新局偏好於下一局使用，不會變更目前進度。";
+
+"gameSettings.current" = "目前遊戲";
+
+"gameSettings.current.empty" = "尚未開始此遊戲。";
+
+"gameSettings.stats.title" = "累計統計";
+
+"gameSettings.stats.total" = "遊玩次數";
+
+"gameSettings.stats.time" = "總遊玩時間";
+
+"gameSettings.stats.moves" = "總步數";
+
+"gameSettings.stats.best" = "完成最佳時間";
+
+"gameSettings.clear" = "清除此遊戲的統計與紀錄";
+
+"gameSettings.clear.title" = "清除統計與紀錄？";
+
+"gameSettings.clear.detail" = "只會清除此遊戲的累計統計與歷史紀錄。目前遊戲進度及設定會保留；建議先匯出備份。";
+
+"gameSettings.clear.confirm" = "確認清除";
+
+"gameSettings.clear.failed" = "無法清除紀錄，請稍後再試。";
+
+"history.title" = "遊玩紀錄";
+
+"history.search.placeholder" = "搜尋遊戲、難度、結果或日期";
+
+"history.search.clear" = "清除搜尋文字";
+
+"history.filters" = "篩選與排序";
+
+"history.filter.game" = "遊戲";
+
+"history.filter.difficulty" = "難度";
+
+"history.filter.result" = "結果";
+
+"history.filter.date" = "日期範圍";
+
+"history.filter.sort" = "排序";
+
+"history.allGames" = "所有遊戲";
+
+"history.allDifficulties" = "所有難度";
+
+"history.allResults" = "所有結果";
+
+"history.window.all" = "所有日期";
+
+"history.window.today" = "今天";
+
+"history.window.week" = "最近 7 天";
+
+"history.window.month" = "最近 30 天";
+
+"history.sort.newest" = "日期：由新至舊";
+
+"history.sort.oldest" = "日期：由舊至新";
+
+"history.sort.shortest" = "時間：由短至長";
+
+"history.sort.longest" = "時間：由長至短";
+
+"history.sort.fewestMoves" = "步數：由少至多";
+
+"history.sort.mostMoves" = "步數：由多至少";
+
+"history.result.won" = "勝利";
+
+"history.result.lost" = "失敗";
+
+"history.result.completed" = "已完成";
+
+"history.result.draw" = "平局";
+
+"history.result.abandoned" = "中途結束";
+
+"history.result" = "結果";
+
+"history.game" = "遊戲";
+
+"history.difficulty" = "難度";
+
+"history.mode" = "模式";
+
+"history.elapsed" = "遊玩時間";
+
+"history.moves.title" = "步數";
+
+"history.moves" = "%d 步";
+
+"history.started" = "開始時間";
+
+"history.finished" = "結束時間";
+
+"history.count" = "%d 筆紀錄";
+
+"history.recordDetail" = "紀錄詳情";
+
+"history.empty" = "還沒有遊玩紀錄";
+
+"history.empty.detail" = "完成遊戲、分出勝負或中途結束後，紀錄會顯示在這裡。";
+
+"history.noResults" = "找不到符合的紀錄";
+
+"history.noResults.detail" = "試試其他搜尋文字，或調整篩選條件。";
+
+"history.resetFilters" = "重設篩選條件";
+
+"history.resetSearch" = "清除搜尋與篩選";
+
+"history.sinceUpdate" = "遊戲進度照常保留；遊玩紀錄自 0.2.2 起儲存。";
+
+"history.unavailable" = "—";
+
+"history.unspecified" = "不適用";
+
+"gameSettings.stats.legacy.title" = "較早版本統計";
+
+"gameSettings.stats.legacy.detail" = "此統計來自較早版本，沒有日期；與本版逐局紀錄分開呈現。";

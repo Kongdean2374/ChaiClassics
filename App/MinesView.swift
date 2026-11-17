@@ -8,12 +8,33 @@ struct MinesMenuView: View {
     @State private var width = 9
     @State private var height = 9
     @State private var mineCount = 10
-    @State private var pending: MineConfiguration?
+    @State private var confirmNew = false
     private var configuration: MineConfiguration? { try? MineConfiguration(width: width, height: height, mines: mineCount) }
     private func start() {
         guard let configuration else { return }
-        if model.mines != nil { pending = configuration }
-        else if model.saveMines(MinesweeperBoard(configuration: configuration)) { showPlay = true }
+        if model.saveMines(MinesweeperBoard(configuration: configuration)) {
+            model.startNewSession(.minesweeper)
+            showPlay = true
+        }
+    }
+    private func selectLayout(_ value: Int) {
+        layout = value
+        let presets: [MineConfiguration] = [.easy, .medium, .hard]
+        guard presets.indices.contains(value) else { return }
+        let preset = presets[value]
+        width = preset.width; height = preset.height; mineCount = preset.mineCount
+    }
+    private func loadNewGameDefaults() {
+        let preferences = model.gameSettings(for: .minesweeper)
+        width = preferences.minesWidth
+        height = preferences.minesHeight
+        mineCount = preferences.minesCount
+        switch (width, height) {
+        case (9, 9): layout = 0
+        case (16, 16): layout = 1
+        case (30, 16): layout = 2
+        default: layout = 3
+        }
     }
     var body: some View {
         Form {
@@ -25,14 +46,17 @@ struct MinesMenuView: View {
             }
             if let board = model.mines {
                 Section(model.t("menu.lastGame")) {
-                    Button { showPlay = true } label: {
+                    ContinueGameRow(game: .minesweeper, action: {
+                        model.beginContinuing(.minesweeper)
+                        showPlay = true
+                    }) {
                         ContinueCard(title: model.t(board.isFinished ? "menu.viewLast" : "menu.continue"),
                                      detail: model.summaryDetail(.mines(board)) + " · " + model.t("status." + model.summary(.minesweeper).state.rawValue))
-                    }.buttonStyle(QuietPressStyle()).accessibilityIdentifier("mines.continue")
+                    }
                 }
             }
             Section(model.t("mines.chooseSize")) {
-                Picker(model.t("mines.chooseSize"), selection: $layout) {
+                Picker(model.t("mines.chooseSize"), selection: Binding(get: { layout }, set: selectLayout)) {
                     Text("9×9").tag(0); Text("16×16").tag(1); Text("30×16").tag(2)
                     Text(model.t("difficulty.custom")).tag(3)
                 }.pickerStyle(.segmented).accessibilityIdentifier("mines.size")
@@ -51,44 +75,32 @@ struct MinesMenuView: View {
                 Text(model.t("mines.difficultyExplanation")).font(.caption).foregroundStyle(.secondary)
             }
             Section(model.t("menu.newGame")) {
-                Button { start() } label: {
+                Button { confirmNew = true } label: {
                     Label(model.t("menu.start"), systemImage: "play.fill")
                         .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 15)
                         .foregroundStyle(.primary)
                         .background(GamePalette.tint(.minesweeper).opacity(0.14), in: RoundedRectangle(cornerRadius: 16))
                         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(GamePalette.tint(.minesweeper).opacity(0.3), lineWidth: 1).allowsHitTesting(false))
-                }.buttonStyle(QuietPressStyle()).disabled(configuration == nil).accessibilityIdentifier("mines.start")
+                }.buttonStyle(QuietPressStyle()).disabled(configuration == nil || model.blocked.contains(.minesweeper)).accessibilityIdentifier("mines.start")
                     .listRowInsets(EdgeInsets(top: 8, leading: 10, bottom: 8, trailing: 10))
                 Text(model.t("mines.randomExplanation")).font(.footnote).foregroundStyle(.secondary)
             }
         }.scrollContentBackground(.hidden).background(GameCanvas()).tint(GamePalette.tint(.minesweeper))
             .localizedNavigation().navigationTitle(model.gameTitle(.minesweeper)).navigationBarTitleDisplayMode(.inline)
-            .onChange(of: layout) { _, value in
-                let presets: [MineConfiguration] = [.easy, .medium, .hard]
-                if presets.indices.contains(value) {
-                    let preset = presets[value]; width = preset.width; height = preset.height; mineCount = preset.mineCount
-                }
-            }
+            .gameMenuSettings(.minesweeper)
+            .onAppear { loadNewGameDefaults() }
+            .onChange(of: [model.gameSettings(for: .minesweeper).minesWidth,
+                           model.gameSettings(for: .minesweeper).minesHeight,
+                           model.gameSettings(for: .minesweeper).minesCount]) { _, _ in loadNewGameDefaults() }
             .onChange(of: width) { _, _ in mineCount = min(mineCount, width * height - 1) }
             .onChange(of: height) { _, _ in mineCount = min(mineCount, width * height - 1) }
             .navigationDestination(isPresented: $showPlay) { MinesPlayView() }
-            .confirmationDialog(model.t("mines.replace.confirm"), isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }), titleVisibility: .visible) {
-                Button(model.t("menu.startNew"), role: .destructive) {
-                    if let config = pending, model.saveMines(MinesweeperBoard(configuration: config)) { showPlay = true }
-                    pending = nil
-                }.accessibilityIdentifier("mines.confirmNew")
-                Button(model.t("common.cancel"), role: .cancel) { pending = nil }
-            }
+            .newGameConfirmation(.minesweeper, isPresented: $confirmNew) { start() }
     }
 }
 
 struct MinesPlayView: View {
     @EnvironmentObject var model: AppModel
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var paused = false
-    @State private var visible = false
-    @State private var restart = false
-    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     var body: some View {
         GeometryReader { geometry in
             if let board = model.mines {
@@ -96,32 +108,21 @@ struct MinesPlayView: View {
                 let width = max(1, geometry.size.width - 32)
                 let compact = board.configuration.width <= 9 && board.configuration.height <= 9
                 // A maximum, not a fixed reservation: the native viewport takes
-                // the space left by the header, metrics and optional result.
+                // the space left by the header and status.
                 let maxViewportHeight = compact ? min(width * natural.height / natural.width, natural.height * 1.7) : natural.height
                 MinesPlaySurface(board: board, naturalSize: natural, maxViewportHeight: maxViewportHeight,
-                                 paused: $paused, isForeground: scenePhase == .active,
                                  tap: { i in
+                                     guard model.sessionIsPlaying(.minesweeper), !board.isFinished else { return }
                                      // Deliberately bypass legacy board.mode, without changing its Codable field.
-                                     if model.editMines({ $0.reveal(i) }) { model.feedback() }
+                                     if model.editMines({ $0.reveal(i) }) { model.feedback(for: .minesweeper) }
                                  }, flag: { i in
-                                     if model.editMines({ $0.toggleFlag(i) }) { model.feedback() }
+                                     guard model.sessionIsPlaying(.minesweeper), !board.isFinished else { return }
+                                     if model.editMines({ $0.toggleFlag(i) }) { model.feedback(for: .minesweeper) }
                                  })
             }
         }.background(GameCanvas()).tint(GamePalette.tint(.minesweeper))
-            .localizedNavigation().navigationTitle(model.gameTitle(.minesweeper)).navigationBarTitleDisplayMode(.inline)
-            .toolbar { Button(model.t("common.restart")) { restart = true }.accessibilityIdentifier("mines.restart") }
-            .confirmationDialog(model.t("mines.restart.confirm"), isPresented: $restart, titleVisibility: .visible) {
-                Button(model.t("common.restart"), role: .destructive) {
-                    if let config = model.mines?.configuration, model.saveMines(MinesweeperBoard(configuration: config)) { paused = false }
-                }.accessibilityIdentifier("mines.confirmRestart")
-                Button(model.t("common.cancel"), role: .cancel) {}
-            }
-            .gameCompletionCelebration(completed: model.mines?.status == .won)
-            .modifier(GameplayActivity(game: .minesweeper, active: !paused && !restart && model.mines?.isFinished == false))
-            .onAppear { visible = true }.onDisappear { visible = false }
-            .onReceive(timer) { _ in
-                if visible && !paused && !restart && scenePhase == .active && model.mines?.status == .playing { model.editMines { $0.elapsedSeconds += 1 } }
-            }
+            .navigationTitle(model.gameTitle(.minesweeper)).navigationBarTitleDisplayMode(.inline)
+            .gameSessionScreen(.minesweeper)
     }
 }
 
@@ -129,8 +130,6 @@ private struct MinesPlaySurface: View {
     let board: MinesweeperBoard
     let naturalSize: CGSize
     let maxViewportHeight: CGFloat
-    @Binding var paused: Bool
-    let isForeground: Bool
     let tap: (Int) -> Void
     let flag: (Int) -> Void
     @EnvironmentObject var model: AppModel
@@ -146,48 +145,31 @@ private struct MinesPlaySurface: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 4)
-                Button { paused.toggle() } label: {
-                    Image(systemName: paused ? "play.fill" : "pause.fill")
-                        .font(.subheadline.weight(.semibold)).frame(width: 44, height: 44)
-                        .background(tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
-                }.buttonStyle(QuietPressStyle()).accessibilityLabel(model.t(paused ? "common.resume" : "common.pause"))
-                    .disabled(board.isFinished).opacity(board.isFinished ? 0.45 : 1)
-                    .accessibilityIdentifier("mines.pause")
             }.fixedSize(horizontal: false, vertical: true).layoutPriority(1)
             HStack {
-                GameMetric(symbol: "timer", value: model.t("common.seconds", board.elapsedSeconds), tint: tint, identifier: "mines.timer")
-                Spacer(minLength: 8)
                 SessionBadge(state: GameSummary.mines(board).state, title: model.t("status." + GameSummary.mines(board).state.rawValue))
+                Spacer(minLength: 8)
             }.fixedSize(horizontal: false, vertical: true).layoutPriority(1)
             boardViewport.frame(maxWidth: .infinity, minHeight: 0, maxHeight: maxViewportHeight)
-            if board.status == .won {
-                GameResultBanner(game: .minesweeper, title: model.t("status.completed"), detail: model.t("mines.result.won"), won: true, identifier: "mines.won")
-                    .fixedSize(horizontal: false, vertical: true).layoutPriority(1)
-            } else if board.status == .lost {
-                GameResultBanner(game: .minesweeper, title: model.t("mines.lost"), detail: model.t("mines.result.lost"), won: false, identifier: "mines.lost")
-                    .fixedSize(horizontal: false, vertical: true).layoutPriority(1)
-            }
             Text(model.t("mines.controls")).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true).layoutPriority(1)
         }.padding(.horizontal, 16).padding(.top, 8)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
-    @ViewBuilder private var boardViewport: some View {
-        if paused || !isForeground {
-            PauseCard(game: .minesweeper) { paused = false }
-        } else {
-            ZoomBoard(size: naturalSize) {
-                MinesGrid(board: board, tap: tap, flag: flag).environmentObject(model)
-            }.background { GameBoardSurface(game: .minesweeper, cornerRadius: 12) }
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(GameMaterial.gold.opacity(0.8), lineWidth: 1.2).allowsHitTesting(false))
-                .shadow(color: .black.opacity(0.06), radius: 18, y: 8)
-        }
+    private var boardViewport: some View {
+        ZoomBoard(size: naturalSize) {
+            MinesGrid(board: board, enabled: model.sessionIsPlaying(.minesweeper) && !board.isFinished, tap: tap, flag: flag)
+                .environmentObject(model)
+        }.background { GameBoardSurface(game: .minesweeper, cornerRadius: 12) }
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(GameMaterial.gold.opacity(0.8), lineWidth: 1.2).allowsHitTesting(false))
+            .shadow(color: .black.opacity(0.06), radius: 18, y: 8)
     }
 }
 
 private struct MinesGrid: View {
     let board: MinesweeperBoard
+    let enabled: Bool
     let tap: (Int) -> Void
     let flag: (Int) -> Void
     @EnvironmentObject var model: AppModel
@@ -201,19 +183,21 @@ private struct MinesGrid: View {
                         let marked = board.flags.contains(i)
                         MinesCellFace(board: board, index: i).frame(width: 34, height: 34).contentShape(Rectangle())
                             .gesture(LongPressGesture(minimumDuration: 0.45, maximumDistance: 12).exclusively(before: TapGesture()).onEnded { value in
+                                guard enabled else { return }
                                 switch value { case .first: flag(i); case .second: tap(i) }
                             })
                             .accessibilityElement().accessibilityAddTraits(.isButton)
                             .accessibilityLabel(model.t("mines.cell.label", row + 1, col + 1, marked ? model.t("mines.flagged") : open ? model.t("mines.revealed", board.adjacentMines(i)) : model.t("mines.covered")))
                             .accessibilityValue(model.t(marked ? "mines.flagged" : open ? "mines.revealed.value" : "mines.covered"))
                             .accessibilityHint(model.t("mines.cell.hint"))
-                            .accessibilityAction { tap(i) }
-                            .accessibilityAction(named: model.t(marked ? "mines.unflag" : "mines.flag")) { flag(i) }
+                            .accessibilityAction { if enabled { tap(i) } }
+                            .accessibilityAction(named: model.t(marked ? "mines.unflag" : "mines.flag")) { if enabled { flag(i) } }
                             .accessibilityIdentifier("mines.cell.\(i)")
+                            .disabled(!enabled)
                     }
                 }
             }
-        }.background(GameMaterial.navy)
+        }.background(GameMaterial.navy).allowsHitTesting(enabled)
     }
 }
 

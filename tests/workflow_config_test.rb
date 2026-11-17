@@ -125,7 +125,7 @@ check(flight.dig('jobs','upload','needs') == 'preflight', 'real signed archive/u
 flight.fetch('jobs').each_value do |entry|
   check(entry.fetch('if').include?("github.ref == 'refs/heads/main'") && entry.fetch('if').include?("github.event_name == 'workflow_dispatch'"), 'both release jobs remain trusted main/manual only')
 end
-check((flight['on'] || flight[true]).dig('workflow_dispatch','inputs','version','default') == '0.2.1', 'manual upload defaults to the current app version')
+check((flight['on'] || flight[true]).dig('workflow_dispatch','inputs','version','default') == '0.2.2', 'manual upload defaults to the current app version')
 puts 'PASS: fast credential-free preflight, trusted manual/main upload, current version default and opt-in full UI.'
 check(!extraction_job.key?('environment') && !extraction_job.key?('env'), 'extraction regression receives no signing environment or secrets')
 extraction_runs = extraction_job.fetch('steps').map { |step| step.fetch('run', '') }.join("\n")
@@ -207,12 +207,13 @@ check(invalid_ipad_phase.exitstatus == 64, 'invalid iPad phase fails before invo
 puts 'PASS: independent iPad screenshot workflow is manual, unsigned, standard-hosted, credential-free and retains partial results.'
 
 # v0.2.0 remains an explicit candidate release, never an ordinary-push upload.
-check(ci_triggers.dig('push', 'branches') == %w[main develop/0.2.0 develop/0.2.1], 'isolated development pushes receive ordinary credential-free CI')
+check(ci_triggers.dig('push', 'branches') == %w[main develop/0.2.0 develop/0.2.1 develop/0.2.2], 'isolated development pushes receive ordinary credential-free CI')
 check(!ci_script.include?('-only-testing:'), 'the complete CI UI phase cannot silently become a subset')
 check(ci_script.include?('Pro Max') && ci_script.include?('Plus'), 'full UI prefers a real phone window wide enough for 430pt coverage')
 [visual_job, ipad_job].each do |entry|
   check(entry.fetch('if').include?("github.ref == 'refs/heads/develop/0.2.0'") && entry.fetch('if').include?("github.ref == 'refs/heads/main'"), 'only trusted main/development refs may run manual unsigned validation')
-  check(entry.fetch('if').include?("github.ref == 'refs/heads/develop/0.2.1'"), '0.2.1 supports exact-SHA unsigned visual/iPad evidence')
+  check(entry.fetch('if').include?("github.ref == 'refs/heads/develop/0.2.1'"), '0.2.1 keeps exact-SHA unsigned visual/iPad evidence')
+  check(entry.fetch('if').include?("github.ref == 'refs/heads/develop/0.2.2'"), '0.2.2 supports exact-SHA unsigned visual/iPad evidence')
 end
 candidate_gate = preflight.fetch('steps').find { |step| step['name'] == 'Require complete exact-SHA candidate verification before 0.2.x signing' }
 check(candidate_gate && candidate_gate['if'] == "startsWith(inputs.version, '0.2.')", '0.2.0 signing requires a candidate gate')

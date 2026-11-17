@@ -73,6 +73,98 @@ extension XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed,
                        "Cancel must dismiss the native confirmation.", file: file, line: line)
     }
+
+    func confirmNewGame(_ game: String, app: XCUIApplication,
+                        file: StaticString = #filePath, line: UInt = #line) {
+        let confirm = app.buttons.matching(identifier: game + ".new.confirm").firstMatch
+        let cancel = app.buttons.matching(identifier: game + ".new.cancel").firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10), file: file, line: line)
+        XCTAssertTrue(cancel.exists, file: file, line: line)
+        XCTAssertTrue(confirm.isEnabled && confirm.isHittable, file: file, line: line)
+        confirm.tap()
+        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !confirm.exists }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 10), .completed, file: file, line: line)
+        waitForSessionInput(game, app: app, file: file, line: line)
+    }
+
+    func cancelNewGame(_ game: String, app: XCUIApplication,
+                       file: StaticString = #filePath, line: UInt = #line) {
+        let confirm = app.buttons.matching(identifier: game + ".new.confirm").firstMatch
+        let cancel = app.buttons.matching(identifier: game + ".new.cancel").firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), file: file, line: line)
+        XCTAssertTrue(cancel.isHittable, file: file, line: line)
+        cancel.tap()
+        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !confirm.exists }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed, file: file, line: line)
+    }
+
+    func resumePausedGame(_ game: String, app: XCUIApplication,
+                       file: StaticString = #filePath, line: UInt = #line) {
+        let resume = app.buttons.matching(identifier: game + ".session.resume").firstMatch
+        XCTAssertTrue(resume.waitForExistence(timeout: 10), "Continue must enter the paused session.", file: file, line: line)
+        XCTAssertTrue(app.buttons[game + ".session.exit"].exists, file: file, line: line)
+        XCTAssertTrue(resume.isEnabled && resume.isHittable, file: file, line: line)
+        resume.tap()
+        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !resume.exists }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 10), .completed, file: file, line: line)
+        waitForSessionInput(game, app: app, file: file, line: line)
+    }
+
+    func waitForSessionInput(_ game: String, app: XCUIApplication,
+                             file: StaticString = #filePath, line: UInt = #line) {
+        let pause = app.buttons.matching(identifier: game + ".session.pause").firstMatch
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            pause.exists && pause.isEnabled && pause.isHittable
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 10), .completed,
+                       "The modal touch gate must settle before board input.", file: file, line: line)
+    }
+
+    func assertPausedClock(_ game: String, boardIdentifier: String, app: XCUIApplication,
+                           file: StaticString = #filePath, line: UInt = #line) {
+        let elapsed = app.descendants(matching: .any).matching(identifier: game + ".session.paused.elapsed").firstMatch
+        XCTAssertTrue(elapsed.waitForExistence(timeout: 5), file: file, line: line)
+        let frozen = elapsed.value as? String
+        XCTAssertNotNil(frozen, file: file, line: line)
+        XCTAssertFalse(app.descendants(matching: .any).matching(identifier: boardIdentifier).firstMatch.exists,
+                       "The board remains rendered under the pause blur but must be hidden from accessibility.", file: file, line: line)
+        let changes = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            !elapsed.exists || (elapsed.value as? String) != frozen
+        }, object: nil)
+        changes.isInverted = true
+        XCTAssertEqual(XCTWaiter.wait(for: [changes], timeout: 2.1), .completed,
+                       "The actual paused elapsed value must remain exactly frozen.", file: file, line: line)
+        XCTAssertEqual(elapsed.value as? String, frozen, file: file, line: line)
+    }
+
+    @discardableResult
+    func requireSessionResult(_ game: String, moves: Int, app: XCUIApplication,
+                              file: StaticString = #filePath, line: UInt = #line) -> XCUIElement {
+        let result = app.descendants(matching: .any).matching(identifier: game + ".session.result").firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 15), file: file, line: line)
+        let moveCount = app.descendants(matching: .any).matching(identifier: game + ".session.result.moves").firstMatch
+        XCTAssertTrue(moveCount.exists, file: file, line: line)
+        XCTAssertEqual(moveCount.value as? String, String(moves),
+                       "The visible result must retain the exact final move count.", file: file, line: line)
+        for action in ["done", "review"] {
+            let button = app.buttons[game + ".session." + action]
+            XCTAssertTrue(button.exists && button.isHittable, file: file, line: line)
+            XCTAssertTrue(app.frame.contains(button.frame), file: file, line: line)
+            XCTAssertEqual(button.frame.midX, app.frame.midX, accuracy: 3,
+                           "Result actions must stay centered on iPhone and iPad.", file: file, line: line)
+        }
+        return result
+    }
+
+    func reviewAndReopenSessionResult(_ game: String, moves: Int, app: XCUIApplication,
+                                     file: StaticString = #filePath, line: UInt = #line) {
+        app.buttons[game + ".session.review"].tap()
+        let shield = app.descendants(matching: .any).matching(identifier: game + ".session.reviewBoard").firstMatch
+        XCTAssertTrue(shield.waitForExistence(timeout: 5), file: file, line: line)
+        XCTAssertFalse(app.buttons[game + ".session.done"].exists, file: file, line: line)
+        shield.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        requireSessionResult(game, moves: moves, app: app, file: file, line: line)
+    }
 }
 
 final class ChaiClassicsUITests: XCTestCase {
@@ -96,10 +188,12 @@ final class ChaiClassicsUITests: XCTestCase {
     private func startMines(_ app: XCUIApplication) {
         let start = app.buttons["mines.start"]
         scrollFullyIntoView(start, app: app); start.tap()
+        confirmNewGame("minesweeper", app: app)
     }
     private func startSliding(_ app: XCUIApplication) {
         let start = app.buttons["sliding.start"]
         scrollFullyIntoView(start, app: app); start.tap()
+        confirmNewGame("sliding", app: app)
     }
     private func externalLink(_ identifier: String, app: XCUIApplication) -> XCUIElement {
         app.descendants(matching: .any).matching(identifier: identifier).firstMatch
@@ -174,6 +268,7 @@ final class ChaiClassicsUITests: XCTestCase {
         app.buttons["sudoku.difficulty.easy"].tap()
         XCTAssertFalse(app.buttons["sudoku.easy.0002"].isEnabled)
         app.buttons["sudoku.easy.0001"].tap()
+        confirmNewGame("sudoku", app: app)
         let cell = app.buttons["sudoku.cell.1"]
         XCTAssertTrue(cell.waitForExistence(timeout: 5)); cell.tap()
         selectNativeSegment("sudoku.tools", label: "鉛筆", index: 1, app: app)
@@ -191,7 +286,7 @@ final class ChaiClassicsUITests: XCTestCase {
         app.buttons["sudoku.digit.7"].tap()
         XCTAssertTrue(app.segmentedControls.buttons["鉛筆"].isSelected)
         app.terminate(); app.launch()
-        app.buttons["game.sudoku"].tap(); app.buttons["sudoku.continue"].tap()
+        app.buttons["game.sudoku"].tap(); app.buttons["sudoku.continue"].tap(); resumePausedGame("sudoku", app: app)
         XCTAssertTrue(app.buttons["sudoku.cell.80"].exists)
         XCTAssertTrue(app.segmentedControls.buttons["鉛筆"].isSelected)
         XCTAssertTrue((app.buttons["sudoku.cell.1"].value as? String ?? "").contains("7"))
@@ -215,9 +310,6 @@ final class ChaiClassicsUITests: XCTestCase {
     func testMinesFirstRevealAndRestoration() {
         let app = launch("mines")
         app.buttons["game.minesweeper"].tap(); startMines(app)
-        if nativeConfirmationButton("mines.confirmNew", app: app).waitForExistence(timeout: 1) {
-            tapNativeConfirmation("mines.confirmNew", app: app)
-        }
         let first = app.buttons["mines.cell.0"]
         XCTAssertTrue(first.waitForExistence(timeout: 5))
         XCTAssertEqual(app.segmentedControls.count, 0)
@@ -226,31 +318,34 @@ final class ChaiClassicsUITests: XCTestCase {
         first.tap(); XCTAssertTrue(first.label.contains("旗標"))
         first.press(forDuration: 0.8); XCTAssertTrue(first.label.contains("未揭開"))
         first.tap(); XCTAssertTrue(first.label.contains("已揭開"))
-        XCTAssertFalse(app.staticTexts["mines.lost"].exists)
+        XCTAssertFalse(app.buttons["minesweeper.session.done"].exists)
         first.press(forDuration: 0.8); XCTAssertTrue(first.label.contains("已揭開"))
         app.terminate(); app.launch()
-        app.buttons["game.minesweeper"].tap(); app.buttons["mines.continue"].tap()
+        app.buttons["game.minesweeper"].tap(); app.buttons["mines.continue"].tap(); resumePausedGame("minesweeper", app: app)
         XCTAssertTrue(app.buttons["mines.cell.0"].label.contains("已揭開"))
     }
     func testSlidingCanStartAndRestore() {
         let app = launch("sliding")
         app.buttons["game.sliding"].tap(); startSliding(app)
-        if nativeConfirmationButton("sliding.confirmNew", app: app).waitForExistence(timeout: 1) {
-            tapNativeConfirmation("sliding.confirmNew", app: app)
-        }
         XCTAssertTrue(app.buttons["sliding.tile.0"].waitForExistence(timeout: 5))
         let labels = (0..<9).map { app.buttons["sliding.tile.\($0)"].label }
         app.terminate(); app.launch()
-        app.buttons["game.sliding"].tap(); app.buttons["sliding.continue"].tap()
+        app.buttons["game.sliding"].tap(); app.buttons["sliding.continue"].tap(); resumePausedGame("sliding", app: app)
         XCTAssertEqual(labels, (0..<9).map { app.buttons["sliding.tile.\($0)"].label })
-        app.buttons["sliding.restart"].tap(); cancelNativeConfirmation("sliding.confirmRestart", app: app)
+        back(app)
+        scrollFullyIntoView(app.buttons["sliding.start"], app: app); app.buttons["sliding.start"].tap()
+        cancelNewGame("sliding", app: app)
+        app.buttons["sliding.continue"].tap(); resumePausedGame("sliding", app: app)
         XCTAssertEqual(labels, (0..<9).map { app.buttons["sliding.tile.\($0)"].label })
-        app.buttons["sliding.pause"].tap(); XCTAssertTrue(app.buttons["繼續"].exists)
-        app.buttons["sliding.pause"].tap(); XCTAssertTrue(app.buttons["sliding.tile.0"].exists)
+        app.buttons["sliding.session.pause"].tap()
+        assertPausedClock("sliding", boardIdentifier: "sliding.tile.0", app: app)
+        screenshot(app, "v022-sliding-paused-board-under-blur")
+        resumePausedGame("sliding", app: app)
+        XCTAssertEqual(labels, (0..<9).map { app.buttons["sliding.tile.\($0)"].label })
     }
     func testSlidingSwipesInAllFourDirectionsAndRestoresExactlyOneMove() {
         let app = launch("sliding", legacy: true)
-        app.buttons["game.sliding"].tap(); app.buttons["sliding.continue"].tap()
+        app.buttons["game.sliding"].tap(); app.buttons["sliding.continue"].tap(); resumePausedGame("sliding", app: app)
         let original = (0..<9).map { app.buttons["sliding.tile.\($0)"].label }
         let moves = app.staticTexts["sliding.moves"]
         XCTAssertTrue(moves.label.contains("35"))
@@ -263,7 +358,7 @@ final class ChaiClassicsUITests: XCTestCase {
         app.buttons["sliding.tile.4"].swipeUp() // Away from the blank must not become a tap.
         XCTAssertTrue(moves.label.contains("39"))
         app.terminate(); app.launch()
-        app.buttons["game.sliding"].tap(); app.buttons["sliding.continue"].tap()
+        app.buttons["game.sliding"].tap(); app.buttons["sliding.continue"].tap(); resumePausedGame("sliding", app: app)
         XCTAssertTrue(app.staticTexts["sliding.moves"].label.contains("39"))
         XCTAssertEqual(original, (0..<9).map { app.buttons["sliding.tile.\($0)"].label })
     }
@@ -293,16 +388,20 @@ final class ChaiClassicsUITests: XCTestCase {
         app.buttons["game.sudoku"].tap()
         XCTAssertTrue(app.buttons["sudoku.continue"].label.contains("001"))
         back(app)
-        app.buttons["game.minesweeper"].tap(); app.buttons["mines.continue"].tap()
+        app.buttons["game.minesweeper"].tap(); app.buttons["mines.continue"].tap(); resumePausedGame("minesweeper", app: app)
         XCTAssertTrue(app.buttons["mines.cell.30"].label.contains("旗標"))
         let cell = app.buttons["mines.cell.40"]
         XCTAssertTrue(cell.label.contains("未揭開")); cell.tap()
         XCTAssertTrue(cell.label.contains("已揭開")); XCTAssertFalse(cell.label.contains("旗標"))
         XCTAssertTrue(app.buttons["mines.cell.30"].label.contains("旗標"))
-        app.buttons["mines.restart"].tap(); cancelNativeConfirmation("mines.confirmRestart", app: app)
+        back(app)
+        scrollFullyIntoView(app.buttons["mines.start"], app: app); app.buttons["mines.start"].tap()
+        cancelNewGame("minesweeper", app: app)
+        app.buttons["mines.continue"].tap(); resumePausedGame("minesweeper", app: app)
         XCTAssertTrue(cell.label.contains("已揭開"))
+        XCTAssertTrue(app.buttons["mines.cell.30"].label.contains("旗標"))
         app.terminate(); app.launch()
-        app.buttons["game.minesweeper"].tap(); app.buttons["mines.continue"].tap()
+        app.buttons["game.minesweeper"].tap(); app.buttons["mines.continue"].tap(); resumePausedGame("minesweeper", app: app)
         XCTAssertTrue(app.buttons["mines.cell.40"].label.contains("已揭開"))
         XCTAssertTrue(app.buttons["mines.cell.30"].label.contains("旗標"))
     }
@@ -317,7 +416,6 @@ final class ChaiClassicsUITests: XCTestCase {
         XCTAssertLessThan(abs(app.buttons["mines.cell.80"].frame.maxY - viewport.frame.maxY), 6)
         screenshot(app,"mines-centered-9x9")
         back(app); app.segmentedControls["mines.size"].buttons["30×16"].tap(); startMines(app)
-        tapNativeConfirmation("mines.confirmNew", app: app)
         let before = app.buttons["mines.cell.0"].frame.width
         viewport.pinch(withScale: 1.8, velocity: 1)
         let zoomed = NSPredicate { _,_ in app.buttons["mines.cell.0"].frame.width > before * 1.2 }
@@ -406,17 +504,17 @@ final class ChaiClassicsUITests: XCTestCase {
     func testEnglishIsAppliedToAllGamesAndAccessibility() {
         let app = launch("settings",legacy: true)
         app.buttons["settings.open"].tap(); app.segmentedControls["settings.language"].buttons["English"].tap(); back(app)
-        app.buttons["game.sudoku"].tap(); app.buttons["sudoku.continue"].tap()
+        app.buttons["game.sudoku"].tap(); app.buttons["sudoku.continue"].tap(); resumePausedGame("sudoku", app: app)
         XCTAssertTrue(app.segmentedControls["sudoku.tools"].buttons["Pencil"].isSelected)
         XCTAssertTrue(app.buttons["sudoku.cell.1"].label.contains("Row 1"))
         XCTAssertTrue((app.buttons["sudoku.cell.1"].value as? String ?? "").contains("Notes: 2, 7"))
         XCTAssertFalse(app.buttons["Hint"].exists); XCTAssertFalse(app.buttons["Show answer"].exists)
         back(app); back(app)
-        app.buttons["game.minesweeper"].tap(); app.buttons["mines.continue"].tap()
+        app.buttons["game.minesweeper"].tap(); app.buttons["mines.continue"].tap(); resumePausedGame("minesweeper", app: app)
         XCTAssertTrue(app.buttons["mines.cell.0"].label.contains("Revealed"))
         XCTAssertTrue(app.buttons["mines.cell.30"].label.contains("Flagged"))
         back(app); back(app)
-        app.buttons["game.sliding"].tap(); app.buttons["sliding.continue"].tap()
+        app.buttons["game.sliding"].tap(); app.buttons["sliding.continue"].tap(); resumePausedGame("sliding", app: app)
         XCTAssertTrue(app.buttons["sliding.tile.0"].label.contains("Tile 1"))
         XCTAssertTrue(app.staticTexts["sliding.moves"].label.contains("35 moves"))
     }

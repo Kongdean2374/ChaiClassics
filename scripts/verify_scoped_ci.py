@@ -18,7 +18,7 @@ import verify_candidate as candidate
 import verify_incremental_ci as historical
 
 require = candidate.require
-BRANCHES = ('main', 'develop/0.2.0', 'develop/0.2.1')
+BRANCHES = ('main', 'develop/0.2.0', 'develop/0.2.1', 'develop/0.2.2')
 MAX_RUNS = 20
 GAME_FILES = {
     'sudoku': {'Core/Sudoku.swift', 'App/SudokuView.swift'},
@@ -31,6 +31,12 @@ GAME_FILES = {
     'maze': {'Core/Maze.swift', 'Core/MazeMotion.swift', 'App/MazeView.swift'},
 }
 ALL_GAME_FILES = set().union(*GAME_FILES.values())
+SHARED_SESSION_FILES = {
+    'App/AppModel.swift', 'App/ChaiClassicsApp.swift', 'App/GameSessionComponents.swift',
+    'App/GameSettingsView.swift', 'App/PlayHistoryView.swift', 'App/GameDataDocument.swift',
+    'App/NewGameComponents.swift', 'Core/GameSessionData.swift', 'Core/GamePlayPreferences.swift',
+    'Core/GameDataArchive.swift', 'Core/GameDataTransferStore.swift',
+}
 
 # Reviewed flows only: an edited or unknown mixed body falls back to every game.
 # All Core files remain shared: startup/fixtures can restore every game even on Home.
@@ -88,7 +94,59 @@ BODY_PROFILES = {
 PURE_EVIDENCE_SCRIPTS = {'scripts/verify_scoped_ci.py', 'scripts/verify_candidate.py'}
 
 
-def dependencies(test, body=None):
+# Reviewed v0.2.2 Visual flows: a case body AND all shared helpers must match.
+# The previous helper digest retains genuine pre-migration source provenance.
+VISUAL_SCAFFOLD_DIGEST = 'b3311e67557a522645a3aadad01717cb16fa4e1d5b3d41a0581090e1c6bfd2c5'
+PREVIOUS_VISUAL_SCAFFOLD_DIGEST = '40dfb0eaa2ebcf7f8e10b2b438ea41d25517d46af3a59128d65b3e2c0c5e397d'
+SESSION_BODY_PROFILES = {
+    'ChaiClassicsVisualSmokeTests/testConnectFourCommonSessionLifecycleAndContinueDeletion': (
+        '9e0fc4ba55dd67eef4952176ddf79c5d38ea70eda73b4e1ca16dd2ba8402bdd5', ('connectfour', 'sliding')),
+    'ChaiClassicsVisualSmokeTests/testFreshWinCelebratesOnceAndRestoredWinDoesNotReplay': (
+        'ab8fb0bcfdd3660120c3ec452c77a9e2e6d0962a33238eef079ae068258baf4e', ('sliding',)),
+    'ChaiClassicsVisualSmokeTests/testIPadHomeScreenshot': (
+        'd847e98d7e53138a9aa8bbccd1ef3a954481cdb36d95921404f31f105de7d918', ()),
+    'ChaiClassicsVisualSmokeTests/testIPadMinesweeperScreenshot': (
+        '6ee463fcd1df8d56d3a9017cc64c0c1148cb5f9120333beab2db18d0f1bbdb52', ('mines',)),
+    'ChaiClassicsVisualSmokeTests/testIPadSlidingPuzzleScreenshot': (
+        'dc44b6a2007ac9c0642246cdeef782a9dea80a7ead2fc3125db02618d8d67516', ('sliding',)),
+    'ChaiClassicsVisualSmokeTests/testIPadSudokuScreenshot': (
+        '4d9a5ef4e6cb0700fedb363d282e73def865c5840ca194bc3370bb0ccbe403e9', ('sudoku',)),
+    'ChaiClassicsVisualSmokeTests/testLowPowerSuppressesCelebrationButStillCompletesGame': (
+        'd61c0385dafb936cc689eb2a99a09bfa0054600f25f224fa476b2d9e75893cba', ('sliding',)),
+    'ChaiClassicsVisualSmokeTests/testMazeCommonSessionLifecycleAndContinueDeletion': (
+        '5ab88548f2be8c0a9067d5724be3dd8858bfc3e9b1a12f9c01cc37df4d925dd3', ('maze', 'sliding')),
+    'ChaiClassicsVisualSmokeTests/testMemoryCommonSessionLifecycleAndContinueDeletion': (
+        '4668996e5d0155662f28deac7ea6b8ddb69da149f4a5b4a913fa3380bb6637ab', ('memory', 'sliding')),
+    'ChaiClassicsVisualSmokeTests/testMinesweeperCommonSessionLifecycleAndContinueDeletion': (
+        '2e34e2eec5daa7d288a7531b68195f58015fdf8d0dbfba13854debadb523f41c', ('mines', 'sliding')),
+    'ChaiClassicsVisualSmokeTests/testPlayHistorySearchDismissesKeyboardWithoutSwallowingActions': (
+        '1309d2241746601de4fc3ba35222760a3c1ffdd0dc292b9c77e7dddc84e5a790', ('sliding',)),
+    'ChaiClassicsVisualSmokeTests/testReducedMotionSuppressesCelebrationButStillCompletesGame': (
+        '70c41d41386e486704ba65b90e4d642b01d43d6cd44c0dd9a7606b29296139eb', ('sliding',)),
+    'ChaiClassicsVisualSmokeTests/testScreenshotGallery': (
+        'f8a38dbe244404a8be9bfc98697845333bb4994c013953c3a02b56b3b8782a01', ('sudoku', 'mines', 'sliding')),
+    'ChaiClassicsVisualSmokeTests/testSlidingCommonSessionLifecycleAndContinueDeletion': (
+        '8fd00358e33b548c27de2427b211554980db758e27df75ac1ea72681d594c8ad', ('sliding', 'mines')),
+    'ChaiClassicsVisualSmokeTests/testSudokuCommonSessionLifecycleAndContinueDeletion': (
+        'f29b1f8aea7a640388d0f5a233557a0f1a8ea021ccafc2499ab316e37f98e086', ('sudoku', 'sliding')),
+    'ChaiClassicsVisualSmokeTests/testTicTacToeCommonSessionLifecycleAndContinueDeletion': (
+        'd5d5d41d10f25b1faeb339ddc8967935ab82bdbf881200a673240a4c26386f7b', ('tictactoe', 'sliding')),
+    'ChaiClassicsVisualSmokeTests/testTwentyFourCommonSessionLifecycleAndContinueDeletion': (
+        'c0b71e13e44bfabb3710c756fef51d73fced51c3b39217e69904cdf93c344268', ('twentyfour', 'sliding')),
+}
+
+
+def dependencies(test, body=None, *, helper_fingerprint=None):
+    if test in SESSION_BODY_PROFILES:
+        expected_body, games = SESSION_BODY_PROFILES[test]
+        actual_body = hashlib.sha256(body.encode()).hexdigest() if isinstance(body, str) else None
+        if helper_fingerprint == VISUAL_SCAFFOLD_DIGEST and actual_body == expected_body:
+            return set().union(*(GAME_FILES[game] for game in games))
+        if helper_fingerprint == PREVIOUS_VISUAL_SCAFFOLD_DIGEST and test in BODY_PROFILES:
+            expected_body, games = BODY_PROFILES[test]
+            if actual_body == expected_body:
+                return set().union(*(GAME_FILES[game] for game in games))
+        return ALL_GAME_FILES
     if test in BODY_PROFILES:
         expected_body, games = BODY_PROFILES[test]
         if isinstance(body, str) and hashlib.sha256(body.encode()).hexdigest() == expected_body:
@@ -117,7 +175,7 @@ def fingerprints(tree):
     not application runtime; all other unknown source files are shared by default. Other test bodies are masked; all signatures/setup/helper
     bytes remain shared, so editing C's test body alone does not invalidate unchanged A/B.
     """
-    methods, scaffolds, shared = {}, [], []
+    methods, scaffolds, shared, helper_fingerprints = {}, [], [], {}
     for path, (mode, data) in sorted(tree.items()):
         require(mode in ('100644', '100755'), 'Source symlinks/submodules cannot establish scoped evidence.')
         if path.startswith('UITests/') and path.endswith('.swift'):
@@ -130,14 +188,17 @@ def fingerprints(tree):
                     require(identity not in methods, 'Duplicate UI test identity.')
                     methods[identity] = source[start:end]
                     scaffold = scaffold[:start] + '{TEST_BODY}' + scaffold[end:]
-            scaffolds.append((path, mode, hashlib.sha256(scaffold.encode()).hexdigest()))
-        elif (path not in ALL_GAME_FILES or path.startswith('Core/')) and path not in PURE_EVIDENCE_SCRIPTS and not path.startswith(('docs/', 'tests/')) and path != 'README.md':
+            helper_fingerprints[Path(path).stem] = hashlib.sha256(scaffold.encode()).hexdigest()
+            scaffolds.append((path, mode, helper_fingerprints[Path(path).stem]))
+        elif (path in SHARED_SESSION_FILES or path not in ALL_GAME_FILES or path.startswith('Core/')) and path not in PURE_EVIDENCE_SCRIPTS and not path.startswith(('docs/', 'tests/')) and path != 'README.md':
             shared.append((path, mode, hashlib.sha256(data).hexdigest()))
     require(methods, 'No declared UI tests available for fingerprints.')
+    require(scopes.required_session_tests_for_paths(tree).issubset(methods),
+            'Session runtime requires all eight lifecycle journeys and the history interaction journey.')
     result = {}
     for test, body in sorted(methods.items()):
         local = [(path, tree[path][0], hashlib.sha256(tree[path][1]).hexdigest())
-                 for path in sorted(dependencies(test, body)) if path in tree]
+                 for path in sorted(dependencies(test, body, helper_fingerprint=helper_fingerprints.get(test.split('/')[0]))) if path in tree]
         result[test] = digest({'version': 1, 'shared': shared, 'helpers': scaffolds, 'local': local, 'test_body': body})
     return result
 
@@ -247,7 +308,8 @@ def planned_tests(target_fingerprints, records):
 
 def make_evidence(sha, current_run, scope, summary, actual, tree, records):
     target = fingerprints(tree)
-    selected = planned_tests(target, records) if scope == 'affected' else scopes.resolve(scope, sorted(target))
+    selected = planned_tests(target, records) if scope == 'affected' else scopes.resolve(
+        scope, sorted(target), include_sessions=bool(scopes.required_session_tests_for_paths(tree)))
     require(set(actual) == set(selected), 'Actual cases differ from the requested scoped selection.')
     normalized = historical.summary_matches(summary, actual)
     require(all(covered(test, {'status': status}) for test, status in actual.items()), 'Current scoped execution failed or unexpectedly skipped.')

@@ -8,7 +8,13 @@ struct TwentyFourMenuView: View {
     @State private var confirmNew = false
 
     private func start() {
-        if model.saveTwentyFour(TwentyFourBoard(difficulty: difficulty)) { play = true }
+        if model.saveTwentyFour(TwentyFourBoard(difficulty: difficulty)) {
+            model.startNewSession(.twentyFour)
+            play = true
+        }
+    }
+    private func applyMenuDefaults() {
+        difficulty = TwentyFourDifficulty(rawValue: model.gameSettings(for: .twentyFour).twentyFourDifficulty) ?? .easy
     }
     var body: some View {
         Form {
@@ -20,11 +26,14 @@ struct TwentyFourMenuView: View {
             }
             if let board = model.twentyFour {
                 Section(model.t("menu.lastGame")) {
-                    Button { play = true } label: {
-                        ContinueCard(title: model.t(board.isComplete ? "menu.viewLast" : "menu.continue"),
+                    ContinueGameRow(game: .twentyFour, action: {
+                        model.beginContinuing(.twentyFour)
+                        play = true
+                    }) {
+                        ContinueCard(title: model.t(board.isEnded ? "menu.viewLast" : "menu.continue"),
                                      detail: model.t("twentyfour.progress", model.t("difficulty." + board.difficulty.rawValue), board.moves, board.solvedCount) + " · " + model.t("common.seconds", board.elapsedSeconds))
                             .contentShape(Rectangle())
-                    }.buttonStyle(QuietPressStyle()).accessibilityIdentifier("twentyfour.continue")
+                    }
                 }
             }
             Section(model.t("menu.newGame")) {
@@ -33,7 +42,7 @@ struct TwentyFourMenuView: View {
                 }.accessibilityIdentifier("twentyfour.difficulty")
                 Text(model.t("twentyfour.difficulty." + difficulty.rawValue))
                     .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Button { if model.twentyFour != nil { confirmNew = true } else { start() } } label: {
+                Button { confirmNew = true } label: {
                     Label(model.t("menu.start"), systemImage: "play.fill")
                         .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 15)
                         .foregroundStyle(.primary)
@@ -46,66 +55,38 @@ struct TwentyFourMenuView: View {
         }.scrollContentBackground(.hidden).background(GameCanvas()).tint(GamePalette.tint(.twentyFour))
             .localizedNavigation().navigationTitle(model.gameTitle(.twentyFour)).navigationBarTitleDisplayMode(.inline)
             .navigationDestination(isPresented: $play) { TwentyFourPlayView() }
-            .confirmationDialog(model.t("twentyfour.replace.confirm"), isPresented: $confirmNew, titleVisibility: .visible) {
-                Button(model.t("menu.startNew"), role: .destructive) { start() }.accessibilityIdentifier("twentyfour.confirmNew")
-                Button(model.t("common.cancel"), role: .cancel) {}
-            }
+            .gameMenuSettings(.twentyFour)
+            .newGameConfirmation(.twentyFour, isPresented: $confirmNew) { start() }
+            .onAppear { applyMenuDefaults() }
+            .onChange(of: model.gameSettings(for: .twentyFour).twentyFourDifficulty) { _, _ in applyMenuDefaults() }
     }
 }
 
 struct TwentyFourPlayView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var paused = false
-    @State private var confirmReset = false
-    @State private var confirmNext = false
+    @Environment(\.gameReducedMotion) private var reduceMotion
     @State private var input = TwentyFourInput()
     @Namespace private var cardPositions
     private var tint: Color { GamePalette.tint(.twentyFour) }
-    private var inactive: Bool { paused || scenePhase != .active || confirmReset || confirmNext }
+    private var inactive: Bool {
+        scenePhase != .active || !model.sessionIsPlaying(.twentyFour) || model.twentyFour?.isEnded == true
+    }
     private var moveAnimation: Animation? { reduceMotion ? nil : .easeInOut(duration: 0.2) }
     private func clearSelection() { input.clear() }
-    private func next() {
-        if model.editTwentyFour({ $0.nextPuzzle() }) { clearSelection(); paused = false }
-    }
     var body: some View {
         ScrollView {
             if let board = model.twentyFour {
                 VStack(spacing: 18) {
                     header(board)
-                    if board.isComplete {
-                        GameResultBanner(game: .twentyFour, title: model.t("twentyfour.won"), detail: model.t("twentyfour.won.detail"), won: true, identifier: "twentyfour.complete")
-                    }
-                    if paused || scenePhase != .active {
-                        PauseCard(game: .twentyFour) { paused = false }.frame(minHeight: 320)
-                    } else {
-                        puzzle(board)
-                    }
+                    puzzle(board)
                 }.padding(16).frame(maxWidth: 580).frame(maxWidth: .infinity)
             }
         }.background(GameCanvas()).tint(tint)
-            .localizedNavigation().navigationTitle(model.gameTitle(.twentyFour)).navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                Button(model.t("twentyfour.reset")) { confirmReset = true }.accessibilityIdentifier("twentyfour.reset")
-            }
-            .confirmationDialog(model.t("twentyfour.reset.confirm"), isPresented: $confirmReset, titleVisibility: .visible) {
-                Button(model.t("twentyfour.reset"), role: .destructive) {
-                    model.editTwentyFour { $0.reset() }
-                    clearSelection(); paused = false
-                }.accessibilityIdentifier("twentyfour.confirmReset")
-                Button(model.t("common.cancel"), role: .cancel) {}
-            }
-            .confirmationDialog(model.t("twentyfour.next.confirm"), isPresented: $confirmNext, titleVisibility: .visible) {
-                Button(model.t("twentyfour.next"), role: .destructive) { next() }.accessibilityIdentifier("twentyfour.confirmNext")
-                Button(model.t("common.cancel"), role: .cancel) {}
-            }
-            .gameCompletionCelebration(completed: model.twentyFour?.isComplete == true)
-            .modifier(GameplayActivity(game: .twentyFour, active: !inactive && model.twentyFour?.isEnded == false))
-            .modifier(SessionTimer(active: !inactive && model.twentyFour?.isEnded == false, tick: {
-                model.editTwentyFour { $0.elapsedSeconds += 1 }
-            }))
+            .navigationTitle(model.gameTitle(.twentyFour)).navigationBarTitleDisplayMode(.inline)
+            .gameSessionScreen(.twentyFour)
             .onChange(of: scenePhase) { _, phase in if phase != .active { clearSelection() } }
+            .onChange(of: model.sessionIsPlaying(.twentyFour)) { _, playing in if !playing { clearSelection() } }
             // Observe puzzle changes only: timer publishes must leave the pending expression intact.
             .onChange(of: model.twentyFour?.history) { _, _ in clearSelection() }
             .onChange(of: model.twentyFour?.numbers) { _, _ in clearSelection() }
@@ -117,25 +98,9 @@ struct TwentyFourPlayView: View {
                 GameArtwork(game: .twentyFour, size: 42)
                 Text(model.t("difficulty." + board.difficulty.rawValue)).font(.system(.headline, design: .rounded))
                 Spacer()
-                Button { paused.toggle(); clearSelection() } label: {
-                    Image(systemName: paused ? "play.fill" : "pause.fill")
-                        .frame(width: 44, height: 44).background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
-                        .contentShape(Rectangle())
-                }.buttonStyle(QuietPressStyle()).disabled(board.isEnded)
-                    .accessibilityLabel(model.t(paused ? "common.resume" : "common.pause"))
-                    .accessibilityIdentifier("twentyfour.pause")
             }
-            ViewThatFits(in: .horizontal) {
-                HStack {
-                    GameMetric(symbol: "checkmark.circle", value: model.t("twentyfour.solved", board.solvedCount), tint: tint, identifier: "twentyfour.solved")
-                    Spacer(minLength: 4)
-                    GameMetric(symbol: "timer", value: model.t("common.seconds", board.elapsedSeconds), tint: tint, identifier: "twentyfour.timer")
-                }
-                VStack(alignment: .leading) {
-                    GameMetric(symbol: "checkmark.circle", value: model.t("twentyfour.solved", board.solvedCount), tint: tint, identifier: "twentyfour.solved")
-                    GameMetric(symbol: "timer", value: model.t("common.seconds", board.elapsedSeconds), tint: tint, identifier: "twentyfour.timer")
-                }.frame(maxWidth: .infinity, alignment: .leading)
-            }
+            GameMetric(symbol: "checkmark.circle", value: model.t("twentyfour.solved", board.solvedCount), tint: tint, identifier: "twentyfour.solved")
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
     private func puzzle(_ board: TwentyFourBoard) -> some View {
@@ -159,10 +124,6 @@ struct TwentyFourPlayView: View {
                 .animation(moveAnimation, value: input)
                 .accessibilityIdentifier("twentyfour.cards")
             if !board.isEnded { calculation(board) }
-            if board.isEnded && !board.isComplete {
-                Text(model.t("twentyfour.tryAgain")).font(.headline).multilineTextAlignment(.center)
-                    .accessibilityIdentifier("twentyfour.incorrect")
-            }
             puzzleActions(board)
             history(board)
             Text(model.t("twentyfour.difficulty." + board.difficulty.rawValue))
@@ -206,7 +167,8 @@ struct TwentyFourPlayView: View {
         let color: Color = role == 2 ? .teal : tint
         let caption = role == 1 ? "twentyfour.input.firstCard" : role == 2 ? "twentyfour.input.secondCard" : card.id >= 4 ? "twentyfour.resultCard" : "twentyfour.select"
         return Button {
-            if input.selectCard(card.id, in: board) { model.feedback() }
+            guard !inactive, let current = model.twentyFour else { return }
+            if input.selectCard(card.id, in: current) { model.feedback(for: .twentyFour) }
         } label: {
             VStack(spacing: 6) {
                 HStack(spacing: 5) {
@@ -235,7 +197,8 @@ struct TwentyFourPlayView: View {
             HStack(spacing: 8) {
                 ForEach(TwentyFourOperator.allCases, id: \.self) { item in
                     Button {
-                        if input.selectOperator(item) { model.feedback() }
+                        guard !inactive else { return }
+                        if input.selectOperator(item) { model.feedback(for: .twentyFour) }
                     } label: {
                         Text(item.symbol).font(.title2.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48)
                             .background(tint.opacity(input.operation == item ? 0.2 : 0.055), in: RoundedRectangle(cornerRadius: 12))
@@ -248,19 +211,27 @@ struct TwentyFourPlayView: View {
                 }
             }.animation(moveAnimation, value: input.operation)
             HStack(spacing: 12) {
-                Button { clearSelection(); model.feedback() } label: {
+                Button {
+                    guard !inactive else { return }
+                    clearSelection()
+                    model.feedback(for: .twentyFour)
+                } label: {
                     Label(model.t("twentyfour.input.clear"), systemImage: "xmark.circle")
                         .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
                 }.buttonStyle(.bordered).disabled(input.isEmpty || inactive).accessibilityIdentifier("twentyfour.clear")
-                Button { if input.swap() { model.feedback() } } label: {
+                Button {
+                    guard !inactive else { return }
+                    if input.swap() { model.feedback(for: .twentyFour) }
+                } label: {
                     Label(model.t("twentyfour.swap"), systemImage: "arrow.left.arrow.right")
                         .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
                 }.buttonStyle(.bordered).disabled(input.secondID == nil || inactive).accessibilityIdentifier("twentyfour.swap")
             }
             Button {
-                guard let first = input.firstID, let second = input.secondID, let operation = input.operation else { return }
+                guard !inactive, let current = model.twentyFour, input.canApply(to: current),
+                      let first = input.firstID, let second = input.secondID, let operation = input.operation else { return }
                 if model.editTwentyFour({ $0.combine(firstID: first, secondID: second, operation: operation) }) {
-                    clearSelection(); model.feedback()
+                    clearSelection(); model.feedback(for: .twentyFour)
                 }
             } label: {
                 HStack(spacing: 10) {
@@ -277,22 +248,15 @@ struct TwentyFourPlayView: View {
         }
     }
     private func puzzleActions(_ board: TwentyFourBoard) -> some View {
-        HStack(spacing: 12) {
-            Button {
-                let changed = model.editTwentyFour { $0.undo() }
-                clearSelection()
-                if changed { model.feedback() }
-            } label: {
-                Label(model.t("twentyfour.undo"), systemImage: "arrow.uturn.backward")
-                    .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
-            }.buttonStyle(.bordered).disabled(!board.canUndo || inactive).accessibilityIdentifier("twentyfour.undo")
-            Button {
-                if board.isComplete { next() } else { confirmNext = true }
-            } label: {
-                Label(model.t("twentyfour.next"), systemImage: "arrow.right")
-                    .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
-            }.buttonStyle(.borderedProminent).disabled(inactive).accessibilityIdentifier("twentyfour.next")
-        }
+        Button {
+            guard !inactive, model.twentyFour?.canUndo == true else { return }
+            let changed = model.editTwentyFour { $0.undo() }
+            clearSelection()
+            if changed { model.feedback(for: .twentyFour) }
+        } label: {
+            Label(model.t("twentyfour.undo"), systemImage: "arrow.uturn.backward")
+                .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+        }.buttonStyle(.bordered).disabled(!board.canUndo || inactive).accessibilityIdentifier("twentyfour.undo")
     }
     private func history(_ board: TwentyFourBoard) -> some View {
         VStack(alignment: .leading, spacing: 10) {

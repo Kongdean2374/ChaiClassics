@@ -430,3 +430,243 @@
 "twentyfour.history.start" = "Original cards: %@";
 
 "twentyfour.history.empty" = "Each calculation will appear here. Undo removes the last step.";
+
+"session.new.title" = "Start a new game?";
+
+"session.new.overwrite" = "This will replace the current progress for this game. Your play history will be kept. Continue?";
+
+"session.new.detail" = "Ready? The timer starts after confirmation, and progress saves automatically.";
+
+"session.new.agree" = "Agree and start";
+
+"session.paused.detail" = "The game and timer are paused. You can leave safely and resume here next time.";
+
+"session.paused.resume" = "Start / Resume";
+
+"session.paused.exit" = "Exit game";
+
+"session.result.won" = "Congratulations, you won!";
+
+"session.result.lost" = "You lost this round";
+
+"session.result.completed" = "Congratulations, you finished!";
+
+"session.result.draw" = "This round is a draw";
+
+"session.result.abandoned" = "This round has ended";
+
+"session.result.review" = "View original game board";
+
+"session.result.show" = "Tap to show the result";
+
+"session.delete.title" = "Discard this game?";
+
+"session.delete.detail" = "Only this progress will be removed. Other games, completed records, and preferences will be kept.";
+
+"session.delete.action" = "Delete progress";
+
+"common.done" = "Done";
+
+"settings.playData" = "Play data";
+
+"settings.individualGames" = "Individual game settings";
+
+"data.title" = "Backup and transfer";
+
+"data.detail" = "Save progress, records and settings as a JSON file. You choose where to keep it; nothing is uploaded automatically.";
+
+"data.export.all" = "Export all game data";
+
+"data.export.game" = "Export this game’s data";
+
+"data.import" = "Import game data";
+
+"data.export.failed" = "The backup could not be exported. Check available storage or choose another location and try again.";
+
+"data.export.success" = "The backup was saved to your chosen location.";
+
+"data.import.failed" = "The backup could not be imported. Check the file and try again.";
+
+"data.import.invalid" = "This file is not a supported ChaiClassics backup. Choose a JSON file exported by the app.";
+
+"data.import.success" = "Your data was imported.";
+
+"data.import.confirm.title" = "Replace existing data?";
+
+"data.import.confirm.detail" = "The data listed in the preview will be replaced by this backup. Consider exporting your current data first. Import begins only after you confirm.";
+
+"data.import.confirm" = "Import and replace";
+
+"data.import.reviewed" = "Continue import…";
+
+"data.preview.title" = "Review before importing";
+
+"data.preview.detail" = "No data has changed yet. Check the backup date and the data it will replace.";
+
+"data.preview.created" = "Backup created";
+
+"data.preview.games" = "Included games";
+
+"data.preview.records" = "Play records";
+
+"data.preview.preferences" = "Global settings";
+
+"data.included" = "Also replaced";
+
+"data.notIncluded" = "Keep current settings";
+
+"gameSettings.title" = "Game settings";
+
+"gameSettings.independent" = "Independent preferences and records";
+
+"gameSettings.haptics.detail" = "Haptic feedback must also be enabled in the app’s global settings.";
+
+"gameSettings.preferences" = "Play preferences";
+
+"gameSettings.sudoku.pencil" = "Start new puzzles with pencil";
+
+"gameSettings.duel.mode" = "Game mode";
+
+"gameSettings.duel.first" = "First move";
+
+"gameSettings.duel.humanFirst" = "You go first";
+
+"gameSettings.duel.computerFirst" = "Computer goes first";
+
+"gameSettings.memory.reveal" = "Unmatched card reveal time";
+
+"gameSettings.memory.seconds" = "%.2f sec";
+
+"gameSettings.maze.speed" = "Movement speed";
+
+"gameSettings.speed.slow" = "Slower";
+
+"gameSettings.speed.normal" = "Standard";
+
+"gameSettings.speed.fast" = "Faster";
+
+"gameSettings.live.detail" = "Control preferences apply immediately. Board difficulty applies to your next game.";
+
+"gameSettings.nextRound.detail" = "New-game preferences apply to your next game and keep your current progress intact.";
+
+"gameSettings.current" = "Current game";
+
+"gameSettings.current.empty" = "You haven’t started this game yet.";
+
+"gameSettings.stats.title" = "Overall statistics";
+
+"gameSettings.stats.total" = "Games recorded";
+
+"gameSettings.stats.time" = "Total playing time";
+
+"gameSettings.stats.moves" = "Total moves";
+
+"gameSettings.stats.best" = "Best completion time";
+
+"gameSettings.clear" = "Clear this game’s statistics and records";
+
+"gameSettings.clear.title" = "Clear statistics and records?";
+
+"gameSettings.clear.detail" = "Only this game’s statistics and history will be cleared. Current progress and settings are kept. Consider exporting a backup first.";
+
+"gameSettings.clear.confirm" = "Clear records";
+
+"gameSettings.clear.failed" = "The records could not be cleared. Please try again.";
+
+"history.title" = "Play history";
+
+"history.search.placeholder" = "Search games, difficulty, results or dates";
+
+"history.search.clear" = "Clear search text";
+
+"history.filters" = "Filter and sort";
+
+"history.filter.game" = "Game";
+
+"history.filter.difficulty" = "Difficulty";
+
+"history.filter.result" = "Result";
+
+"history.filter.date" = "Date range";
+
+"history.filter.sort" = "Sort order";
+
+"history.allGames" = "All games";
+
+"history.allDifficulties" = "All difficulties";
+
+"history.allResults" = "All results";
+
+"history.window.all" = "All dates";
+
+"history.window.today" = "Today";
+
+"history.window.week" = "Last 7 days";
+
+"history.window.month" = "Last 30 days";
+
+"history.sort.newest" = "Date: newest first";
+
+"history.sort.oldest" = "Date: oldest first";
+
+"history.sort.shortest" = "Time: shortest first";
+
+"history.sort.longest" = "Time: longest first";
+
+"history.sort.fewestMoves" = "Moves: fewest first";
+
+"history.sort.mostMoves" = "Moves: most first";
+
+"history.result.won" = "Won";
+
+"history.result.lost" = "Lost";
+
+"history.result.completed" = "Completed";
+
+"history.result.draw" = "Draw";
+
+"history.result.abandoned" = "Abandoned";
+
+"history.result" = "Result";
+
+"history.game" = "Game";
+
+"history.difficulty" = "Difficulty";
+
+"history.mode" = "Mode";
+
+"history.elapsed" = "Playing time";
+
+"history.moves.title" = "Moves";
+
+"history.moves" = "%d moves";
+
+"history.started" = "Started";
+
+"history.finished" = "Finished";
+
+"history.count" = "%d records";
+
+"history.recordDetail" = "Record details";
+
+"history.empty" = "No play history yet";
+
+"history.empty.detail" = "Records appear here when a game is completed, won, lost, drawn or ended early.";
+
+"history.noResults" = "No matching records";
+
+"history.noResults.detail" = "Try another search or adjust your filters.";
+
+"history.resetFilters" = "Reset filters";
+
+"history.resetSearch" = "Clear search and filters";
+
+"history.sinceUpdate" = "Your game progress is preserved. Play history is recorded starting with version 0.2.2.";
+
+"history.unavailable" = "—";
+
+"history.unspecified" = "Not applicable";
+
+"gameSettings.stats.legacy.title" = "Earlier-version statistics";
+
+"gameSettings.stats.legacy.detail" = "These totals come from an earlier version and have no dates. They are shown separately from this version’s individual game records.";

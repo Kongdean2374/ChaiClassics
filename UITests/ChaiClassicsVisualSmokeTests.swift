@@ -1,7 +1,7 @@
 import XCTest
 import UIKit
 
-/// Focused 0.1.3 smoke selection; the existing full game/regression suite remains intact.
+/// Original image galleries plus real shared-session, deletion, and history flows.
 final class ChaiClassicsVisualSmokeTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -10,10 +10,13 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         executionTimeAllowance = 300
     }
 
-    private func launch(profile: String, suppressionFlag: String? = nil, allGames: Bool = false) throws -> XCUIApplication {
+    private func launch(profile: String, suppressionFlag: String? = nil, allGames: Bool = false,
+                        fixture: String? = nil, language: String? = nil) throws -> XCUIApplication {
         let app = XCUIApplication()
         var arguments = ["--ui-testing", "--ui-celebration-probe", "--ui-profile", profile]
         if let suppressionFlag { arguments.append(suppressionFlag) }
+        if let fixture { arguments += ["--ui-near-win", fixture] }
+        if let language { arguments += ["--ui-language", language] }
         app.launchArguments = arguments + ["--ui-reset"]
         let namespaces = allGames ? ["sudoku", "minesweeper", "sliding"] : ["sliding"]
         for namespace in namespaces {
@@ -26,12 +29,94 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         return app
     }
 
-    private func openSavedSliding(_ app: XCUIApplication) {
-        app.buttons["game.sliding"].tap()
-        let resume = app.buttons["sliding.continue"]
+    private func node(_ id: String, app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: id).firstMatch
+    }
+
+    private func waitUI(_ message: String, timeout: TimeInterval = 15, _ condition: @escaping () -> Bool) {
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in condition() }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: timeout), .completed, message)
+    }
+
+    private func tap(_ id: String, app: XCUIApplication) {
+        let button = app.buttons.matching(identifier: id).firstMatch
+        if id == "history.filters" || id == "history.keyboard.done" || id == "gameSettings.done" || id.hasSuffix(".menu.settings") || id.hasSuffix(".session.settings") {
+            XCTAssertTrue(button.waitForExistence(timeout: 10), "Missing action: " + id)
+            XCTAssertTrue(button.isHittable)
+        } else {
+            scrollFullyIntoView(button, app: app)
+            XCTAssertTrue(button.waitForExistence(timeout: 10), "Missing action: " + id)
+        }
+        if !button.isEnabled { waitUI("Action must become enabled: " + id) { button.exists && button.isEnabled } }
+        button.tap()
+    }
+
+    private func continueID(_ game: String) -> String {
+        (game == "minesweeper" ? "mines" : game) + ".continue"
+    }
+
+    private func openMenu(_ game: String, app: XCUIApplication) {
+        if ["tictactoe", "connectfour"].contains(game) { tap("catalog.boardgames", app: app) }
+        tap("game." + game, app: app)
+        XCTAssertTrue(app.buttons[game + ".menu.settings"].waitForExistence(timeout: 10))
+    }
+
+    private func resumeSession(_ game: String, app: XCUIApplication, doubleTap: Bool = false) {
+        let resume = app.buttons[game + ".session.resume"]
         XCTAssertTrue(resume.waitForExistence(timeout: 10))
-        scrollFullyIntoView(resume, app: app); resume.tap()
-        XCTAssertTrue(app.buttons["sliding.tile.8"].waitForExistence(timeout: 5))
+        if doubleTap { resume.doubleTap() } else { resume.tap() }
+        waitUI("Resume must return to the actual game.") {
+            !resume.exists && self.node(game + ".timer", app: app).exists && app.buttons[game + ".session.pause"].isEnabled
+        }
+    }
+
+    private func openSavedSession(_ game: String, app: XCUIApplication, ended: Bool = false) {
+        openMenu(game, app: app)
+        tap(continueID(game), app: app)
+        if ended {
+            XCTAssertTrue(node(game + ".session.result", app: app).waitForExistence(timeout: 10))
+        } else {
+            XCTAssertTrue(app.buttons[game + ".session.resume"].waitForExistence(timeout: 10))
+            resumeSession(game, app: app)
+        }
+    }
+
+    private func openSavedSliding(_ app: XCUIApplication, ended: Bool = false) {
+        openSavedSession("sliding", app: app, ended: ended)
+        if !ended { XCTAssertTrue(app.buttons["sliding.tile.8"].waitForExistence(timeout: 5)) }
+    }
+
+    private func goHome(_ app: XCUIApplication) {
+        for _ in 0..<4 {
+            if app.buttons["settings.open"].exists { return }
+            back(app)
+        }
+        XCTAssertTrue(app.buttons["settings.open"].waitForExistence(timeout: 10))
+    }
+
+    private func assertResult(_ game: String, app: XCUIApplication, moves: Int? = nil) {
+        XCTAssertTrue(node(game + ".session.result", app: app).waitForExistence(timeout: 15))
+        for field in ["elapsed", "moves", "difficulty"] {
+            let value = node(game + ".session.result." + field, app: app)
+            XCTAssertTrue(value.exists)
+            XCTAssertNotNil(value.value as? String)
+        }
+        if let moves { XCTAssertEqual(node(game + ".session.result.moves", app: app).value as? String, String(moves)) }
+        XCTAssertTrue(app.buttons[game + ".session.done"].isEnabled)
+        XCTAssertTrue(app.buttons[game + ".session.review"].isEnabled)
+    }
+
+    private func reviewAndReopenResult(_ game: String, app: XCUIApplication) {
+        let elapsed = node(game + ".session.result.elapsed", app: app).value as? String
+        let moves = node(game + ".session.result.moves", app: app).value as? String
+        tap(game + ".session.review", app: app)
+        let shield = node(game + ".session.reviewBoard", app: app)
+        XCTAssertTrue(shield.waitForExistence(timeout: 10))
+        XCTAssertFalse(node(game + ".session.result", app: app).exists)
+        shield.tap()
+        assertResult(game, app: app)
+        XCTAssertEqual(node(game + ".session.result.elapsed", app: app).value as? String, elapsed)
+        XCTAssertEqual(node(game + ".session.result.moves", app: app).value as? String, moves)
     }
 
     private func expectProbe(_ app: XCUIApplication, starts: Int, active: Bool? = nil) {
@@ -51,9 +136,7 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
     private func finishSeed(_ app: XCUIApplication, capturesWin: Bool = false) {
         app.buttons["sliding.tile.8"].swipeLeft()
         if capturesWin { screenshot(app, name: "visual-013-winning-banner") }
-        XCTAssertTrue(app.staticTexts["sliding.complete"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["sliding.moves"].label.contains("36"))
-        XCTAssertFalse(app.buttons["sliding.pause"].isEnabled)
+        assertResult("sliding", app: app, moves: 36)
     }
 
     private func screenshot(_ app: XCUIApplication, name: String) {
@@ -89,10 +172,10 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         openSavedSliding(app)
         expectProbe(app, starts: 0, active: false)
         screenshot(app, name: "visual-013-sliding-play-light")
-        app.buttons["sliding.pause"].tap()
-        XCTAssertTrue(app.buttons["game.resume"].waitForExistence(timeout: 5))
+        tap("sliding.session.pause", app: app)
+        XCTAssertTrue(app.buttons["sliding.session.resume"].waitForExistence(timeout: 5))
         screenshot(app, name: "visual-013-sliding-pause-light")
-        app.buttons["game.resume"].tap()
+        resumeSession("sliding", app: app)
         finishSeed(app, capturesWin: true)
         // Count is a Debug-Simulator probe of actual starts. The short-lived,
         // noninteractive effect can end before XCTest finishes waiting for idle.
@@ -102,21 +185,30 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
 
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["game.sliding"].waitForExistence(timeout: 10))
-        openSavedSliding(app)
-        XCTAssertTrue(app.staticTexts["sliding.complete"].exists)
+        openSavedSliding(app, ended: true)
+        assertResult("sliding", app: app, moves: 36)
         expectProbe(app, starts: 0, active: false)
-
-        app.buttons["sliding.restart"].tap()
-        tapNativeConfirmation("sliding.confirmRestart", app: app)
+        reviewAndReopenResult("sliding", app: app)
+        expectProbe(app, starts: 0, active: false)
+        tap("sliding.session.done", app: app)
+        tap("sliding.start", app: app)
+        XCTAssertTrue(app.buttons["sliding.new.confirm"].waitForExistence(timeout: 5))
+        tap("sliding.new.cancel", app: app)
+        XCTAssertTrue(app.buttons["sliding.continue"].label.contains("36"))
+        tap("sliding.start", app: app)
+        let agree = app.buttons["sliding.new.confirm"]
+        XCTAssertTrue(agree.waitForExistence(timeout: 5)); agree.doubleTap()
         let restarted = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            !app.staticTexts["sliding.complete"].exists &&
+            !self.node("sliding.session.result", app: app).exists &&
             app.staticTexts["sliding.moves"].label == "0 步" &&
-            app.buttons["sliding.tile.7"].isEnabled
+            app.buttons["sliding.session.pause"].isEnabled
         }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [restarted], timeout: 10), .completed)
-        XCTAssertFalse(app.staticTexts["sliding.complete"].exists)
+        XCTAssertFalse(node("sliding.session.result", app: app).exists)
         XCTAssertEqual(app.staticTexts["sliding.moves"].label, "0 步")
-        XCTAssertEqual(app.buttons["sliding.tile.6"].label, "空格")
+        let tiles = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'sliding.tile.'"))
+        XCTAssertEqual(tiles.count, 9)
+        XCTAssertEqual(tiles.allElementsBoundByIndex.filter { $0.label == "空格" }.count, 1)
         expectProbe(app, starts: 0, active: false)
     }
 
@@ -162,16 +254,17 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
             let continueID = game == "minesweeper" ? "mines.continue" : game + ".continue"
             let resume = app.buttons[continueID]
             scrollFullyIntoView(resume, app: app); resume.tap()
+            XCTAssertTrue(app.buttons[game + ".session.resume"].waitForExistence(timeout: 10))
+            resumeSession(game, app: app)
             XCTAssertTrue(app.buttons[playElement].waitForExistence(timeout: 5))
-            let prefix = game == "minesweeper" ? "mines" : game
-            XCTAssertTrue(app.buttons[prefix + ".restart"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons[game + ".session.settings"].waitForExistence(timeout: 5))
             XCTAssertTrue(app.buttons["navigation.back"].isHittable)
             screenshot(app, name: "visual-013-" + game + "-play-dark")
             if game == "sliding" {
-                app.buttons["sliding.pause"].tap()
-                XCTAssertTrue(app.buttons["game.resume"].waitForExistence(timeout: 5))
+                tap("sliding.session.pause", app: app)
+                XCTAssertTrue(app.buttons["sliding.session.resume"].waitForExistence(timeout: 5))
                 screenshot(app, name: "visual-013-sliding-pause-dark")
-                app.buttons["game.resume"].tap()
+                resumeSession("sliding", app: app)
             }
             back(app); back(app)
         }
@@ -225,40 +318,44 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         // its wide Form-row center can be transparent Spacer on iPad.
         resume.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5))
             .withOffset(CGVector(dx: 24, dy: 0)).tap()
+        XCTAssertTrue(app.buttons[game + ".session.resume"].waitForExistence(timeout: 10))
+        resumeSession(game, app: app)
         // Prove navigation independently of a cell's accessibility traits.
-        XCTAssertTrue(app.buttons[prefix + ".restart"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons[game + ".session.settings"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons[firstCell].waitForExistence(timeout: 5))
     }
 
     private func assertIPadPauseResume(_ app: XCUIApplication, prefix: String, firstCell: String) {
-        let pause = app.buttons[prefix + ".pause"]
+        let game = prefix == "mines" ? "minesweeper" : prefix
+        let pause = app.buttons[game + ".session.pause"]
         assertIPadVisible(pause, app: app)
         XCTAssertTrue(pause.isEnabled); pause.tap()
-        let resume = app.buttons["game.resume"]
+        let resume = app.buttons[game + ".session.resume"]
         assertIPadVisible(resume, app: app)
+        // The board stays rendered under blur; the modal owns accessibility focus.
         XCTAssertFalse(app.buttons[firstCell].exists)
-        resume.tap()
+        resumeSession(game, app: app)
         XCTAssertTrue(app.buttons[firstCell].waitForExistence(timeout: 5))
         XCTAssertTrue(pause.isEnabled)
     }
 
-    private func cancelIPadRestart(_ app: XCUIApplication, prefix: String) {
-        let restart = app.buttons[prefix + ".restart"]
-        assertIPadVisible(restart, app: app, toolbar: true); restart.tap()
-        let confirm = app.buttons.matching(identifier: prefix + ".confirmRestart").firstMatch
-        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
-        // iPad confirmation popovers may omit the Cancel action. Dismiss from
-        // the empty lower-left margin, outside both popover and game board.
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.04, dy: 0.94)).tap()
-        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: confirm)
-        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed)
-        XCTAssertFalse(confirm.exists)
+    private func assertIPadSettingsRoundTrip(_ app: XCUIApplication, game: String, firstCell: String) {
+        let settings = app.buttons[game + ".session.settings"]
+        assertIPadVisible(settings, app: app, toolbar: true); settings.tap()
+        XCTAssertTrue(app.buttons["gameSettings.done"].waitForExistence(timeout: 10))
+        tap("gameSettings.done", app: app)
+        XCTAssertTrue(app.buttons[game + ".session.resume"].waitForExistence(timeout: 10))
+        resumeSession(game, app: app)
+        XCTAssertTrue(app.buttons[firstCell].waitForExistence(timeout: 10))
     }
 
     private func assertIPadCaptureReady(_ app: XCUIApplication, prefix: String? = nil) {
         if let prefix {
-            assertIPadVisible(app.buttons[prefix + ".restart"], app: app, toolbar: true)
+            let game = prefix == "mines" ? "minesweeper" : prefix
+            assertIPadVisible(app.buttons[game + ".session.settings"], app: app, toolbar: true)
             assertIPadVisible(app.buttons["navigation.back"], app: app, toolbar: true)
+            XCTAssertFalse(app.buttons[game + ".session.resume"].exists)
+            XCTAssertFalse(node(game + ".session.result", app: app).exists)
         } else {
             assertIPadVisible(app.buttons["settings.open"], app: app, toolbar: true)
         }
@@ -294,7 +391,7 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         }
         var report: [String: Any] = [
             "page": page, "orientation": "portrait", "language": "zh-Hant", "appearance": "dark",
-            "testNavigationStrategy": page == "Home" ? "Settings selected through native controls; game entry not exercised in this case." : "Tap the Continue button's visible leading play area using button-local coordinates, then require restart and an actionable saved cell.",
+            "testNavigationStrategy": page == "Home" ? "Settings selected through native controls; game entry not exercised in this case." : "Tap the saved Continue row, resume through the shared paused notice, and require session settings and an actionable saved cell.",
             "screen": rectangle(app.frame), "navigation": elementGeometry(app.navigationBars.firstMatch),
             "table": elementGeometry(app.tables.firstMatch), "scrollContent": elementGeometry(app.scrollViews.firstMatch),
             "gridBounds": bounds.isNull ? [:] : rectangle(bounds),
@@ -428,32 +525,17 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         assertIPadPauseResume(app, prefix: "sudoku", firstCell: "sudoku.cell.0")
         let preservedNotes = app.buttons["sudoku.cell.1"].value as? String
         XCTAssertTrue(preservedNotes?.contains("2, 7") == true)
-        let restart = app.buttons["sudoku.restart"]
-        assertIPadVisible(restart, app: app, toolbar: true); restart.tap()
-        let confirm = app.buttons.matching(identifier: "sudoku.confirmRestart").firstMatch
-        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
-        attachUIEvidence(app, name: "v021-iPad-sudoku-restart-before-cancel")
-        let cancel = app.buttons.matching(NSPredicate(format: "label == %@", "取消")).firstMatch
-        if cancel.exists && cancel.isHittable {
-            cancel.tap()
-        } else {
-            app.coordinate(withNormalizedOffset: CGVector(dx: 0.04, dy: 0.94)).tap()
-        }
-        // The recorded outside tap dismissed the popup, but the five-second
-        // waiter interrupted a slow remote AX query. Keep the real dismissal
-        // requirement while allowing that query to complete on this device.
-        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: confirm)
-        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 15), .completed)
-        XCTAssertFalse(confirm.exists)
+        attachUIEvidence(app, name: "v022-iPad-sudoku-before-settings")
+        assertIPadSettingsRoundTrip(app, game: "sudoku", firstCell: "sudoku.cell.0")
         XCTAssertEqual(seededBlueDigit.value as? String, "4")
         XCTAssertEqual(empty.value as? String, "空白")
         XCTAssertEqual(app.buttons["sudoku.cell.1"].value as? String, preservedNotes)
-        XCTAssertFalse(app.staticTexts["sudoku.complete"].exists)
+        XCTAssertFalse(node("sudoku.session.result", app: app).exists)
         assertIPadCaptureReady(app, prefix: "sudoku")
-        attachUIEvidence(app, name: "v021-iPad-sudoku-restart-cancelled")
+        attachUIEvidence(app, name: "v022-iPad-sudoku-settings-kept-progress")
         screenshot(app, name: "02_iPad_Sudoku")
         try attachIPadLayout(app, page: "Sudoku", grid: corners,
-                             controls: digits + [app.segmentedControls["sudoku.tools"], app.buttons["sudoku.erase"], app.buttons["sudoku.pause"], app.buttons["sudoku.restart"], app.buttons["navigation.back"]])
+                             controls: digits + [app.segmentedControls["sudoku.tools"], app.buttons["sudoku.erase"], app.buttons["sudoku.session.pause"], app.buttons["sudoku.session.settings"], app.buttons["navigation.back"]])
         back(app); XCTAssertTrue(app.buttons["sudoku.continue"].waitForExistence(timeout: 5))
         back(app); XCTAssertTrue(app.buttons["game.sudoku"].waitForExistence(timeout: 5))
     }
@@ -481,14 +563,13 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         flag.press(forDuration: 0.8); XCTAssertTrue(flag.label.contains("未揭開"))
         flag.press(forDuration: 0.8); XCTAssertTrue(flag.label.contains("旗標"))
         assertIPadPauseResume(app, prefix: "mines", firstCell: "mines.cell.30")
-        cancelIPadRestart(app, prefix: "mines")
+        assertIPadSettingsRoundTrip(app, game: "minesweeper", firstCell: "mines.cell.30")
         XCTAssertTrue(flag.label.contains("旗標"))
-        XCTAssertFalse(app.staticTexts["mines.won"].exists)
-        XCTAssertFalse(app.staticTexts["mines.lost"].exists)
+        XCTAssertFalse(node("minesweeper.session.result", app: app).exists)
         assertIPadCaptureReady(app, prefix: "mines")
         screenshot(app, name: "03_iPad_Minesweeper")
         try attachIPadLayout(app, page: "Minesweeper", grid: corners,
-                             controls: [app.staticTexts["mines.timer"], app.buttons["mines.pause"], app.buttons["mines.restart"], app.buttons["navigation.back"]], viewport: viewport)
+                             controls: [node("minesweeper.timer", app: app), app.buttons["minesweeper.session.pause"], app.buttons["minesweeper.session.settings"], app.buttons["navigation.back"]], viewport: viewport)
         back(app); XCTAssertTrue(app.buttons["mines.continue"].waitForExistence(timeout: 5))
         back(app); XCTAssertTrue(app.buttons["game.minesweeper"].waitForExistence(timeout: 5))
     }
@@ -511,27 +592,199 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         XCTAssertEqual(app.buttons["sliding.tile.7"].label, "方塊 7")
         XCTAssertEqual(tiles.matching(identifier: "sliding.tile.6").firstMatch.label, "空格")
         XCTAssertEqual(app.staticTexts["sliding.moves"].label, "36 步")
-        XCTAssertFalse(app.staticTexts["sliding.complete"].exists)
+        XCTAssertFalse(node("sliding.session.result", app: app).exists)
         assertIPadPauseResume(app, prefix: "sliding", firstCell: "sliding.tile.7")
-        cancelIPadRestart(app, prefix: "sliding")
+        assertIPadSettingsRoundTrip(app, game: "sliding", firstCell: "sliding.tile.7")
         XCTAssertEqual(app.staticTexts["sliding.moves"].label, "36 步")
-        app.buttons["sliding.restart"].tap()
-        let confirm = app.buttons.matching(identifier: "sliding.confirmRestart").firstMatch
-        XCTAssertTrue(confirm.waitForExistence(timeout: 5)); confirm.tap()
-        XCTAssertFalse(confirm.exists)
-        XCTAssertEqual(app.staticTexts["sliding.moves"].label, "0 步")
-        XCTAssertEqual(tiles.matching(identifier: "sliding.tile.6").firstMatch.label, "空格")
-        let restartedMove = app.buttons["sliding.tile.7"]
-        assertIPadVisible(restartedMove, app: app); XCTAssertTrue(restartedMove.isEnabled)
-        restartedMove.swipeLeft()
-        XCTAssertEqual(app.staticTexts["sliding.moves"].label, "1 步")
+        let reverseMove = app.buttons["sliding.tile.7"]
+        assertIPadVisible(reverseMove, app: app); XCTAssertTrue(reverseMove.isEnabled)
+        reverseMove.swipeLeft()
+        XCTAssertEqual(app.staticTexts["sliding.moves"].label, "37 步")
         XCTAssertEqual(tiles.matching(identifier: "sliding.tile.7").firstMatch.label, "空格")
-        XCTAssertFalse(app.staticTexts["sliding.complete"].exists)
+        XCTAssertEqual(tiles.matching(identifier: "sliding.tile.6").firstMatch.label, "方塊 7")
+        XCTAssertFalse(node("sliding.session.result", app: app).exists)
         assertIPadCaptureReady(app, prefix: "sliding")
         screenshot(app, name: "04_iPad_SlidingPuzzle")
         try attachIPadLayout(app, page: "SlidingPuzzle", grid: corners,
-                             controls: [app.staticTexts["sliding.moves"], app.staticTexts["sliding.timer"], app.buttons["sliding.pause"], app.buttons["sliding.restart"], app.buttons["navigation.back"]])
+                             controls: [app.staticTexts["sliding.moves"], node("sliding.timer", app: app), app.buttons["sliding.session.pause"], app.buttons["sliding.session.settings"], app.buttons["navigation.back"]])
         back(app); XCTAssertTrue(app.buttons["sliding.continue"].waitForExistence(timeout: 5))
         back(app); XCTAssertTrue(app.buttons["game.sliding"].waitForExistence(timeout: 5))
+    }
+
+    private func boardSnapshot(_ game: String, app: XCUIApplication) -> [String] {
+        let ids: [String]
+        switch game {
+        case "sudoku": ids = [0, 1, 2, 3, 8, 40, 80].map { "sudoku.cell.\($0)" }
+        case "minesweeper": ids = [0, 1, 30, 40, 80].map { "mines.cell.\($0)" }
+        case "sliding": ids = (0..<9).map { "sliding.tile.\($0)" } + ["sliding.moves"]
+        case "tictactoe": ids = (0..<9).map { "tictactoe.cell.\($0)" } + ["tictactoe.moves"]
+        case "connectfour": ids = (0..<7).map { "connectfour.column.\($0)" } + ["connectfour.moves"]
+        case "twentyfour": ids = ["twentyfour.card.3", "twentyfour.card.5", "twentyfour.stage"]
+        case "memory": ids = (0..<16).map { "memory.card.\($0)" } + ["memory.moves", "memory.pairs"]
+        case "maze": ids = ["maze.position", "maze.moves"]
+        default: XCTFail("Unknown session fixture"); return []
+        }
+        return ids.map { id in
+            let element = node(id, app: app)
+            XCTAssertTrue(element.exists, "Missing saved board element: " + id)
+            return id + ":" + element.label + ":" + (element.value as? String ?? "")
+        }
+    }
+
+    private func finishSessionFixture(_ game: String, app: XCUIApplication) {
+        switch game {
+        case "sudoku":
+            tap("sudoku.cell.1", app: app)
+            tap("sudoku.digit.3", app: app)
+        case "minesweeper": tap("mines.cell.0", app: app)
+        case "sliding": app.buttons["sliding.tile.8"].swipeLeft()
+        case "tictactoe": tap("tictactoe.cell.2", app: app)
+        case "connectfour": tap("connectfour.column.3", app: app)
+        case "twentyfour":
+            tap("twentyfour.card.3", app: app); tap("twentyfour.operator.multiply", app: app)
+            tap("twentyfour.card.5", app: app); tap("twentyfour.apply", app: app)
+        case "memory":
+            let cards = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'memory.card.'"))
+            XCTAssertEqual(cards.count, 16)
+            let unturned = cards.allElementsBoundByIndex.filter(\.isEnabled)
+            XCTAssertEqual(unturned.count, 2)
+            for card in unturned {
+                XCTAssertTrue(card.label.contains("face down")); card.tap()
+            }
+        case "maze": tap("maze.right", app: app); tap("maze.down", app: app)
+        default: XCTFail("Unknown completion fixture")
+        }
+        assertResult(game, app: app)
+    }
+
+    private func exerciseSharedSession(_ game: String) throws {
+        executionTimeAllowance = 360
+        let app = try launch(profile: "v022-session-" + game, allGames: true,
+                             fixture: game == "sliding" ? nil : game, language: "en")
+        openSavedSession(game, app: app)
+        if game == "memory" {
+            let cards = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'memory.card.'"))
+            XCTAssertEqual(cards.count, 16)
+            XCTAssertEqual(cards.allElementsBoundByIndex.filter(\.isEnabled).count, 2)
+        }
+        let beforePause = boardSnapshot(game, app: app)
+        let clock = node(game + ".timer", app: app), firstTime = node(game + ".timer", app: app).label
+        waitUI("The shared clock must advance during actual play.", timeout: 10) { clock.label != firstTime }
+        tap(game + ".session.pause", app: app)
+        let pausedClock = node(game + ".session.paused.elapsed", app: app)
+        XCTAssertTrue(pausedClock.waitForExistence(timeout: 10))
+        let frozenTime = pausedClock.value as? String
+        XCTAssertNotNil(frozenTime)
+        let changedWhilePaused = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            pausedClock.exists && pausedClock.value as? String != frozenTime
+        }, object: nil)
+        changedWhilePaused.isInverted = true
+        XCTAssertEqual(XCTWaiter.wait(for: [changedWhilePaused], timeout: 1.5), .completed)
+        screenshot(app, name: "v022-" + game + "-paused-blurred-board")
+        // A single compound event exercises the shell's actual touch isolation.
+        // It must not submit a second touch to the board under the resume button.
+        resumeSession(game, app: app, doubleTap: true)
+        XCTAssertEqual(boardSnapshot(game, app: app), beforePause)
+        tap(game + ".session.settings", app: app)
+        XCTAssertTrue(app.buttons["gameSettings.done"].waitForExistence(timeout: 10))
+        tap("gameSettings.done", app: app)
+        XCTAssertTrue(app.buttons[game + ".session.resume"].waitForExistence(timeout: 10))
+        resumeSession(game, app: app)
+        XCTAssertEqual(boardSnapshot(game, app: app), beforePause)
+        finishSessionFixture(game, app: app)
+        screenshot(app, name: "v022-" + game + "-shared-result")
+        reviewAndReopenResult(game, app: app)
+        let done = app.buttons[game + ".session.done"]
+        done.doubleTap()
+        let current = app.buttons.matching(identifier: continueID(game)).firstMatch
+        XCTAssertTrue(current.waitForExistence(timeout: 10), "Done must return to the game's menu.")
+        XCTAssertFalse(node(game + ".session.result", app: app).exists)
+        scrollFullyIntoView(current, app: app); current.swipeLeft()
+        let delete = app.buttons[game + ".continue.delete"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 10))
+        tap(game + ".continue.delete", app: app)
+        XCTAssertTrue(app.buttons[game + ".delete.confirm"].waitForExistence(timeout: 10))
+        tap(game + ".delete.cancel", app: app)
+        XCTAssertTrue(current.exists, "Cancelling deletion must preserve the saved round.")
+        tap(game + ".continue.delete", app: app)
+        let confirm = app.buttons[game + ".delete.confirm"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10)); confirm.doubleTap()
+        waitUI("Confirmed deletion must remove only this Continue row.") { !current.exists }
+        screenshot(app, name: "v022-" + game + "-continue-deleted")
+
+        // Finishing, reviewing, reopening, double-Done, and deleting the board
+        // must all leave exactly one actual completion record.
+        tap(game + ".menu.settings", app: app)
+        tap("gameSettings.history", app: app)
+        let records = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'history.record.'"))
+        XCTAssertTrue(records.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertEqual(records.count, 1)
+        screenshot(app, name: "v022-" + game + "-single-retained-history-record")
+        back(app); tap("gameSettings.done", app: app)
+        goHome(app)
+        let otherGame = game == "sliding" ? "minesweeper" : "sliding"
+        openMenu(otherGame, app: app)
+        let otherSave = app.buttons[continueID(otherGame)]
+        XCTAssertTrue(otherSave.waitForExistence(timeout: 10), "Deleting one namespace must preserve the other released saves.")
+        XCTAssertTrue(otherSave.label.contains(otherGame == "sliding" ? "35" : "1 flags / 10 mines"))
+        if game == "sudoku" {
+            goHome(app); openMenu("sudoku", app: app)
+            tap("sudoku.difficulty.medium", app: app)
+            let sentinel = app.buttons["sudoku.medium.0001"]
+            XCTAssertTrue(sentinel.waitForExistence(timeout: 10))
+            XCTAssertTrue(sentinel.label.contains("In progress"), "Deleting the current Sudoku puzzle must retain other puzzle boards.")
+            sentinel.tap()
+            XCTAssertTrue(app.buttons["sudoku.session.resume"].waitForExistence(timeout: 10))
+        }
+    }
+
+    func testSudokuCommonSessionLifecycleAndContinueDeletion() throws { try exerciseSharedSession("sudoku") }
+    func testMinesweeperCommonSessionLifecycleAndContinueDeletion() throws { try exerciseSharedSession("minesweeper") }
+    func testSlidingCommonSessionLifecycleAndContinueDeletion() throws { try exerciseSharedSession("sliding") }
+    func testTicTacToeCommonSessionLifecycleAndContinueDeletion() throws { try exerciseSharedSession("tictactoe") }
+    func testConnectFourCommonSessionLifecycleAndContinueDeletion() throws { try exerciseSharedSession("connectfour") }
+    func testTwentyFourCommonSessionLifecycleAndContinueDeletion() throws { try exerciseSharedSession("twentyfour") }
+    func testMemoryCommonSessionLifecycleAndContinueDeletion() throws { try exerciseSharedSession("memory") }
+    func testMazeCommonSessionLifecycleAndContinueDeletion() throws { try exerciseSharedSession("maze") }
+
+    func testPlayHistorySearchDismissesKeyboardWithoutSwallowingActions() throws {
+        let app = try launch(profile: "v022-history", allGames: true, language: "en")
+        openSavedSliding(app)
+        finishSessionFixture("sliding", app: app)
+        tap("sliding.session.done", app: app); goHome(app)
+        app.buttons["settings.open"].tap()
+        tap("settings.history", app: app)
+        let search = app.textFields["history.search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 10)); search.tap(); search.typeText("sliding")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
+        let records = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'history.record.'"))
+        XCTAssertEqual(records.count, 1)
+        search.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.exists, "Tapping inside the search field must keep the keyboard.")
+        tap("history.filters", app: app)
+        waitUI("Opening filters must dismiss the keyboard without swallowing the filter action.") { app.keyboards.count == 0 }
+        tap("history.filter.sort", app: app)
+        XCTAssertTrue(app.navigationBars["Sort order"].waitForExistence(timeout: 10))
+        let order = app.buttons.matching(NSPredicate(format: "label == %@", "Moves: fewest first")).firstMatch
+        XCTAssertTrue(order.waitForExistence(timeout: 10)); order.tap()
+        waitUI("Selecting an actual sort option must close its sheet.") { !app.navigationBars["Sort order"].exists }
+        search.tap(); search.typeText(" qzx-no-record")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertEqual(records.count, 0)
+        tap("history.search.clear", app: app)
+        XCTAssertEqual(records.count, 1)
+        search.tap(); search.typeText("sliding")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
+        records.firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Record details"].waitForExistence(timeout: 10), "A record tap must still open its real detail sheet.")
+        XCTAssertEqual(app.keyboards.count, 0)
+        XCTAssertTrue(app.navigationBars["Record details"].exists)
+        screenshot(app, name: "v022-history-record-opened-with-keyboard-dismissed")
+        app.navigationBars["Record details"].buttons["Done"].tap()
+        search.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
+        tap("history.keyboard.done", app: app)
+        waitUI("The keyboard toolbar Done action must dismiss the keyboard.") { app.keyboards.count == 0 }
+        XCTAssertEqual(records.count, 1)
     }
 }

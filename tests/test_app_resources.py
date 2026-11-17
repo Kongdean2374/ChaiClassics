@@ -70,8 +70,8 @@ class AppResourceTests(unittest.TestCase):
             for file in ['Localizable.strings','InfoPlist.strings','Privacy.md','Terms.md','Support.md']:
                 self.assertIn(f'App/Resources/{language}.lproj/{file}',project)
         for file in (ROOT/'App').glob('*.swift'):self.assertIn('App/'+file.name,project)
-        self.assertIn('MARKETING_VERSION = 0.2.1',project)
-        self.assertIn('CHAI_RELEASE_VERSION = 0.2.1',project)
+        self.assertIn('MARKETING_VERSION = 0.2.2',project)
+        self.assertIn('CHAI_RELEASE_VERSION = 0.2.2',project)
         info=plistlib.loads((ROOT/'App/Info.plist').read_bytes())
         self.assertEqual(info['CFBundleLocalizations'],['zh-Hant','en'])
         self.assertEqual(info['CFBundleIdentifier'],'$(PRODUCT_BUNDLE_IDENTIFIER)')
@@ -117,11 +117,14 @@ class AppResourceTests(unittest.TestCase):
     def test_testflight_preserves_manual_header_and_signing_job(self):
         actual=(ROOT/'.github/workflows/testflight.yml').read_bytes()
         header=actual.split(b'jobs:\n',1)[0]
-        self.assertEqual(header.count(b"'Version (e.g. 0.2.1)'"),1)
-        self.assertEqual(header.count(b"        default: '0.2.1'\n"),1)
+        self.assertEqual(header.count(b"'Version (e.g. 0.2.2)'"),1)
+        self.assertEqual(header.count(b"        default: '0.2.2'\n"),1)
         # v0.2.1 adds a read-only same-SHA candidate evidence gate. The actual
         # signing/upload job below remains byte-frozen to the released pipeline.
-        self.assertEqual(hashlib.sha256(header).hexdigest(),'85771cd921b95f4ba50e226b2e94114413228de2d6395c305cc2e5f4fc531bd5')
+        # Only the documented current-version description/default may differ.
+        stable_header=header.replace(b"'Version (e.g. 0.2.2)'", b"'Version (e.g. 0.2.1)'")
+        stable_header=stable_header.replace(b"        default: '0.2.2'\n", b"        default: '0.2.1'\n")
+        self.assertEqual(hashlib.sha256(stable_header).hexdigest(),'85771cd921b95f4ba50e226b2e94114413228de2d6395c305cc2e5f4fc531bd5')
         upload=b'  upload:\n'+actual.split(b'  upload:\n',1)[1]
         self.assertEqual(upload.count(b'    needs: preflight\n'),1)
         self.assertEqual(upload.count(b'    runs-on: macos-15-intel\n'),1)

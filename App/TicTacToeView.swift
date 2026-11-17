@@ -8,14 +8,22 @@ struct TicTacToeMenuView: View {
     @State private var humanPlayer = DuelPlayer.first
     @State private var play = false
     @State private var confirm = false
-    @State private var clear = false
-    @State private var loadedSettings = false
     private var tint: Color { GamePalette.tint(.ticTacToe) }
+
     private func start() {
         let next = model.ticTacToe?.newGame(mode: mode, difficulty: difficulty, humanPlayer: humanPlayer)
             ?? TicTacToeBoard(mode: mode, difficulty: difficulty, humanPlayer: humanPlayer)
-        if model.saveTicTacToe(next) { play = true }
+        if model.saveTicTacToe(next) {
+            model.updateGameSettings(for: .ticTacToe) {
+                $0.duelMode = mode.rawValue
+                $0.duelDifficulty = difficulty.rawValue
+                $0.humanPlayer = humanPlayer.rawValue
+            }
+            model.startNewSession(.ticTacToe)
+            play = true
+        }
     }
+
     var body: some View {
         Form {
             Section {
@@ -25,10 +33,10 @@ struct TicTacToeMenuView: View {
             }
             if let board = model.ticTacToe {
                 Section(model.t("menu.lastGame")) {
-                    Button { play = true } label: {
+                    ContinueGameRow(game: .ticTacToe, action: { model.beginContinuing(.ticTacToe); play = true }) {
                         ContinueCard(title: model.t(board.isFinished ? "menu.viewLast" : "menu.continue"),
                                      detail: model.t("tictactoe.moves", board.moves) + " · " + model.t("common.seconds", board.elapsedSeconds))
-                    }.buttonStyle(QuietPressStyle()).contentShape(Rectangle()).accessibilityIdentifier("tictactoe.continue")
+                    }
                 }
             }
             Section(model.t("menu.newGame")) {
@@ -45,52 +53,38 @@ struct TicTacToeMenuView: View {
                     }.accessibilityIdentifier("tictactoe.first")
                     Text(model.t("tictactoe.difficulty.detail")).font(.caption).foregroundStyle(.secondary)
                 }
-                Button { if model.ticTacToe != nil { confirm = true } else { start() } } label: {
+                Button { confirm = true } label: {
                     Label(model.t("menu.start"), systemImage: "play.fill")
                         .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 15).contentShape(Rectangle())
                         .foregroundStyle(.primary).background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 16))
                 }.buttonStyle(QuietPressStyle()).accessibilityIdentifier("tictactoe.start")
                     .disabled(model.blocked.contains(.ticTacToe))
             }
-            if let board = model.ticTacToe {
-                Section(model.t("tictactoe.statistics")) {
-                    Text(model.t("tictactoe.record", board.statistics.wins, board.statistics.draws, board.statistics.losses))
-                        .accessibilityIdentifier("tictactoe.statistics")
-                    Text(model.t("tictactoe.record.detail")).font(.caption).foregroundStyle(.secondary)
-                    Button(model.t("tictactoe.clearStatistics"), role: .destructive) { clear = true }
-                        .accessibilityIdentifier("tictactoe.clearStatistics")
-                }
-            }
         }.scrollContentBackground(.hidden).background(GameCanvas()).tint(tint)
             .localizedNavigation().navigationTitle(model.gameTitle(.ticTacToe)).navigationBarTitleDisplayMode(.inline)
             .navigationDestination(isPresented: $play) { TicTacToePlayView() }
             .onAppear {
-                if !loadedSettings, let board = model.ticTacToe {
-                    mode = board.mode; difficulty = board.difficulty; humanPlayer = board.humanPlayer
-                }
-                loadedSettings = true
+                let settings = model.gameSettings(for: .ticTacToe)
+                mode = DuelMode(rawValue: settings.duelMode) ?? .singlePlayer
+                difficulty = DuelDifficulty(rawValue: settings.duelDifficulty) ?? .normal
+                humanPlayer = DuelPlayer(rawValue: settings.humanPlayer) ?? .first
             }
-            .confirmationDialog(model.t("tictactoe.replace.confirm"), isPresented: $confirm, titleVisibility: .visible) {
-                Button(model.t("menu.startNew"), role: .destructive) { start() }.accessibilityIdentifier("tictactoe.confirmNew")
-                Button(model.t("common.cancel"), role: .cancel) {}
-            }
-            .confirmationDialog(model.t("tictactoe.clear.confirm"), isPresented: $clear, titleVisibility: .visible) {
-                Button(model.t("tictactoe.clearStatistics"), role: .destructive) { model.editTicTacToe { $0.clearStatistics() } }
-                    .accessibilityIdentifier("tictactoe.confirmClearStatistics")
-                Button(model.t("common.cancel"), role: .cancel) {}
-            }
+            // Settings change only the next-round choices, never the saved board.
+            .onChange(of: model.gameSettings(for: .ticTacToe).duelMode) { _, value in mode = DuelMode(rawValue: value) ?? .singlePlayer }
+            .onChange(of: model.gameSettings(for: .ticTacToe).duelDifficulty) { _, value in difficulty = DuelDifficulty(rawValue: value) ?? .normal }
+            .onChange(of: model.gameSettings(for: .ticTacToe).humanPlayer) { _, value in humanPlayer = DuelPlayer(rawValue: value) ?? .first }
+            .gameMenuSettings(.ticTacToe)
+            .newGameConfirmation(.ticTacToe, isPresented: $confirm) { start() }
     }
 }
 
 struct TicTacToePlayView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.scenePhase) private var scenePhase
-    @State private var paused = false
     @State private var visible = false
-    @State private var restart = false
     @State private var turnGeneration = UUID()
     private var tint: Color { GamePalette.tint(.ticTacToe) }
-    private var active: Bool { visible && scenePhase == .active && !paused && !restart }
+    private var active: Bool { visible && scenePhase == .active && model.sessionIsPlaying(.ticTacToe) && model.ticTacToe?.isFinished == false }
     private var aiRequest: String? {
         guard active, let board = model.ticTacToe, board.isComputerTurn else { return nil }
         return turnGeneration.uuidString + ":" + board.sessionID.uuidString + ":" + board.history.map(String.init).joined(separator: ",")
@@ -100,43 +94,19 @@ struct TicTacToePlayView: View {
             if let board = model.ticTacToe {
                 VStack(spacing: 18) {
                     header(board)
-                    if board.isFinished {
-                        GameResultBanner(game: .ticTacToe, title: resultTitle(board),
-                                         detail: model.t("tictactoe.result.detail"), won: board.winner != nil && (board.mode == .localTwoPlayer || board.winner == board.humanPlayer), identifier: "tictactoe.result")
-                    }
-                    if paused || scenePhase != .active {
-                        PauseCard(game: .ticTacToe) { turnGeneration = UUID(); paused = false }.frame(height: 300)
-                    } else {
-                        TicTacToeGrid(board: board, enabled: active) { index in
-                            guard let current = model.ticTacToe,
-                                  current.canHumanPlay(at: index, active: active) else { return }
-                            if model.editTicTacToe({ _ = $0.play(at: index, by: current.currentPlayer) }) { model.feedback() }
-                        }
-                    }
-                    if board.isFinished {
-                        Button { turnGeneration = UUID(); model.editTicTacToe { $0.restart() }; paused = false } label: {
-                            Label(model.t("tictactoe.replay"), systemImage: "arrow.clockwise").frame(maxWidth: .infinity).padding(.vertical, 10)
-                        }.buttonStyle(.borderedProminent).accessibilityIdentifier("tictactoe.replay")
+                    TicTacToeGrid(board: board, enabled: active) { index in
+                        guard let current = model.ticTacToe,
+                              current.canHumanPlay(at: index, active: active) else { return }
+                        if model.editTicTacToe({ _ = $0.play(at: index, by: current.currentPlayer) }) { model.feedback(for: .ticTacToe) }
                     }
                     Text(model.t("tictactoe.controls")).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                    Text(model.t("tictactoe.record", board.statistics.wins, board.statistics.draws, board.statistics.losses))
-                        .font(.footnote).foregroundStyle(.secondary).accessibilityIdentifier("tictactoe.playStatistics")
                 }.padding(16).frame(maxWidth: 520).frame(maxWidth: .infinity)
             }
-        }.background(GameCanvas()).tint(tint).localizedNavigation()
-            .navigationTitle(model.gameTitle(.ticTacToe)).navigationBarTitleDisplayMode(.inline)
-            .toolbar { Button(model.t("common.restart")) { turnGeneration = UUID(); restart = true }.accessibilityIdentifier("tictactoe.restart") }
-            .confirmationDialog(model.t("tictactoe.restart.confirm"), isPresented: $restart, titleVisibility: .visible) {
-                Button(model.t("common.restart"), role: .destructive) { turnGeneration = UUID(); model.editTicTacToe { $0.restart() }; paused = false }
-                    .accessibilityIdentifier("tictactoe.confirmRestart")
-                Button(model.t("common.cancel"), role: .cancel) {}
-            }
-            .modifier(SessionTimer(active: active && model.ticTacToe?.isFinished == false, tick: { model.editTicTacToe { $0.elapsedSeconds += 1 } }))
-            .modifier(GameplayActivity(game: .ticTacToe, active: active && model.ticTacToe?.isFinished == false))
-            .gameCompletionCelebration(completed: model.ticTacToe.map { $0.winner != nil && ($0.mode == .localTwoPlayer || $0.winner == $0.humanPlayer) } ?? false)
+        }.background(GameCanvas()).tint(tint)
+            .gameSessionScreen(.ticTacToe)
             .onAppear { visible = true }
             .onDisappear { visible = false; turnGeneration = UUID() }
-            .onChange(of: scenePhase) { _, _ in turnGeneration = UUID() }
+            .onChange(of: active) { _, value in if !value { turnGeneration = UUID() } }
             .task(id: aiRequest) { await computerMove() }
     }
 
@@ -156,7 +126,7 @@ struct TicTacToePlayView: View {
             guard !Task.isCancelled, aiRequest == request, let move,
                   let current = model.ticTacToe, current.sessionID == snapshot.sessionID,
                   current.history == snapshot.history, current.isComputerTurn else { return }
-            if model.editTicTacToe({ _ = $0.play(at: move, by: snapshot.currentPlayer) }) { model.feedback() }
+            if model.editTicTacToe({ _ = $0.play(at: move, by: snapshot.currentPlayer) }) { model.feedback(for: .ticTacToe) }
         } catch {
             // Pause, background, navigation and restart cancel the pending turn.
         }
@@ -165,10 +135,6 @@ struct TicTacToePlayView: View {
     private func playerName(_ player: DuelPlayer, board: TicTacToeBoard) -> String {
         if board.mode == .singlePlayer { return model.t(player == board.humanPlayer ? "tictactoe.you" : "tictactoe.computer") }
         return model.t(player == .first ? "tictactoe.player1" : "tictactoe.player2")
-    }
-    private func resultTitle(_ board: TicTacToeBoard) -> String {
-        guard let winner = board.winner else { return model.t("tictactoe.draw") }
-        return model.t("tictactoe.winner", playerName(winner, board: board))
     }
     private func header(_ board: TicTacToeBoard) -> some View {
         VStack(spacing: 12) {
@@ -179,7 +145,7 @@ struct TicTacToePlayView: View {
                         // Reserve both possible turn labels at large text sizes.
                         Text(model.t("tictactoe.turn", playerName(.first, board: board), "X")).hidden().accessibilityHidden(true)
                         Text(model.t("tictactoe.turn", playerName(.second, board: board), "O")).hidden().accessibilityHidden(true)
-                        Text(board.isFinished ? resultTitle(board) : model.t("tictactoe.turn", playerName(board.currentPlayer, board: board), board.currentPlayer == .first ? "X" : "O"))
+                        Text(board.isFinished ? "" : model.t("tictactoe.turn", playerName(board.currentPlayer, board: board), board.currentPlayer == .first ? "X" : "O"))
                             .accessibilityIdentifier("tictactoe.turn")
                     }.font(.subheadline).fixedSize(horizontal: false, vertical: true)
                         .transaction { $0.animation = nil }
@@ -191,17 +157,10 @@ struct TicTacToePlayView: View {
                         .accessibilityIdentifier("tictactoe.thinking")
                 }
                 Spacer(minLength: 4)
-                Button { turnGeneration = UUID(); paused.toggle() } label: {
-                    Image(systemName: paused ? "play.fill" : "pause.fill").frame(width: 44, height: 44)
-                        .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
-                }.buttonStyle(QuietPressStyle()).disabled(board.isFinished)
-                    .accessibilityLabel(model.t(paused ? "common.resume" : "common.pause")).accessibilityIdentifier("tictactoe.pause")
             }
             HStack {
                 GameMetric(symbol: "hand.tap", value: model.t("tictactoe.moves", board.moves), tint: tint, identifier: "tictactoe.moves")
                 Spacer(minLength: 4)
-                GameMetric(symbol: "timer", value: model.t("common.seconds", board.elapsedSeconds), tint: tint, identifier: "tictactoe.timer")
-                    .transaction { $0.animation = nil }
             }
         }
     }

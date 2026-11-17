@@ -5,7 +5,7 @@
 SwiftUI 原生 iPhone／iPad 離線合集，iOS 17+。免費、無廣告、帳號、訂閱、追蹤或遊戲後端。
 Bundle ID：`cc.chaihome.chaiclassics`。Public 原始碼，未另授予開源授權。
 
-0.2.1 實作包含 **8 款可玩、17 款尚未推出，共 25 款邏輯遊戲**：
+0.2.2 實作包含 **8 款可玩、17 款尚未推出，共 25 款邏輯遊戲**：
 
 | 可玩 | 規則與模式 |
 | --- | --- |
@@ -45,7 +45,7 @@ GitHub Actions → **CI → Run workflow** 可選 `ui_scope`：
 會執行真正的 13 吋 iPad 模擬器，保留四張原生直向 PNG、五款新遊戲路徑、尺寸報告與 XCTest 結果。
 以 Actions 的實際通過數和原始產物為準；不能以編譯成功或局部測試代替整體驗收。
 
-0.2.1 的 TestFlight 由受信任候選版及驗證門檻控制，完成後可由 Codex 代為觸發並追蹤 Apple 處理。
+0.2.2 的 TestFlight 由受信任候選版及驗證門檻控制，完成後可由 Codex 代為觸發並追蹤 Apple 處理。
 普通提交不自動上傳。簽署沿用私人倉庫的 **match readonly** 資產；不要重新初始化或撤銷憑證。
 不自動正式提交 App Store 或公開上架；上傳、處理完成、內部可用與外部 Beta 審核分開回報。
 
@@ -59,6 +59,7 @@ CHAI_UI_SCOPE=memory bash scripts/ci.sh ui  # macOS 指定 UI 範圍
 Xcode 26+ 開啟 `ChaiClassics.xcodeproj` 的 `ChaiClassics` scheme。
 新增 Swift 檔案後執行 `python3 scripts/create_project.py`。
 
+- [0.2.2 改版與驗證方法](docs/RELEASE_0.2.2.md)
 - [0.2.0 進度](docs/V020_PROGRESS.md)、[發布規格](docs/v020-release.md)、[驗證證據](docs/v020-verification.md)
 - [存檔與架構](docs/ARCHITECTURE.md)、[題庫規格](docs/SUDOKU_PUZZLES.md)
 - [發布與 Secrets](docs/RELEASING.md)、[簽署資產唯讀驗證](docs/SIGNING_ASSET_VERIFICATION.md)

@@ -81,7 +81,8 @@ class CandidateVerificationTests(unittest.TestCase):
 
     def prepare_scoped_evidence(self, scope='affected'):
         source = {str(path.relative_to(self.root)): ('100644', path.read_bytes()) for path in self.root.rglob('*.swift')}
-        tests = scoped.planned_tests(scoped.fingerprints(source), []) if scope == 'affected' else scoped.scopes.resolve(scope, scoped.fingerprints(source))
+        tests = scoped.planned_tests(scoped.fingerprints(source), []) if scope == 'affected' else scoped.scopes.resolve(
+            scope, scoped.fingerprints(source), include_sessions=bool(scoped.scopes.required_session_tests_for_paths(source)))
         actual = {test: 'skipped' if test.split('/')[-1] in candidate.IPAD_TESTS else 'passed' for test in tests}
         counts = {'totalTestCount': len(actual), 'passedTests': sum(value == 'passed' for value in actual.values()),
                   'failedTests': 0, 'skippedTests': sum(value == 'skipped' for value in actual.values()), 'result': 'Passed'}
@@ -220,8 +221,35 @@ class CandidateVerificationTests(unittest.TestCase):
         self.assertEqual(proof['workflows']['ipad']['summary']['passedTests'], 4)
         self.assertEqual(proof['workflows']['ipad']['games_summary']['passedTests'], 5)
 
-    def test_v021_development_proof_retains_exact_sha_and_never_authorizes_release(self):
-        version = '0.2.1'; tag = 'v0.2.1-rc.1'; branch = 'develop/0.2.1'
+    def test_session_runtime_requires_all_nine_real_journeys_and_counts_them_without_new_skips(self):
+        before = {kind: len(candidate.expected_tests(kind, self.root)) for kind in ('ci', 'visual')}
+        (self.root / 'App').mkdir(exist_ok=True)
+        (self.root / 'App/GameSessionComponents.swift').write_text('struct GameSessionComponents {}')
+        with self.assertRaises(candidate.CandidateError): candidate.expected_tests('ci', self.root)
+        visual = self.root / 'UITests/ChaiClassicsVisualSmokeTests.swift'
+        visual.write_text(visual.read_text() + ''.join('\nfunc ' + name + '() {}' for name in candidate.scopes.SESSION_VISUAL_TESTS))
+        for kind in ('ci', 'visual'):
+            required = candidate.expected_tests(kind, self.root)
+            self.assertEqual(len(required), before[kind] + len(candidate.scopes.SESSION_VISUAL_TESTS))
+            actual = {name: 'skipped' if name.split('/')[-1] in candidate.IPAD_TESTS else 'passed' for name in required}
+            counts = {'result': 'Passed', 'totalTestCount': len(required), 'passedTests': len(required) - 4,
+                      'failedTests': 0, 'skippedTests': 4}
+            evidence = candidate.make_evidence(kind, counts, self.sha, executed_tests=actual, root=self.root)
+            self.assertEqual(evidence['expected_tests'], required)
+            for method in candidate.scopes.SESSION_VISUAL_TESTS:
+                skipped = dict(actual); skipped['ChaiClassicsVisualSmokeTests/' + method] = 'skipped'
+                with self.subTest(kind=kind, skipped=method), self.assertRaises(candidate.CandidateError):
+                    candidate.make_evidence(kind, counts, self.sha, executed_tests=skipped, root=self.root)
+            old_counts = dict(counts, totalTestCount=before[kind], passedTests=before[kind] - 4)
+            with self.assertRaises(candidate.CandidateError):
+                candidate.make_evidence(kind, old_counts, self.sha, executed_tests=actual, root=self.root)
+        self.assertEqual(len(candidate.expected_tests('ipad', self.root)), len(candidate.IPAD_TESTS))
+        method = candidate.scopes.HISTORY_TEST
+        visual.write_text(visual.read_text().replace('\nfunc ' + method + '() {}', ''))
+        with self.assertRaises(candidate.CandidateError): candidate.expected_tests('visual', self.root)
+
+    def assert_development_version_stays_exact_sha_and_unsigned(self, version):
+        tag = f'v{version}-rc.1'; branch = f'develop/{version}'
         self.responses[f'repos/{self.repo}/git/ref/heads/{branch}'] = {'object': {'sha': self.sha}}
         self.responses[f'repos/{self.repo}/git/ref/tags/{tag}'] = {'ref': 'refs/tags/' + tag, 'object': {'sha': self.sha, 'type': 'commit'}}
         for run_id in self.runs.values():
@@ -233,6 +261,12 @@ class CandidateVerificationTests(unittest.TestCase):
         self.responses[f'repos/{self.repo}/actions/runs/{self.runs["visual"]}']['head_sha'] = 'b' * 40
         with self.assertRaises(candidate.CandidateError):
             candidate.verify(self.repo, self.sha, version, tag, self.runs, read=self.read, root=self.root, branch=branch)
+
+    def test_v021_development_proof_retains_exact_sha_and_never_authorizes_release(self):
+        self.assert_development_version_stays_exact_sha_and_unsigned('0.2.1')
+
+    def test_v022_development_proof_retains_exact_sha_and_never_authorizes_release(self):
+        self.assert_development_version_stays_exact_sha_and_unsigned('0.2.2')
 
     def test_development_proof_never_authorizes_release(self):
         self.responses[f'repos/{self.repo}/git/ref/heads/develop/0.2.0'] = {'object': {'sha': self.sha}}

@@ -9,6 +9,19 @@ import sys
 V = 'ChaiClassicsUITests/ChaiClassicsV020UITests/'
 L = 'ChaiClassicsUITests/ChaiClassicsUITests/'
 S = 'ChaiClassicsUITests/ChaiClassicsVisualSmokeTests/'
+SESSION_LIFECYCLE_TESTS = {
+    'sudoku': 'testSudokuCommonSessionLifecycleAndContinueDeletion',
+    'mines': 'testMinesweeperCommonSessionLifecycleAndContinueDeletion',
+    'sliding': 'testSlidingCommonSessionLifecycleAndContinueDeletion',
+    'tictactoe': 'testTicTacToeCommonSessionLifecycleAndContinueDeletion',
+    'connectfour': 'testConnectFourCommonSessionLifecycleAndContinueDeletion',
+    'twentyfour': 'testTwentyFourCommonSessionLifecycleAndContinueDeletion',
+    'memory': 'testMemoryCommonSessionLifecycleAndContinueDeletion',
+    'maze': 'testMazeCommonSessionLifecycleAndContinueDeletion',
+}
+HISTORY_TEST = 'testPlayHistorySearchDismissesKeyboardWithoutSwallowingActions'
+SESSION_VISUAL_TESTS = tuple(SESSION_LIFECYCLE_TESTS.values()) + (HISTORY_TEST,)
+SESSION_RUNTIME_FILES = ('App/GameSessionComponents.swift', 'Core/GameSessionData.swift')
 SCOPES = {
     'full': [],
     'sliding': [L + 'testSlidingCanStartAndRestore',
@@ -28,8 +41,23 @@ SCOPES = {
                'testAccessibilityTypeAdaptsCatalogAndSupportsReducedMotion']],
     'legacy': ['ChaiClassicsUITests/ChaiClassicsUITests'],
 }
+for game, method in SESSION_LIFECYCLE_TESTS.items():
+    if game in SCOPES:
+        SCOPES[game].append(S + method)
+    if game in ('sudoku', 'mines', 'sliding'):
+        SCOPES['legacy'].append(S + method)
+SCOPES['catalog'].append(S + HISTORY_TEST)
 
-def resolve(scope, tests):
+
+def required_session_tests(root):
+    """Keep released source fixtures verifiable, but require every new runtime journey."""
+    return required_session_tests_for_paths(path for path in SESSION_RUNTIME_FILES if (root / path).is_file())
+
+
+def required_session_tests_for_paths(paths):
+    return {'ChaiClassicsVisualSmokeTests/' + name for name in SESSION_VISUAL_TESTS} if set(SESSION_RUNTIME_FILES).intersection(paths) else set()
+
+def resolve(scope, tests, *, include_sessions=True):
     if scope == 'full':
         return sorted(tests)
     if scope not in SCOPES:
@@ -37,6 +65,8 @@ def resolve(scope, tests):
     selected = set()
     for selector in SCOPES[scope]:
         identity = selector.split('/', 1)[1]
+        if not include_sessions and identity in {'ChaiClassicsVisualSmokeTests/' + name for name in SESSION_VISUAL_TESTS}:
+            continue
         matches = {test for test in tests if test == identity or test.startswith(identity + '/')}
         if not matches:
             raise ValueError('A selected UI case is no longer declared: ' + identity)

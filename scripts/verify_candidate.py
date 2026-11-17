@@ -14,6 +14,7 @@ import re
 import subprocess
 import sys
 import zipfile
+import ui_test_scope as scopes
 
 # The incremental validator imports this module. Preserve one exception class
 # when this file is launched as a CLI rather than imported by unit tests.
@@ -32,7 +33,7 @@ IPAD_GAME_TESTS = {
 WORKFLOWS = {'ci': 'ci.yml', 'visual': 'visual-smoke.yml', 'ipad': 'ipad-screenshots.yml'}
 JOBS = {'ci': {'test', 'codesign-extraction', 'release-tooling'}, 'visual': {'visual-smoke'}, 'ipad': {'ipad-screenshots'}}
 MAX_EVIDENCE_BYTES = 2 * 1024 * 1024
-TRUSTED_BRANCHES = ('main', 'develop/0.2.0', 'develop/0.2.1')
+TRUSTED_BRANCHES = ('main', 'develop/0.2.0', 'develop/0.2.1', 'develop/0.2.2')
 PURE_EVIDENCE_SCRIPTS = {'scripts/verify_candidate.py', 'scripts/verify_scoped_ci.py'}
 
 
@@ -46,11 +47,14 @@ def require(condition, message):
 
 
 def expected_tests(kind, root=ROOT):
+    require(kind in WORKFLOWS, 'Unknown candidate evidence kind.')
     sources = sorted((root / 'UITests').glob('*.swift')) if kind == 'ci' else [root / 'UITests/ChaiClassicsVisualSmokeTests.swift']
     tests = [path.stem + '/' + name for path in sources for name in re.findall(r'\bfunc\s+(test\w+)\s*\(', path.read_text())]
     require(tests and len(tests) == len(set(tests)), 'Missing or duplicate declared UI tests.')
     declared_ipad = {name.split('/')[-1] for name in tests} & IPAD_TESTS
     require(declared_ipad == IPAD_TESTS, 'All four original iPad screenshot tests must remain declared.')
+    if kind != 'ipad':
+        require(scopes.required_session_tests(root).issubset(tests), 'All eight session lifecycle journeys and the history interaction journey must remain declared.')
     return sorted(name for name in tests if kind != 'ipad' or name.split('/')[-1] in IPAD_TESTS)
 
 

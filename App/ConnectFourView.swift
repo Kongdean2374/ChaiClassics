@@ -8,31 +8,35 @@ struct ConnectFourMenuView: View {
     @State private var humanPlayer = DuelPlayer.first
     @State private var play = false
     @State private var confirm = false
-    @State private var clearRecords = false
-    @State private var loadedSettings = false
+    private var tint: Color { GamePalette.tint(.connectFour) }
 
     private func start() {
         var random = SystemRandomNumberGenerator()
         let next = model.connectFour?.newRound(mode: mode, difficulty: difficulty, humanPlayer: humanPlayer, seed: random.next())
             ?? ConnectFourBoard(mode: mode, difficulty: difficulty, humanPlayer: humanPlayer, seed: random.next())
-        if model.saveConnectFour(next) { play = true }
+        if model.saveConnectFour(next) {
+            model.updateGameSettings(for: .connectFour) {
+                $0.duelMode = mode.rawValue
+                $0.duelDifficulty = difficulty.rawValue
+                $0.humanPlayer = humanPlayer.rawValue
+            }
+            model.startNewSession(.connectFour)
+            play = true
+        }
     }
 
     var body: some View {
         Form {
             Section {
                 GameIntroHeader(game: .connectFour, title: model.gameTitle(.connectFour), subtitle: model.t("connectfour.intro"))
-                    .padding(.vertical, 8)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
-                    .listRowBackground(Color.clear)
+                    .padding(.vertical, 8).listRowBackground(Color.clear)
             }
             if let board = model.connectFour {
                 Section(model.t("menu.lastGame")) {
-                    Button { play = true } label: {
+                    ContinueGameRow(game: .connectFour, action: { model.beginContinuing(.connectFour); play = true }) {
                         ContinueCard(title: model.t(board.isFinished ? "menu.viewLast" : "menu.continue"),
                                      detail: model.t("connectfour.moves", board.moves) + " · " + model.t("common.seconds", board.elapsedSeconds))
-                            .contentShape(Rectangle())
-                    }.buttonStyle(QuietPressStyle()).accessibilityIdentifier("connectfour.continue")
+                    }
                 }
             }
             Section(model.t("menu.newGame")) {
@@ -49,42 +53,28 @@ struct ConnectFourMenuView: View {
                     }.accessibilityIdentifier("connectfour.first")
                     Text(model.t("connectfour.ai." + difficulty.rawValue)).font(.caption).foregroundStyle(.secondary)
                 }
-                Button { if model.connectFour != nil { confirm = true } else { start() } } label: {
+                Button { confirm = true } label: {
                     Label(model.t("menu.start"), systemImage: "play.fill")
-                        .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 15)
-                        .foregroundStyle(.primary)
-                        .background(GamePalette.tint(.connectFour).opacity(0.14), in: RoundedRectangle(cornerRadius: 16))
-                        .contentShape(Rectangle())
+                        .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 15).contentShape(Rectangle())
+                        .foregroundStyle(.primary).background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 16))
                 }.buttonStyle(QuietPressStyle()).accessibilityIdentifier("connectfour.start")
                     .disabled(model.blocked.contains(.connectFour))
             }
-            if let board = model.connectFour {
-                Section(model.t("connectfour.records")) {
-                    Text(model.t("connectfour.records.values", board.statistics.wins, board.statistics.draws, board.statistics.losses))
-                        .accessibilityIdentifier("connectfour.statistics")
-                    Text(model.t("connectfour.records.explanation")).font(.caption).foregroundStyle(.secondary)
-                    Button(model.t("connectfour.records.clear"), role: .destructive) { clearRecords = true }
-                        .accessibilityIdentifier("connectfour.clearStatistics")
-                }
-            }
-        }.scrollContentBackground(.hidden).background(GameCanvas()).tint(GamePalette.tint(.connectFour))
+        }.scrollContentBackground(.hidden).background(GameCanvas()).tint(tint)
             .localizedNavigation().navigationTitle(model.gameTitle(.connectFour)).navigationBarTitleDisplayMode(.inline)
             .navigationDestination(isPresented: $play) { ConnectFourPlayView() }
             .onAppear {
-                if !loadedSettings, let board = model.connectFour {
-                    mode = board.mode; difficulty = board.difficulty; humanPlayer = board.humanPlayer
-                }
-                loadedSettings = true
+                let settings = model.gameSettings(for: .connectFour)
+                mode = DuelMode(rawValue: settings.duelMode) ?? .singlePlayer
+                difficulty = DuelDifficulty(rawValue: settings.duelDifficulty) ?? .normal
+                humanPlayer = DuelPlayer(rawValue: settings.humanPlayer) ?? .first
             }
-            .confirmationDialog(model.t("connectfour.replace.confirm"), isPresented: $confirm, titleVisibility: .visible) {
-                Button(model.t("menu.startNew"), role: .destructive) { start() }.accessibilityIdentifier("connectfour.confirmNew")
-                Button(model.t("common.cancel"), role: .cancel) {}
-            }
-            .confirmationDialog(model.t("connectfour.records.confirm"), isPresented: $clearRecords, titleVisibility: .visible) {
-                Button(model.t("connectfour.records.clear"), role: .destructive) { model.editConnectFour { $0.clearStatistics() } }
-                    .accessibilityIdentifier("connectfour.confirmClearStatistics")
-                Button(model.t("common.cancel"), role: .cancel) {}
-            }
+            // Settings change only the next-round choices, never the saved board.
+            .onChange(of: model.gameSettings(for: .connectFour).duelMode) { _, value in mode = DuelMode(rawValue: value) ?? .singlePlayer }
+            .onChange(of: model.gameSettings(for: .connectFour).duelDifficulty) { _, value in difficulty = DuelDifficulty(rawValue: value) ?? .normal }
+            .onChange(of: model.gameSettings(for: .connectFour).humanPlayer) { _, value in humanPlayer = DuelPlayer(rawValue: value) ?? .first }
+            .gameMenuSettings(.connectFour)
+            .newGameConfirmation(.connectFour, isPresented: $confirm) { start() }
     }
 }
 
@@ -92,9 +82,7 @@ struct ConnectFourPlayView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.gameReducedMotion) private var reduceMotion
-    @State private var paused = false
     @State private var visible = false
-    @State private var restart = false
     @State private var generation = UUID()
     @State private var presentation = ConnectFourPresentation()
 
@@ -104,11 +92,11 @@ struct ConnectFourPlayView: View {
         let history: [Int]
         let active: Bool
     }
-    private var interactive: Bool { visible && !paused && !restart && scenePhase == .active }
+    private var interactive: Bool { visible && scenePhase == .active && model.sessionIsPlaying(.connectFour) }
     private var computerTaskID: ComputerTaskID {
         ComputerTaskID(generation: generation, seed: model.connectFour?.seed ?? 0,
                        history: model.connectFour?.history ?? [],
-                       active: interactive && !presentation.isDropping && model.connectFour?.isComputerTurn == true)
+                       active: active && !presentation.isDropping && model.connectFour?.isComputerTurn == true)
     }
     private var active: Bool { interactive && model.connectFour?.isFinished == false }
 
@@ -117,61 +105,22 @@ struct ConnectFourPlayView: View {
             if let board = model.connectFour {
                 VStack(spacing: 18) {
                     header(board)
-                    if board.isFinished && !presentation.isDropping {
-                        GameResultBanner(game: .connectFour, title: resultTitle(board), detail: model.t(board.isDraw ? "connectfour.result.draw" : "connectfour.result.line"),
-                                         won: board.winner == (board.mode == .singlePlayer ? board.humanPlayer : .first), identifier: "connectfour.result")
-                    }
-                    if paused || scenePhase != .active {
-                        PauseCard(game: .connectFour) { paused = false }.frame(height: 300)
-                    } else {
-                        ConnectFourGrid(board: board, acceptsInput: interactive && !presentation.isDropping && !board.isComputerTurn,
-                                        falling: presentation.drop, reduceMotion: reduceMotion, settled: finishDrop) { column in
-                            guard interactive, !presentation.isDropping,
-                                  let current = model.connectFour, !current.isComputerTurn else { return }
-                            acceptDrop(column, on: current)
-                        }
+                    ConnectFourGrid(board: board, acceptsInput: active && !presentation.isDropping && !board.isComputerTurn,
+                                    falling: presentation.drop, reduceMotion: reduceMotion, settled: finishDrop) { column in
+                        guard active, !presentation.isDropping,
+                              let current = model.connectFour, !current.isComputerTurn else { return }
+                        acceptDrop(column, on: current)
                     }
                     Text(model.t("connectfour.controls")).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                    Text(model.t("connectfour.records.values", board.statistics.wins, board.statistics.draws, board.statistics.losses))
-                        .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("connectfour.statistics")
-                    if board.isFinished && !presentation.isDropping {
-                        Button {
-                            invalidatePresentation()
-                            model.editConnectFour { $0.restart() }; paused = false
-                        } label: {
-                            Label(model.t("connectfour.replay"), systemImage: "arrow.clockwise")
-                                .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 12).contentShape(Rectangle())
-                        }.buttonStyle(.borderedProminent).accessibilityIdentifier("connectfour.replay")
-                    }
                 }.padding(16).frame(maxWidth: 580).frame(maxWidth: .infinity)
             }
         }.background(GameCanvas()).tint(GamePalette.tint(.connectFour))
-            .localizedNavigation().navigationTitle(model.gameTitle(.connectFour)).navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                Button(model.t("common.restart")) {
-                    invalidatePresentation(); restart = true
-                }.accessibilityIdentifier("connectfour.restart")
-            }
-            .confirmationDialog(model.t("connectfour.restart.confirm"), isPresented: $restart, titleVisibility: .visible) {
-                Button(model.t("common.restart"), role: .destructive) {
-                    invalidatePresentation()
-                    model.editConnectFour { $0.restart() }; paused = false
-                }.accessibilityIdentifier("connectfour.confirmRestart")
-                Button(model.t("common.cancel"), role: .cancel) {}
-            }
-            .modifier(GameplayActivity(game: .connectFour, active: active))
-            .modifier(SessionTimer(active: active, tick: { model.editConnectFour { $0.elapsedSeconds += 1 } }))
+            .gameSessionScreen(.connectFour, resultReady: !presentation.isDropping)
             .onAppear { visible = true }
             .onDisappear { visible = false; invalidatePresentation() }
             .onChange(of: interactive) { _, value in if !value { invalidatePresentation() } }
             .onChange(of: reduceMotion) { _, _ in invalidatePresentation() }
             .task(id: computerTaskID) { await computerMove() }
-    }
-
-    private func resultTitle(_ board: ConnectFourBoard) -> String {
-        guard let winner = board.winner else { return model.t("connectfour.draw") }
-        if board.mode == .singlePlayer { return model.t(winner == board.humanPlayer ? "connectfour.youWon" : "connectfour.computerWon") }
-        return model.t("connectfour.playerWon", winner.rawValue)
     }
 
     @ViewBuilder private func header(_ board: ConnectFourBoard) -> some View {
@@ -185,22 +134,12 @@ struct ConnectFourPlayView: View {
                             Text(model.t("connectfour.turn.human")).hidden().accessibilityHidden(true)
                             Text(model.t("connectfour.turn.computerMove")).hidden().accessibilityHidden(true)
                         }
-                        Text(board.isFinished && !presentation.isDropping ? resultTitle(board) : turnTitle(board))
+                        Text(board.isFinished ? "" : turnTitle(board))
                             .accessibilityIdentifier("connectfour.turn")
                     }.font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         .transaction { $0.animation = nil }
                 }
                 Spacer(minLength: 4)
-                Button {
-                    paused.toggle()
-                    if paused { invalidatePresentation() }
-                } label: {
-                    Image(systemName: paused ? "play.fill" : "pause.fill")
-                        .font(.subheadline.weight(.semibold)).frame(width: 44, height: 44)
-                        .background(GamePalette.tint(.connectFour).opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
-                }.buttonStyle(QuietPressStyle()).disabled(board.isFinished && !presentation.isDropping)
-                    .accessibilityLabel(model.t(paused ? "common.resume" : "common.pause"))
-                    .accessibilityIdentifier("connectfour.pause")
             }
             // Both labels reserve their full natural height. Entering/leaving the
             // computer turn changes opacity, never the grid's position.
@@ -217,7 +156,6 @@ struct ConnectFourPlayView: View {
             HStack {
                 GameMetric(symbol: "circle.grid.3x3", value: model.t("connectfour.moves", board.moves), tint: GamePalette.tint(.connectFour), identifier: "connectfour.moves")
                 Spacer(minLength: 4)
-                GameMetric(symbol: "timer", value: model.t("common.seconds", board.elapsedSeconds), tint: GamePalette.tint(.connectFour), identifier: "connectfour.timer")
             }.transaction { $0.animation = nil }
         }
     }
@@ -230,13 +168,13 @@ struct ConnectFourPlayView: View {
     /// The accepted board reaches disk before the visual piece starts falling.
     /// Presentation is separate so pause/navigation settles that piece safely.
     @MainActor private func acceptDrop(_ column: Int, on before: ConnectFourBoard) {
-        guard interactive, !presentation.isDropping else { return }
+        guard active, !presentation.isDropping, model.connectFour == before else { return }
         var after = before
         guard after.drop(in: column, player: before.currentPlayer) else { return }
         withTransaction(Transaction(animation: nil)) {
             if model.saveConnectFour(after) {
                 presentation.begin(before: before, after: after)
-                model.feedback()
+                model.feedback(for: .connectFour)
             }
         }
     }

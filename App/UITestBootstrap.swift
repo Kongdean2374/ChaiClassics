@@ -40,7 +40,9 @@ enum UITestBootstrap {
         let allowed = ["base", "sudoku", "mines", "legacy", "large", "settings", "legal", "sliding",
                        "visual-normal", "visual-reduced", "visual-lowpower", "visual-gallery",
                        "v020-catalog", "v020-tictactoe", "v020-connectfour", "v020-twentyfour", "v020-memory", "v020-maze", "v020-layout",
-                       "v021-tictactoe", "v021-connectfour", "v021-memory", "v021-twentyfour", "v021-maze"]
+                       "v021-tictactoe", "v021-connectfour", "v021-memory", "v021-twentyfour", "v021-maze",
+                       "v022-session-sudoku", "v022-session-minesweeper", "v022-session-sliding", "v022-session-tictactoe",
+                       "v022-session-connectfour", "v022-session-twentyfour", "v022-session-memory", "v022-session-maze", "v022-history"]
         let index = args.firstIndex(of: "--ui-profile")
         let requested = index.flatMap { args.indices.contains($0 + 1) ? args[$0 + 1] : nil } ?? "base"
         let profile = allowed.contains(requested) ? requested : "base"
@@ -79,6 +81,56 @@ enum UITestBootstrap {
     private static func seedScenario(_ game: String, directory: URL) throws {
         let store = try SaveStore(directory: directory)
         switch game {
+        case "sudoku":
+            let puzzles = try SudokuPuzzle.bundled()
+            guard let puzzle = puzzles.first(where: { $0.difficulty == .easy && $0.number == 1 }),
+                  let sentinel = puzzles.first(where: { $0.difficulty == .medium && $0.number == 1 }) else {
+                preconditionFailure("Missing released Sudoku catalog fixtures")
+            }
+            let solution = [
+                2, 3, 4, 9, 7, 8, 1, 5, 6,
+                6, 1, 5, 4, 3, 2, 7, 9, 8,
+                8, 7, 9, 5, 1, 6, 3, 4, 2,
+                7, 9, 6, 2, 5, 1, 4, 8, 3,
+                3, 4, 8, 6, 9, 7, 5, 2, 1,
+                1, 5, 2, 8, 4, 3, 9, 6, 7,
+                9, 6, 1, 3, 2, 5, 8, 7, 4,
+                5, 2, 3, 7, 8, 4, 6, 1, 9,
+                4, 8, 7, 1, 6, 9, 2, 3, 5
+            ]
+            precondition(SudokuRules.isComplete(solution, givens: puzzle.givens) && puzzle.givens[1] == 0)
+            var board = SudokuBoard(puzzle: puzzle)
+            for index in puzzle.givens.indices where puzzle.givens[index] == 0 && index != 1 {
+                board.selected = index; board.enter(solution[index], puzzle: puzzle)
+            }
+            board.selected = 1
+            var progress = SudokuProgress()
+            progress.record(SudokuBoard(puzzle: sentinel), puzzle: sentinel)
+            progress.record(board, puzzle: puzzle)
+            precondition(board.isValidSave(for: puzzle) && !board.isComplete(puzzle: puzzle) && progress.completed.isEmpty)
+            try store.save(progress, namespace: GameID.sudoku.rawValue)
+        case "minesweeper":
+            var board = MinesweeperBoard(configuration: .easy, seed: 42)
+            // Flag cell0 before the first reveal: reveal1's safety exclusion
+            // makes it safe, while the flag keeps flood-fill from opening it.
+            board.toggleFlag(0); board.reveal(1)
+            precondition(!board.mines.contains(0))
+            for index in 0..<board.cellCount where index != 0 && !board.mines.contains(index) { board.reveal(index) }
+            board.toggleFlag(0); board.elapsedSeconds = 12
+            precondition(board.isValidSave && !board.isFinished && board.revealed.count == 70)
+            try store.save(board, namespace: GameID.minesweeper.rawValue)
+        case "tictactoe":
+            var board = TicTacToeBoard(mode: .localTwoPlayer, difficulty: .normal, humanPlayer: .first, seed: 24)
+            for index in [0, 3, 1, 4] { precondition(board.play(at: index, by: board.currentPlayer)) }
+            board.elapsedSeconds = 12
+            precondition(board.isValidSave && !board.isFinished)
+            try store.save(board, namespace: GameID.ticTacToe.rawValue)
+        case "connectfour":
+            var board = ConnectFourBoard(mode: .localTwoPlayer, difficulty: .normal, humanPlayer: .first, seed: 24)
+            for column in [0, 6, 1, 6, 2, 5] { precondition(board.drop(in: column, player: board.currentPlayer)) }
+            board.elapsedSeconds = 12
+            precondition(board.isValidSave && !board.isFinished)
+            try store.save(board, namespace: GameID.connectFour.rawValue)
         case "twentyfour-fresh", "twentyfour-zero":
             var board = try TwentyFourBoard(numbers: [1, 2, 3, 4], seed: 24)
             if game == "twentyfour-zero" {

@@ -4,10 +4,20 @@ import ChaiCore
 struct SettingsView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.colorScheme) private var colorScheme
+    @State private var dataOperationBusy = false
     var body: some View {
         Form {
             generalSection
             gameSection
+            Section(model.t("settings.playData")) {
+                NavigationLink { PlayHistoryView() } label: {
+                    Label(model.t("history.title"), systemImage: "clock.arrow.circlepath")
+                }.accessibilityIdentifier("settings.history")
+                NavigationLink { GameSettingsDirectoryView() } label: {
+                    Label(model.t("settings.individualGames"), systemImage: "slider.horizontal.3")
+                }.accessibilityIdentifier("settings.individualGames")
+            }
+            GameDataTransferSection(game: nil, allowsImport: true, isBusy: $dataOperationBusy)
             Section(model.t("settings.support")) {
                 SupportEmailLink(identifier: "settings.email")
                 NavigationLink { LegalView(document: .support) } label: {
@@ -97,5 +107,17 @@ struct SettingsView: View {
             Text(model.t(title))
             Text(model.t(detail)).font(.caption).foregroundStyle(.secondary)
         }.fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+private struct GameSettingsDirectoryView: View {
+    @EnvironmentObject private var model: AppModel
+    var body: some View {
+        List(GameRegistry.games) { descriptor in
+            NavigationLink { GameSettingsView(game: descriptor.id) } label: {
+                Label(model.gameTitle(descriptor.id), systemImage: descriptor.symbol)
+            }.accessibilityIdentifier("settings.game." + descriptor.id.rawValue)
+        }
+        .localizedNavigation().navigationTitle(model.t("settings.individualGames"))
     }
 }

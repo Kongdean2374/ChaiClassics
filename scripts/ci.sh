@@ -8,6 +8,7 @@ fi
 verify() {
 ruby -c fastlane/Fastfile
 bash -n scripts/select_xcode.sh
+python3 -m unittest discover -s tests -p 'test_ci_shell.py' -q
 python3 scripts/check_compatibility.py
 python3 scripts/verify_sudoku.py --report sudoku-verification.json
 python3 scripts/create_project.py
@@ -21,7 +22,9 @@ xcodebuild -project ChaiClassics.xcodeproj -scheme ChaiClassics -destination 'ge
 }
 ui() {
 CHAI_UI_FILTERS=$(python3 scripts/ui_test_scope.py "${CHAI_UI_SCOPE:-full}")
-CHAI_UI_ARGS=()
+# macOS /bin/bash 3.2 treats an empty array as unset under `set -u`.
+# Keep the array nonempty even when full scope intentionally has no test filters.
+CHAI_UI_ARGS=(-parallel-testing-enabled NO)
 if [[ -n "$CHAI_UI_FILTERS" ]]; then
   while IFS= read -r filter; do CHAI_UI_ARGS+=("$filter"); done <<< "$CHAI_UI_FILTERS"
 fi
@@ -41,7 +44,7 @@ PY
 # at the previous 120s maximum and cascading into app-termination failures.
 CHAI_UI_EXIT=0
 mkdir -p build
-xcodebuild -project ChaiClassics.xcodeproj -scheme ChaiClassics -destination "$CHAI_SIM_DESTINATION" -derivedDataPath build/DerivedData -resultBundlePath build/UITests.xcresult CODE_SIGNING_ALLOWED=NO ONLY_ACTIVE_ARCH=YES "${CHAI_UI_ARGS[@]}" -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 420 -maximum-test-execution-time-allowance 600 test 2>&1 | tee build/UITests.log || CHAI_UI_EXIT=$?
+xcodebuild -project ChaiClassics.xcodeproj -scheme ChaiClassics -destination "$CHAI_SIM_DESTINATION" -derivedDataPath build/DerivedData -resultBundlePath build/UITests.xcresult CODE_SIGNING_ALLOWED=NO ONLY_ACTIVE_ARCH=YES "${CHAI_UI_ARGS[@]}" -test-timeouts-enabled YES -default-test-execution-time-allowance 420 -maximum-test-execution-time-allowance 600 test 2>&1 | tee build/UITests.log || CHAI_UI_EXIT=$?
 if [[ -d build/UITests.xcresult ]]; then
   xcrun xcresulttool get test-results summary --path build/UITests.xcresult > build/UITests-summary.json || CHAI_UI_EXIT=1
 fi

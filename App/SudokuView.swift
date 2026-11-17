@@ -3,6 +3,8 @@ import ChaiCore
 
 struct SudokuMenuView: View {
     @EnvironmentObject var model: AppModel
+    @State private var continuedPuzzle: SudokuPuzzle?
+    @State private var showPlay = false
     private let tint = GamePalette.tint(.sudoku)
 
     var body: some View {
@@ -12,22 +14,14 @@ struct SudokuMenuView: View {
                 if let id = model.sudoku.currentID, let puzzle = model.puzzles.first(where: { $0.id == id }), let board = model.sudoku.boards[id] {
                     VStack(alignment: .leading, spacing: 10) {
                         SudokuSectionLabel(title: model.t("menu.lastGame"))
-                        NavigationLink { SudokuPlayView(puzzle: puzzle) } label: {
-                            HStack(spacing: 14) {
-                                Image(systemName: board.isComplete(puzzle: puzzle) ? "checkmark.seal" : "play.fill")
-                                    .font(.title3.weight(.semibold)).foregroundStyle(tint)
-                                    .frame(width: 44, height: 44).background(tint.opacity(0.09), in: RoundedRectangle(cornerRadius: 14))
-                                VStack(alignment: .leading, spacing: 5) {
-                                    Text(model.t(board.isComplete(puzzle: puzzle) ? "menu.viewLast" : "menu.continue"))
-                                        .font(.headline).foregroundStyle(.primary)
-                                    Text(model.summaryDetail(model.summary(.sudoku)))
-                                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                                }
-                                Spacer(minLength: 0)
-                                Image(systemName: "arrow.up.right").font(.caption.weight(.semibold)).foregroundStyle(tint)
-                            }.padding(16).background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20))
-                                .overlay { RoundedRectangle(cornerRadius: 20).strokeBorder(tint.opacity(0.13), lineWidth: 1) }
-                        }.buttonStyle(QuietPressStyle()).accessibilityIdentifier("sudoku.continue")
+                        ContinueGameRow(game: .sudoku, action: {
+                            continuedPuzzle = puzzle
+                            model.beginContinuing(.sudoku)
+                            showPlay = true
+                        }) {
+                            ContinueCard(title: model.t(board.isComplete(puzzle: puzzle) ? "menu.viewLast" : "menu.continue"),
+                                         detail: model.summaryDetail(model.summary(.sudoku)))
+                        }
                     }
                 }
                 VStack(alignment: .leading, spacing: 12) {
@@ -48,6 +42,10 @@ struct SudokuMenuView: View {
             }.padding(20).frame(maxWidth: 620).frame(maxWidth: .infinity)
         }.background { GameCanvas() }.tint(tint)
             .localizedNavigation().navigationTitle(model.gameTitle(.sudoku)).navigationBarTitleDisplayMode(.inline)
+            .gameMenuSettings(.sudoku)
+            .navigationDestination(isPresented: $showPlay) {
+                if let puzzle = continuedPuzzle { SudokuPlayView(puzzle: puzzle) }
+            }
     }
 }
 
@@ -95,9 +93,39 @@ struct SudokuLevelsView: View {
     let difficulty: SudokuDifficulty
     @EnvironmentObject var model: AppModel
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var selectedPuzzle: SudokuPuzzle?
+    @State private var confirmNew = false
+    @State private var showPlay = false
     private let tint = GamePalette.tint(.sudoku)
     private var catalog: [SudokuPuzzle] { model.puzzles.filter { $0.difficulty == difficulty } }
     private var completed: Int { catalog.filter { model.sudoku.completed.contains($0.id) }.count }
+
+    private func choose(_ puzzle: SudokuPuzzle) {
+        guard !model.blocked.contains(.sudoku), model.sudoku.isUnlocked(puzzle, catalog: model.puzzles) else { return }
+        selectedPuzzle = puzzle
+        if let board = model.sudoku.boards[puzzle.id], !board.isComplete(puzzle: puzzle) {
+            var next = model.sudoku
+            next.currentID = puzzle.id
+            guard next == model.sudoku || model.saveSudoku(next) else { return }
+            model.beginContinuing(.sudoku)
+            showPlay = true
+        } else {
+            confirmNew = true
+        }
+    }
+
+    private func startSelectedPuzzle() {
+        guard let puzzle = selectedPuzzle,
+              model.sudoku.isUnlocked(puzzle, catalog: model.puzzles) else { return }
+        var board = SudokuBoard(puzzle: puzzle)
+        board.mode = model.gameSettings(for: .sudoku).sudokuPencilByDefault ? .pencil : .answer
+        var next = model.sudoku
+        // Only this puzzle changes; completion history and the other boards stay intact.
+        next.record(board, puzzle: puzzle)
+        guard model.saveSudoku(next) else { return }
+        model.startNewSession(.sudoku)
+        showPlay = true
+    }
 
     var body: some View {
         ScrollView {
@@ -115,14 +143,19 @@ struct SudokuLevelsView: View {
                         let current = model.sudoku.boards[puzzle.id]
                         let inProgress = current.map { !$0.isComplete(puzzle: puzzle) } ?? false
                         let finished = model.sudoku.completed.contains(puzzle.id)
-                        NavigationLink { SudokuPlayView(puzzle: puzzle) } label: {
+                        Button { choose(puzzle) } label: {
                             SudokuLevelCard(number: puzzle.number, unlocked: unlocked, inProgress: inProgress, finished: finished)
-                        }.buttonStyle(QuietPressStyle()).disabled(!unlocked).accessibilityIdentifier(puzzle.id)
+                        }.buttonStyle(QuietPressStyle()).disabled(!unlocked || model.blocked.contains(.sudoku)).accessibilityIdentifier(puzzle.id)
                     }
                 }
             }.padding(20).frame(maxWidth: 620).frame(maxWidth: .infinity)
         }.background { GameCanvas() }.tint(tint)
             .localizedNavigation().navigationTitle(model.t("difficulty." + difficulty.rawValue)).navigationBarTitleDisplayMode(.inline)
+            .gameMenuSettings(.sudoku)
+            .newGameConfirmation(.sudoku, isPresented: $confirmNew) { startSelectedPuzzle() }
+            .navigationDestination(isPresented: $showPlay) {
+                if let puzzle = selectedPuzzle { SudokuPlayView(puzzle: puzzle) }
+            }
     }
 }
 
@@ -155,12 +188,10 @@ private struct SudokuLevelCard: View {
 struct SudokuPlayView: View {
     let puzzle: SudokuPuzzle
     @EnvironmentObject var model: AppModel
-    @Environment(\.scenePhase) var scenePhase
-    @State private var paused = false
-    @State private var confirmRestart = false
     private let tint = GamePalette.tint(.sudoku)
     private var board: SudokuBoard { model.sudoku.boards[puzzle.id] ?? SudokuBoard(puzzle: puzzle) }
     private var complete: Bool { board.isComplete(puzzle: puzzle) }
+    private var playing: Bool { model.sessionIsPlaying(.sudoku) && !complete }
 
     var body: some View {
         ScrollView {
@@ -172,25 +203,23 @@ struct SudokuPlayView: View {
                         .font(.subheadline).foregroundStyle(tint).padding(10).background(tint.opacity(0.08), in: Circle())
                         .accessibilityHidden(true)
                 }
-                if complete {
-                    GameResultBanner(game: .sudoku, title: model.t("status.completed"), detail: model.t("sudoku.completion.detail"), won: true, identifier: "sudoku.complete")
-                }
-                if paused || scenePhase != .active {
-                    PauseCard(game: .sudoku) { paused = false }.frame(maxWidth: .infinity).aspectRatio(1, contentMode: .fit)
-                } else {
-                    SudokuGrid(puzzle: puzzle, board: board) { index in
-                        if model.edit(puzzle, { $0.selected = index }) { model.feedback() }
-                    }
-                }
+                SudokuGrid(puzzle: puzzle, board: board) { index in
+                    guard playing else { return }
+                    if model.edit(puzzle, { $0.selected = index }) { model.feedback(for: .sudoku) }
+                }.disabled(!playing)
                 VStack(spacing: 14) {
-                    Picker(model.t("sudoku.tools"), selection: Binding(get: { board.mode }, set: { mode in model.edit(puzzle) { $0.mode = mode } })) {
+                    Picker(model.t("sudoku.tools"), selection: Binding(get: { board.mode }, set: { mode in
+                        guard playing else { return }
+                        model.edit(puzzle) { $0.mode = mode }
+                    })) {
                         Text(model.t("sudoku.answerPen")).tag(SudokuBoard.Mode.answer)
                         Text(model.t("sudoku.pencil")).tag(SudokuBoard.Mode.pencil)
-                    }.pickerStyle(.segmented).disabled(paused || complete).accessibilityIdentifier("sudoku.tools")
+                    }.pickerStyle(.segmented).disabled(!playing).accessibilityIdentifier("sudoku.tools")
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5), spacing: 8) {
                         ForEach(1...9, id: \.self) { digit in
                             Button {
-                                if model.edit(puzzle, { $0.enter(digit, puzzle: puzzle) }) { model.feedback() }
+                                guard playing else { return }
+                                if model.edit(puzzle, { $0.enter(digit, puzzle: puzzle) }) { model.feedback(for: .sudoku) }
                             } label: {
                                 Text("\(digit)").font(.system(.title3, design: .rounded, weight: .medium).monospacedDigit())
                                     .lineLimit(1).minimumScaleFactor(0.6)
@@ -199,7 +228,8 @@ struct SudokuPlayView: View {
                             }.buttonStyle(QuietPressStyle()).accessibilityIdentifier("sudoku.digit.\(digit)")
                         }
                         Button {
-                            if model.edit(puzzle, { $0.erase(puzzle: puzzle) }) { model.feedback() }
+                            guard playing else { return }
+                            if model.edit(puzzle, { $0.erase(puzzle: puzzle) }) { model.feedback(for: .sudoku) }
                         } label: {
                             VStack(spacing: 3) {
                                 Image(systemName: "eraser").font(.subheadline)
@@ -207,25 +237,13 @@ struct SudokuPlayView: View {
                             }.foregroundStyle(.secondary).frame(maxWidth: .infinity).frame(height: 48)
                                 .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
                         }.buttonStyle(QuietPressStyle()).accessibilityIdentifier("sudoku.erase")
-                    }.disabled(paused || complete)
+                    }.disabled(!playing)
                 }.padding(14).background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22))
                     .overlay { RoundedRectangle(cornerRadius: 22).strokeBorder(.primary.opacity(0.04), lineWidth: 1) }
-                Button { paused.toggle() } label: {
-                    Label(model.t(paused ? "common.resume" : "common.pause"), systemImage: paused ? "play.fill" : "pause.fill")
-                        .font(.subheadline.weight(.medium)).frame(maxWidth: .infinity, minHeight: 44)
-                }.buttonStyle(QuietPressStyle()).foregroundStyle(tint).disabled(complete).opacity(complete ? 0.45 : 1)
-                    .accessibilityIdentifier("sudoku.pause")
             }.padding(16).frame(maxWidth: 560).frame(maxWidth: .infinity)
         }.background { GameCanvas() }.tint(tint)
-            .localizedNavigation().navigationTitle(model.gameTitle(.sudoku)).navigationBarTitleDisplayMode(.inline)
-            .toolbar { Button(model.t("common.restart")) { confirmRestart = true }.accessibilityIdentifier("sudoku.restart") }
-            .confirmationDialog(model.t("sudoku.restart.confirm"), isPresented: $confirmRestart, titleVisibility: .visible) {
-                Button(model.t("common.restart"), role: .destructive) { model.open(puzzle, restart: true); paused = false }.accessibilityIdentifier("sudoku.confirmRestart")
-                Button(model.t("common.cancel"), role: .cancel) {}
-            }
-            .modifier(GameplayActivity(game: .sudoku, active: !paused && !confirmRestart && !complete))
-            .gameCompletionCelebration(completed: complete)
-            .onAppear { model.open(puzzle) }
+            .navigationTitle(model.gameTitle(.sudoku)).navigationBarTitleDisplayMode(.inline)
+            .gameSessionScreen(.sudoku)
     }
 }
 

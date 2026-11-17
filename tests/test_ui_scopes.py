@@ -29,9 +29,26 @@ class UIScopeTests(unittest.TestCase):
 
     def test_sliding_retries_both_failed_methods_and_direct_gesture_regression(self):
         methods = scope.SCOPES['sliding']
-        self.assertEqual(len(methods), 3)
         for required in ['testSlidingCanStartAndRestore', 'testFreshWinCelebratesOnceAndRestoredWinDoesNotReplay', 'testSlidingSwipesInAllFourDirectionsAndRestoresExactlyOneMove']:
             self.assertTrue(any(item.endswith('/' + required) for item in methods))
+
+    def test_v022_every_game_scope_includes_its_real_lifecycle_and_history_is_selected(self):
+        self.assertEqual(len(scope.SESSION_LIFECYCLE_TESTS), 8)
+        self.assertEqual(len(set(scope.SESSION_VISUAL_TESTS)), 9)
+        for game, method in scope.SESSION_LIFECYCLE_TESTS.items():
+            selected = scope.SCOPES[game if game in scope.SCOPES else 'legacy']
+            self.assertIn(scope.S + method, selected)
+        for game in ('sudoku', 'mines', 'sliding'):
+            self.assertIn(scope.S + scope.SESSION_LIFECYCLE_TESTS[game], scope.SCOPES['legacy'])
+        self.assertIn(scope.S + scope.HISTORY_TEST, scope.SCOPES['catalog'])
+        self.assertEqual(scope.required_session_tests_for_paths([]), set())
+        required = scope.required_session_tests_for_paths(['App/GameSessionComponents.swift'])
+        self.assertEqual(required, {'ChaiClassicsVisualSmokeTests/' + name for name in scope.SESSION_VISUAL_TESTS})
+
+    def test_previous_runtime_keeps_its_original_named_scope_without_inventing_new_execution(self):
+        original = ['ChaiClassicsUITests/testOriginalActualCase']
+        self.assertEqual(scope.resolve('legacy', original, include_sessions=False), original)
+        with self.assertRaises(ValueError): scope.resolve('legacy', original)
 
     def test_v021_scopes_include_real_new_regressions(self):
         expected = {'memory': 'testMemoryFlipMismatchGatesAndReducedMotionPreserveNativeCards',

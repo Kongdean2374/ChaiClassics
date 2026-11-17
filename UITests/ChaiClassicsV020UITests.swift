@@ -1,7 +1,7 @@
 import XCTest
 import UIKit
 
-/// Runs real menu, board, save, result, and replay flows. Near-win data is created
+/// Runs real menu, board, save, result review, and confirmed new-session flows. Near-win data is created
 /// through legal core moves in the DEBUG-Simulator bootstrap's isolated store.
 final class ChaiClassicsV020UITests: XCTestCase {
     override func setUpWithError() throws {
@@ -124,10 +124,47 @@ final class ChaiClassicsV020UITests: XCTestCase {
         choice.tap()
     }
 
+    private func startNew(_ game: String, app: XCUIApplication) {
+        tap((game == "minesweeper" ? "mines" : game) + ".start", app: app)
+        confirmNewGame(game, app: app)
+    }
+
+    private func continueGame(_ game: String, app: XCUIApplication) {
+        tap((game == "minesweeper" ? "mines" : game) + ".continue", app: app)
+        resumePausedGame(game, app: app)
+    }
+
+    private func boardSignature(_ game: String, app: XCUIApplication) -> [String] {
+        if game == "maze" {
+            return [app.staticTexts["maze.position"].label, app.staticTexts["maze.moves"].label]
+        }
+        let prefix: String
+        switch game {
+        case "tictactoe": prefix = "tictactoe.cell."
+        case "connectfour": prefix = "connectfour.column."
+        case "memory": prefix = "memory.card."
+        case "twentyfour": prefix = "twentyfour.card."
+        default: prefix = game + ".tile."
+        }
+        return app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix))
+            .allElementsBoundByIndex.map { element in
+                // Unmatched Memory reveals are deliberately cleared by pause;
+                // matched identities and every real card Button must persist.
+                let label = game == "memory" && element.isEnabled ? "unmatched" : element.label
+                return element.identifier + ":" + label
+            }.sorted()
+    }
+
     private func pauseResume(_ prefix: String, app: XCUIApplication) {
-        tap(prefix + ".pause", app: app)
-        XCTAssertTrue(app.buttons["game.resume"].waitForExistence(timeout: 5))
-        tap("game.resume", app: app)
+        let signature = boardSignature(prefix, app: app)
+        tap((prefix == "mines" ? "minesweeper" : prefix) + ".session.pause", app: app)
+        let probe = prefix == "maze" ? "maze.board" : prefix == "connectfour" ? "connectfour.column.0" :
+            prefix == "tictactoe" ? "tictactoe.cell.0" : prefix == "memory" ? "memory.card.0" : "twentyfour.cards"
+        assertPausedClock(prefix, boardIdentifier: probe, app: app)
+        capture(app, "v022-" + prefix + "-paused-board-under-blur")
+        resumePausedGame(prefix, app: app)
+        XCTAssertEqual(boardSignature(prefix, app: app), signature,
+                       "Resume must preserve the actual board and completed moves.")
     }
 
     private func restore(_ game: String, app: XCUIApplication) {
@@ -135,12 +172,33 @@ final class ChaiClassicsV020UITests: XCTestCase {
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["game.sudoku"].waitForExistence(timeout: 10))
         open(game, app: app)
-        tap(game + ".continue", app: app)
+        continueGame(game, app: app)
     }
 
     private func capture(_ app: XCUIApplication, _ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
+    }
+
+    private func finishReviewAndReturnToMenu(_ game: String, moves: Int, app: XCUIApplication, screenshot: String) {
+        requireSessionResult(game, moves: moves, app: app)
+        let prefix = game == "tictactoe" ? "tictactoe.cell." : game == "connectfour" ? "connectfour.column." :
+            game == "memory" ? "memory.card." : game == "twentyfour" ? "twentyfour.card." : "maze."
+        let hiddenBoard = game == "maze" ? "maze.board" : prefix + (game == "twentyfour" ? "6" : "0")
+        XCTAssertFalse(app.descendants(matching: .any).matching(identifier: hiddenBoard).firstMatch.exists,
+                       "The centered result must own accessibility focus.")
+        capture(app, screenshot)
+        reviewAndReopenSessionResult(game, moves: moves, app: app)
+        tap(game + ".session.done", app: app)
+        let saved = app.buttons.matching(identifier: game + ".continue").firstMatch
+        XCTAssertTrue(saved.waitForExistence(timeout: 10), "Done must return to this game's menu.")
+        let summary = saved.label
+        // A completed save reopens its immutable result, without a Resume path.
+        tap(game + ".continue", app: app)
+        requireSessionResult(game, moves: moves, app: app)
+        XCTAssertFalse(app.buttons[game + ".session.resume"].exists)
+        tap(game + ".session.done", app: app)
+        XCTAssertEqual(saved.label, summary)
     }
 
     private func requireMemoryButtons(_ count: Int, app: XCUIApplication) {
@@ -281,7 +339,7 @@ final class ChaiClassicsV020UITests: XCTestCase {
         let app = launch("v020-tictactoe")
         open("tictactoe", app: app)
         choose("tictactoe.mode", option: "Two players on this device", app: app)
-        tap("tictactoe.start", app: app)
+        startNew("tictactoe", app: app)
         for cell in [0, 3, 1, 4] { tap("tictactoe.cell.\(cell)", app: app) }
         XCTAssertTrue(app.staticTexts["tictactoe.moves"].label.contains("4"))
         pauseResume("tictactoe", app: app)
@@ -290,12 +348,10 @@ final class ChaiClassicsV020UITests: XCTestCase {
         XCTAssertTrue(app.buttons["tictactoe.cell.0"].label.contains("X"))
         XCTAssertTrue(app.buttons["tictactoe.cell.3"].label.contains("O"))
         tap("tictactoe.cell.2", app: app)
-        XCTAssertTrue(app.staticTexts["tictactoe.result"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["tictactoe.cell.5"].isEnabled)
-        show(app.staticTexts["tictactoe.result"], app: app, requireHittable: false)
-        capture(app, "v020-tictactoe-win")
-        tap("tictactoe.replay", app: app)
-        XCTAssertFalse(app.staticTexts["tictactoe.result"].exists)
+        finishReviewAndReturnToMenu("tictactoe", moves: 5, app: app, screenshot: "v020-tictactoe-win")
+        choose("tictactoe.mode", option: "Two players on this device", app: app)
+        startNew("tictactoe", app: app)
+        XCTAssertFalse(app.buttons["tictactoe.session.done"].exists)
         XCTAssertTrue(app.staticTexts["tictactoe.moves"].label.contains("0"))
         XCTAssertTrue(app.buttons["tictactoe.cell.0"].isEnabled)
     }
@@ -304,19 +360,17 @@ final class ChaiClassicsV020UITests: XCTestCase {
         let app = launch("v020-connectfour")
         open("connectfour", app: app)
         choose("connectfour.mode", option: "Two players on this device", app: app)
-        tap("connectfour.start", app: app)
+        startNew("connectfour", app: app)
         for column in [0, 1, 0, 1, 0, 1] { tap("connectfour.column.\(column)", app: app) }
         XCTAssertTrue(app.staticTexts["connectfour.moves"].label.contains("6"))
         pauseResume("connectfour", app: app)
         restore("connectfour", app: app)
         XCTAssertTrue(app.staticTexts["connectfour.moves"].label.contains("6"))
         tap("connectfour.column.0", app: app)
-        XCTAssertTrue(app.staticTexts["connectfour.result"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["connectfour.column.2"].isEnabled)
-        show(app.staticTexts["connectfour.result"], app: app, requireHittable: false)
-        capture(app, "v020-connectfour-win")
-        tap("connectfour.replay", app: app)
-        XCTAssertFalse(app.staticTexts["connectfour.result"].exists)
+        finishReviewAndReturnToMenu("connectfour", moves: 7, app: app, screenshot: "v020-connectfour-win")
+        choose("connectfour.mode", option: "Two players on this device", app: app)
+        startNew("connectfour", app: app)
+        XCTAssertFalse(app.buttons["connectfour.session.done"].exists)
         XCTAssertTrue(app.staticTexts["connectfour.moves"].label.contains("0"))
         XCTAssertTrue(app.buttons["connectfour.column.0"].isEnabled)
     }
@@ -380,7 +434,7 @@ final class ChaiClassicsV020UITests: XCTestCase {
                     ? (computerFirst ? "Computer first (X)" : "You first (X)")
                     : (computerFirst ? "Computer first · star" : "You first · star")
                 choose(game + ".first", option: first, app: app)
-                tap(game + ".start", app: app)
+                startNew(game, app: app)
 
                 // In a computer-first round this cannot pass until a genuine
                 // opening move has been computed, saved, and rendered.
@@ -402,7 +456,7 @@ final class ChaiClassicsV020UITests: XCTestCase {
                 expectMoves(replyMoves, game: game, app: app)
                 expectHumanTurn(game, computerFirst: computerFirst, app: app)
                 expectBoardInputReady(game, app: app)
-                XCTAssertFalse(app.staticTexts[game + ".result"].exists)
+                XCTAssertFalse(app.buttons[game + ".session.done"].exists)
                 let board = (0..<cellCount).map { app.buttons[cellPrefix + String($0)].label }
                 pauseResume(game, app: app)
                 expectMoves(replyMoves, game: game, app: app)
@@ -414,7 +468,7 @@ final class ChaiClassicsV020UITests: XCTestCase {
                 let resume = app.buttons.matching(identifier: game + ".continue").firstMatch
                 XCTAssertTrue(resume.waitForExistence(timeout: 5))
                 XCTAssertTrue(resume.label.contains("\(replyMoves) moves"))
-                tap(game + ".continue", app: app)
+                continueGame(game, app: app)
                 expectMoves(replyMoves, game: game, app: app)
                 expectHumanTurn(game, computerFirst: computerFirst, app: app)
                 assertMovesStay(replyMoves, game: game, app: app)
@@ -444,7 +498,7 @@ final class ChaiClassicsV020UITests: XCTestCase {
             } else {
                 choose(game + ".mode", option: "Two players on this device", app: app)
             }
-            tap(game + ".start", app: app)
+            startNew(game, app: app)
             expectBoardInputReady(game, app: app)
             let prefix = game == "tictactoe" ? "tictactoe.cell." : "connectfour.column."
             let first = app.buttons[prefix + "0"]
@@ -485,7 +539,7 @@ final class ChaiClassicsV020UITests: XCTestCase {
         for reducedMotion in [false, true] {
             let app = launch("v021-memory", fixture: "memory-fresh",
                              extra: reducedMotion ? ["--ui-reduce-motion"] : [])
-            open("memory", app: app); tap("memory.continue", app: app)
+            open("memory", app: app); continueGame("memory", app: app)
             requireMemoryButtons(16, app: app)
             let cards = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'memory.card.'"))
             XCTAssertTrue(cards.allElementsBoundByIndex.allSatisfy { $0.isEnabled && $0.label.contains("face down") })
@@ -529,7 +583,7 @@ final class ChaiClassicsV020UITests: XCTestCase {
         for reducedMotion in [false, true] {
             let app = launch("v021-maze", fixture: "maze-joystick",
                              extra: reducedMotion ? ["--ui-reduce-motion"] : [])
-            open("maze", app: app); tap("maze.continue", app: app)
+            open("maze", app: app); continueGame("maze", app: app)
             let joystick = app.descendants(matching: .any).matching(identifier: "maze.joystick").firstMatch
             XCTAssertTrue(joystick.waitForExistence(timeout: 10))
             show(joystick, app: app)
@@ -549,7 +603,7 @@ final class ChaiClassicsV020UITests: XCTestCase {
             center.press(forDuration: 0.02, thenDragTo: down, withVelocity: .fast, thenHoldForDuration: 0.4)
             expectMoves(2, game: "maze", app: app)
             pauseResume("maze", app: app)
-            restore("maze", app: app); tap("game.resume", app: app)
+            restore("maze", app: app)
             expectMoves(2, game: "maze", app: app)
             XCTAssertTrue(app.staticTexts["maze.position"].label.contains("Row 3, column 1"))
             show(joystick, app: app)
@@ -567,7 +621,8 @@ final class ChaiClassicsV020UITests: XCTestCase {
 
     func testTwentyFourOrderedInputHistoryAndZeroDivision() {
         let app = launch("v021-twentyfour", fixture: "twentyfour-fresh")
-        open("twentyfour", app: app); tap("twentyfour.continue", app: app)
+        open("twentyfour", app: app); continueGame("twentyfour", app: app)
+        let originalCards = (0..<4).map { app.buttons["twentyfour.card.\($0)"].label }
         for operation in ["add", "subtract", "multiply", "divide"] {
             XCTAssertFalse(app.buttons["twentyfour.operator." + operation].isEnabled)
             XCTAssertFalse(app.buttons["twentyfour.operator." + operation].isSelected)
@@ -614,31 +669,32 @@ final class ChaiClassicsV020UITests: XCTestCase {
         }
         tap("twentyfour.card.4", app: app); tap("twentyfour.clear", app: app)
         XCTAssertEqual(app.staticTexts["twentyfour.stage"].label, "1 · Choose your first number")
-        let reset = app.buttons.matching(identifier: "twentyfour.reset").firstMatch
-        XCTAssertTrue(reset.waitForExistence(timeout: 5)); XCTAssertTrue(reset.isHittable)
-        XCTAssertTrue(app.navigationBars.firstMatch.frame.contains(reset.frame))
-        reset.tap(); tapNativeConfirmation("twentyfour.confirmReset", app: app)
+        let undo = app.buttons.matching(identifier: "twentyfour.undo").firstMatch
+        show(undo, app: app)
+        XCTAssertTrue(undo.isEnabled && undo.isHittable)
+        undo.tap()
         let emptyHistory = app.staticTexts.matching(NSPredicate(format: "label == %@", "Each calculation will appear here. Undo removes the last step.")).firstMatch
         show(emptyHistory, app: app, requireHittable: false)
         XCTAssertTrue(emptyHistory.exists)
         XCTAssertFalse(history0.exists); XCTAssertFalse(history1.exists)
         let resetHistory = XCTAttachment(string: app.debugDescription)
-        resetHistory.name = "v021-twentyfour-visible-empty-calculation-history"
+        resetHistory.name = "v022-twentyfour-undo-visible-empty-calculation-history"
         resetHistory.lifetime = .keepAlways; add(resetHistory)
-        capture(app, "v021-twentyfour-reset-empty-history")
+        capture(app, "v022-twentyfour-undo-empty-history")
         for _ in 0..<6 {
             if app.buttons["twentyfour.card.0"].exists { break }
             app.swipeDown()
         }
         show(app.buttons["twentyfour.card.0"], app: app)
-        expectUI("Reset must restore the original four cards and clear calculation history.") {
+        expectUI("Undoing every real calculation must restore the original four cards and clear history.") {
             !history0.exists && app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'twentyfour.card.'")).count == 4
         }
+        XCTAssertEqual((0..<4).map { app.buttons["twentyfour.card.\($0)"].label }, originalCards)
         capture(app, "v021-twentyfour-ordered-input-and-history")
         app.terminate()
 
         let zero = launch("v021-twentyfour", fixture: "twentyfour-zero")
-        open("twentyfour", app: zero); tap("twentyfour.continue", app: zero)
+        open("twentyfour", app: zero); continueGame("twentyfour", app: zero)
         tap("twentyfour.card.3", app: zero); tap("twentyfour.operator.divide", app: zero)
         tap("twentyfour.card.5", app: zero)
         let explanation = zero.staticTexts["twentyfour.zeroDivision"]
@@ -656,26 +712,24 @@ final class ChaiClassicsV020UITests: XCTestCase {
         let app = launch("v020-twentyfour", fixture: "twentyfour")
         open("twentyfour", app: app)
         choose("twentyfour.difficulty", option: "Easy", app: app)
-        tap("twentyfour.continue", app: app)
+        continueGame("twentyfour", app: app)
         let labels = [3, 5].map { app.buttons["twentyfour.card.\($0)"].label }
         pauseResume("twentyfour", app: app)
         restore("twentyfour", app: app)
         XCTAssertEqual(labels, [3, 5].map { app.buttons["twentyfour.card.\($0)"].label })
         tap("twentyfour.card.3", app: app); tap("twentyfour.operator.multiply", app: app)
         tap("twentyfour.card.5", app: app); tap("twentyfour.apply", app: app)
-        XCTAssertTrue(app.staticTexts["twentyfour.complete"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["twentyfour.solved"].label.contains("1"))
-        show(app.staticTexts["twentyfour.complete"], app: app, requireHittable: false)
-        capture(app, "v020-twentyfour-win")
-        tap("twentyfour.next", app: app)
-        XCTAssertFalse(app.staticTexts["twentyfour.complete"].exists)
+        finishReviewAndReturnToMenu("twentyfour", moves: 3, app: app, screenshot: "v020-twentyfour-win")
+        XCTAssertTrue(app.buttons["twentyfour.continue"].label.contains("3 operations · 1 solved"))
+        startNew("twentyfour", app: app)
+        XCTAssertFalse(app.buttons["twentyfour.session.done"].exists)
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'twentyfour.card.'")).count, 4)
-        XCTAssertTrue(app.staticTexts["twentyfour.solved"].label.contains("1"))
+        XCTAssertEqual(app.staticTexts["twentyfour.solved"].label, "0 solved")
     }
 
     func testMemoryRestoresMatchesHidesUnturnedCardsCompletesAndReplays() {
         let app = launch("v020-memory", fixture: "memory")
-        open("memory", app: app); tap("memory.mode.easy", app: app); tap("memory.continue", app: app)
+        open("memory", app: app); tap("memory.mode.easy", app: app); continueGame("memory", app: app)
         XCTAssertTrue(app.staticTexts["memory.pairs"].label.contains("7/8"))
         requireMemoryButtons(16, app: app)
         let cards = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'memory.card.'"))
@@ -688,12 +742,11 @@ final class ChaiClassicsV020UITests: XCTestCase {
         restore("memory", app: app)
         XCTAssertTrue(app.staticTexts["memory.pairs"].label.contains("7/8"))
         for id in remaining { XCTAssertTrue(app.buttons[id].label.contains("face down")); tap(id, app: app) }
-        XCTAssertTrue(app.staticTexts["memory.complete"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["memory.pairs"].label.contains("8/8"))
-        show(app.staticTexts["memory.complete"], app: app, requireHittable: false)
-        capture(app, "v020-memory-win")
-        tap("memory.newDeck", app: app)
-        XCTAssertFalse(app.staticTexts["memory.complete"].exists)
+        finishReviewAndReturnToMenu("memory", moves: 8, app: app, screenshot: "v020-memory-win")
+        XCTAssertTrue(app.buttons["memory.continue"].label.contains("8/8"))
+        tap("memory.mode.easy", app: app)
+        startNew("memory", app: app)
+        XCTAssertFalse(app.buttons["memory.session.done"].exists)
         XCTAssertTrue(app.staticTexts["memory.pairs"].label.contains("0/8"))
         XCTAssertEqual(cards.count, 16)
         XCTAssertTrue(cards.allElementsBoundByIndex.allSatisfy { $0.isEnabled && $0.label.contains("face down") })
@@ -703,23 +756,19 @@ final class ChaiClassicsV020UITests: XCTestCase {
         let app = launch("v020-maze", fixture: "maze")
         open("maze", app: app)
         choose("maze.difficulty", option: "Easy · 9×9", app: app)
-        tap("maze.continue", app: app)
+        continueGame("maze", app: app)
         XCTAssertTrue(app.staticTexts["maze.moves"].label.contains("42"))
         tap("maze.right", app: app)
         XCTAssertTrue(app.staticTexts["maze.moves"].label.contains("43"))
         let position = app.staticTexts["maze.position"].label
         restore("maze", app: app)
-        XCTAssertTrue(app.buttons["game.resume"].waitForExistence(timeout: 5))
-        tap("game.resume", app: app)
         XCTAssertEqual(app.staticTexts["maze.position"].label, position)
         XCTAssertTrue(app.staticTexts["maze.moves"].label.contains("43"))
         tap("maze.down", app: app)
-        XCTAssertTrue(app.staticTexts["maze.complete"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["maze.moves"].label.contains("44"))
-        show(app.staticTexts["maze.complete"], app: app, requireHittable: false)
-        capture(app, "v020-maze-win")
-        tap("maze.next", app: app)
-        XCTAssertFalse(app.staticTexts["maze.complete"].exists)
+        finishReviewAndReturnToMenu("maze", moves: 44, app: app, screenshot: "v020-maze-win")
+        choose("maze.difficulty", option: "Easy · 9×9", app: app)
+        startNew("maze", app: app)
+        XCTAssertFalse(app.buttons["maze.session.done"].exists)
         XCTAssertTrue(app.staticTexts["maze.moves"].label.contains("0"))
         XCTAssertTrue(app.staticTexts["maze.position"].label.contains("Row 1, column 1"))
     }
@@ -730,7 +779,7 @@ final class ChaiClassicsV020UITests: XCTestCase {
             open(game, app: app)
             if game == "memory" { tap("memory.mode.hard", app: app) }
             else { choose(game + ".difficulty", option: game == "maze" ? "Hard · 21×21" : "Hard", app: app) }
-            tap(game + ".start", app: app)
+            startNew(game, app: app)
             if game == "memory" {
                 requireMemoryButtons(36, app: app)
                 XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'memory.card.'")).count, 36)
@@ -759,18 +808,18 @@ final class ChaiClassicsV020UITests: XCTestCase {
         tapNativeConfirmation("storage.confirmRecovery.memory", app: app)
         XCTAssertFalse(app.buttons["storage.recover.memory"].exists)
         XCTAssertTrue(app.buttons["memory.start"].isEnabled)
-        tap("memory.start", app: app)
+        startNew("memory", app: app)
         XCTAssertTrue(app.buttons["memory.card.0"].waitForExistence(timeout: 5))
         back(app); back(app)
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["game.sudoku"].waitForExistence(timeout: 10))
-        open("sudoku", app: app); tap("sudoku.continue", app: app)
+        open("sudoku", app: app); continueGame("sudoku", app: app)
         XCTAssertTrue((app.buttons["sudoku.cell.1"].value as? String ?? "").contains("2, 7"))
         back(app); back(app)
-        open("minesweeper", app: app); tap("mines.continue", app: app)
+        open("minesweeper", app: app); continueGame("minesweeper", app: app)
         XCTAssertTrue(app.buttons["mines.cell.30"].label.contains("Flagged"))
         back(app); back(app)
-        open("sliding", app: app); tap("sliding.continue", app: app)
+        open("sliding", app: app); continueGame("sliding", app: app)
         XCTAssertTrue(app.staticTexts["sliding.moves"].label.contains("35 moves"))
     }
 

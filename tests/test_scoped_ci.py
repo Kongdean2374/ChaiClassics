@@ -27,6 +27,11 @@ def tree():
     mode, data = value[path]
     extra = ''.join('    func ' + name + '() { XCTAssertTrue(true) }\n' for name in NEW)
     value[path] = (mode, data[:-2] + extra.encode() + b'}\n')
+    path = 'UITests/ChaiClassicsVisualSmokeTests.swift'
+    mode, data = value[path]
+    extra = ''.join('    func ' + name + '() { XCTAssertTrue(true) }\n' for name in scopes.SESSION_VISUAL_TESTS)
+    value[path] = (mode, data[:-2] + extra.encode() + b'}\n')
+    value['App/GameSessionComponents.swift'] = ('100644', b'struct GameSessionComponents {}\n')
     for game in ('Memory', 'TwentyFour', 'Maze'):
         value['Core/' + ('MemoryMatch' if game == 'Memory' else game) + '.swift'] = ('100644', ('struct ' + game + 'Board {}\n').encode())
         value['App/' + game + 'View.swift'] = ('100644', ('struct ' + game + 'View {}\n').encode())
@@ -70,10 +75,19 @@ class FingerprintTests(unittest.TestCase):
         for path in ['Core/AppPreferences.swift', 'Core/MemoryMatch.swift', 'Core/Maze.swift', 'Core/Random.swift', 'App/AnimationFrameClock.swift', 'App/DesignSystem.swift', 'App/NewGameComponents.swift', 'App/UITestBootstrap.swift',
                      'App/Resources/en.lproj/Localizable.strings', 'App/Resources/game-maze.imageset/image.png',
                      'scripts/create_project.py', 'Package.swift', 'ChaiClassics.xcodeproj/project.pbxproj',
-                     'scripts/ci.sh', 'scripts/ui_test_scope.py', '.github/workflows/ci.yml', 'App/UnexpectedRuntime.swift']:
+                     'scripts/ci.sh', 'scripts/ui_test_scope.py', '.github/workflows/ci.yml', 'App/UnexpectedRuntime.swift',
+                     *scoped.SHARED_SESSION_FILES]:
             with self.subTest(path=path):
                 updated = self.edited(path)
                 self.assertTrue(all(self.fp[test] != updated[test] for test in self.fp))
+
+    def test_session_runtime_cannot_remove_a_required_new_journey(self):
+        target = copy.deepcopy(self.base)
+        path = 'UITests/ChaiClassicsVisualSmokeTests.swift'
+        mode, data = target[path]
+        method = scopes.SESSION_LIFECYCLE_TESTS['memory']
+        target[path] = (mode, data.replace(('    func ' + method + '() { XCTAssertTrue(true) }\n').encode(), b''))
+        with self.assertRaises(candidate.CandidateError): scoped.fingerprints(target)
 
     def test_only_c_test_body_change_keeps_a_b_while_helper_change_invalidates_all(self):
         updated = copy.deepcopy(self.base)
@@ -106,13 +120,20 @@ class ReviewedFlowProfileTests(unittest.TestCase):
         for path in scoped.ALL_GAME_FILES:
             file = root / path
             if file.exists(): self.base[path] = ('100644', file.read_bytes())
-        self.bodies = {}
+        self.bodies = {}; self.helpers = {}
         for path, (_mode, data) in self.base.items():
             if path.startswith('UITests/') and path.endswith('.swift'):
                 source = data.decode()
-                for name, (start, end) in scoped.historical.functions(source).items():
+                functions = scoped.historical.functions(source)
+                scaffold = source
+                for name, (start, end) in sorted(functions.items(), key=lambda item: item[1][0], reverse=True):
                     if name.startswith('test'): self.bodies[Path(path).stem + '/' + name] = source[start:end]
+                    if name.startswith('test'): scaffold = scaffold[:start] + '{TEST_BODY}' + scaffold[end:]
+                self.helpers[Path(path).stem] = scoped.hashlib.sha256(scaffold.encode()).hexdigest()
         self.before = scoped.fingerprints(self.base)
+
+    def dependencies(self, name, body):
+        return scoped.dependencies(name, body, helper_fingerprint=self.helpers.get(name.split('/')[0]))
 
     def changed(self, path):
         result = copy.deepcopy(self.base)
@@ -127,17 +148,43 @@ class ReviewedFlowProfileTests(unittest.TestCase):
                 self.assertIn(name, self.bodies)
                 body = self.bodies[name]
                 if scoped.hashlib.sha256(body.encode()).hexdigest() == expected:
-                    self.assertEqual(scoped.dependencies(name, body), set().union(*(scoped.GAME_FILES[game] for game in games)))
+                    self.assertEqual(self.dependencies(name, body), set().union(*(scoped.GAME_FILES[game] for game in games)))
+                elif name in scoped.SESSION_BODY_PROFILES:
+                    expected, games = scoped.SESSION_BODY_PROFILES[name]
+                    self.assertEqual(scoped.hashlib.sha256(body.encode()).hexdigest(), expected)
+                    self.assertEqual(self.helpers[name.split('/')[0]], scoped.VISUAL_SCAFFOLD_DIGEST)
+                    self.assertEqual(self.dependencies(name, body), set().union(*(scoped.GAME_FILES[game] for game in games)))
                 else:
-                    self.assertEqual(scoped.dependencies(name, body), scoped.ALL_GAME_FILES,
+                    self.assertEqual(self.dependencies(name, body), scoped.ALL_GAME_FILES,
                                      'An edited body must not inherit its previous reviewed profile')
+
+    def test_current_session_profiles_require_both_actual_body_and_complete_shared_scaffold(self):
+        self.assertEqual(len(scoped.SESSION_BODY_PROFILES), len(scopes.SESSION_VISUAL_TESTS) + 8)
+        for name, (expected, games) in scoped.SESSION_BODY_PROFILES.items():
+            body = self.bodies[name]
+            self.assertEqual(scoped.hashlib.sha256(body.encode()).hexdigest(), expected)
+            self.assertEqual(self.helpers[name.split('/')[0]], scoped.VISUAL_SCAFFOLD_DIGEST)
+            self.assertEqual(self.dependencies(name, body), set().union(*(scoped.GAME_FILES[game] for game in games)))
+            self.assertEqual(scoped.dependencies(name, body + '\n// changed', helper_fingerprint=scoped.VISUAL_SCAFFOLD_DIGEST), scoped.ALL_GAME_FILES)
+            self.assertEqual(scoped.dependencies(name, body, helper_fingerprint='unreviewed helper'), scoped.ALL_GAME_FILES)
+
+    def test_shared_session_requires_all_lifecycles_but_real_game_view_dependencies_remain_scoped(self):
+        shared = self.changed('App/GameSessionComponents.swift')
+        maze = self.changed('App/MazeView.swift')
+        sliding = self.changed('App/SlidingView.swift')
+        for game, method in scopes.SESSION_LIFECYCLE_TESTS.items():
+            key = 'ChaiClassicsVisualSmokeTests/' + method
+            self.assertNotEqual(self.before[key], shared[key])
+            self.assertEqual(self.before[key] == maze[key], game != 'maze')
+            # Every journey intentionally visits another saved menu after deletion.
+            self.assertNotEqual(self.before[key], sliding[key])
 
     def test_memory_play_change_preserves_unopened_flows_and_invalidates_six_real_dependents(self):
         after = self.changed('App/MemoryView.swift')
         changed = {test for test in self.before if self.before[test] != after[test]}
         unknown_memory_dependents = {name for name, (expected, _games) in scoped.BODY_PROFILES.items()
                                      if scoped.hashlib.sha256(self.bodies[name].encode()).hexdigest() != expected
-                                     and 'App/MemoryView.swift' in scoped.dependencies(name, self.bodies[name])}
+                                     and 'App/MemoryView.swift' in self.dependencies(name, self.bodies[name])}
         reviewed_memory_dependents = {
             'ChaiClassicsV020UITests/testAllEightPlayableCardsOpenRealMenus',
             'ChaiClassicsV020UITests/testMemoryFlipMismatchGatesAndReducedMotionPreserveNativeCards',
@@ -145,9 +192,10 @@ class ReviewedFlowProfileTests(unittest.TestCase):
             'ChaiClassicsV020UITests/testNewPuzzleModesStartRealBoards',
             'ChaiClassicsV020UITests/testCorruptNewSaveRecoveryPreservesAllThreeLegacySaves',
             'ChaiClassicsV020UITests/testFutureSchemaRemainsProtectedAcrossRelaunch',
+            'ChaiClassicsVisualSmokeTests/' + scopes.SESSION_LIFECYCLE_TESTS['memory'],
         }
         self.assertEqual(changed, unknown_memory_dependents | reviewed_memory_dependents)
-        self.assertEqual(len(self.before) - len(changed), 35 - len(unknown_memory_dependents - reviewed_memory_dependents))
+        self.assertEqual(len(self.before) - len(changed), len(self.before) - len(unknown_memory_dependents | reviewed_memory_dependents))
         coverage = scoped.inherited_coverage(after, [record(self.base)])
         self.assertEqual(set(coverage), set(self.before) - changed)
         for retained in (B, 'ChaiClassicsV020UITests/testTicTacToeLocalRoundRestoresWinsAndReplays'):
@@ -313,6 +361,11 @@ class ProvenanceTests(unittest.TestCase):
                        lambda e: e.update(complete=False), lambda e: e['executed_current_tests'].pop(C)]:
             forged = copy.deepcopy(self.evidence); change(forged)
             with self.assertRaises(candidate.CandidateError): self.verify(forged)
+
+    def test_v022_trusted_branch_retains_raw_scoped_provenance(self):
+        for run in (10, 20):
+            self.responses[f'repos/{self.repo}/actions/runs/{run}']['head_branch'] = 'develop/0.2.2'
+        self.assertEqual(self.verify(), self.evidence)
 
     def test_excluding_pure_tool_bytes_cannot_forge_actual_raw_statuses(self):
         for path in scoped.PURE_EVIDENCE_SCRIPTS:

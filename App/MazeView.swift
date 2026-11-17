@@ -9,7 +9,14 @@ struct MazeMenuView: View {
     @State private var confirm = false
 
     private func start() {
-        if model.saveMaze(MazeBoard(difficulty: difficulty)) { play = true }
+        if model.saveMaze(MazeBoard(difficulty: difficulty)) {
+            model.startNewSession(.maze)
+            play = true
+        }
+    }
+
+    private func loadDefaultDifficulty() {
+        difficulty = MazeBoard.Difficulty(rawValue: model.gameSettings(for: .maze).mazeDifficulty) ?? .normal
     }
 
     var body: some View {
@@ -22,11 +29,14 @@ struct MazeMenuView: View {
             }
             if let board = model.maze {
                 Section(model.t("menu.lastGame")) {
-                    Button { play = true } label: {
+                    ContinueGameRow(game: .maze, action: {
+                        model.beginContinuing(.maze)
+                        play = true
+                    }) {
                         ContinueCard(title: model.t(board.isComplete ? "menu.viewLast" : "menu.continue"),
                                      detail: model.t("maze.save.detail", board.size, board.size, board.moves, board.elapsedSeconds))
                             .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-                    }.buttonStyle(QuietPressStyle()).accessibilityIdentifier("maze.continue")
+                    }
                 }
             }
             Section(model.t("menu.newGame")) {
@@ -37,7 +47,7 @@ struct MazeMenuView: View {
                 }.accessibilityIdentifier("maze.difficulty")
                 Text(model.t("maze.difficulty.detail." + difficulty.rawValue))
                     .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Button { if model.maze != nil { confirm = true } else { start() } } label: {
+                Button { confirm = true } label: {
                     Label(model.t("menu.start"), systemImage: "play.fill")
                         .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 15)
                         .foregroundStyle(.primary)
@@ -49,22 +59,22 @@ struct MazeMenuView: View {
             }
         }.scrollContentBackground(.hidden).background(GameCanvas()).tint(GamePalette.tint(.maze))
             .localizedNavigation().navigationTitle(model.gameTitle(.maze)).navigationBarTitleDisplayMode(.inline)
+            .gameMenuSettings(.maze)
             .navigationDestination(isPresented: $play) { MazePlayView() }
-            .confirmationDialog(model.t("maze.replace.confirm"), isPresented: $confirm, titleVisibility: .visible) {
-                Button(model.t("menu.startNew"), role: .destructive) { start() }.accessibilityIdentifier("maze.confirmNew")
-                Button(model.t("common.cancel"), role: .cancel) {}
-            }
+            .newGameConfirmation(.maze, isPresented: $confirm) { start() }
+            .onAppear { loadDefaultDifficulty() }
+            .onChange(of: model.gameSettings(for: .maze).mazeDifficulty) { _, _ in loadDefaultDifficulty() }
     }
 }
 
 struct MazePlayView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.scenePhase) private var scenePhase
-    @State private var restart = false
     @State private var blockedDirection: MazeBoard.Direction?
     @State private var motionReset = 0
     private var active: Bool {
-        scenePhase == .active && model.maze?.isPaused == false && model.maze?.isComplete == false && !restart
+        scenePhase == .active && model.sessionIsPlaying(.maze) &&
+            model.maze?.isPaused == false && model.maze?.isComplete == false
     }
 
     private func positionText(_ board: MazeBoard) -> String {
@@ -88,7 +98,7 @@ struct MazePlayView: View {
     private func saveArrival(_ board: MazeBoard) -> Bool {
         guard model.saveMaze(board) else { return false }
         blockedDirection = nil
-        model.feedback()
+        model.feedback(for: .maze)
         // VoiceOver receives cell centers, never a guessed route or every display frame.
         if UIAccessibility.isVoiceOverRunning || board.isComplete {
             UIAccessibility.post(notification: .announcement,
@@ -97,65 +107,32 @@ struct MazePlayView: View {
         return true
     }
 
-    private func resume() {
-        motionReset &+= 1
-        model.editMaze { $0.resume() }
-        blockedDirection = nil
-    }
-
     var body: some View {
         ScrollView {
             if let board = model.maze {
                 VStack(spacing: 16) {
                     header(board)
-                    if board.isComplete {
-                        GameResultBanner(game: .maze, title: model.t("status.completed"),
-                                         detail: model.t("maze.result.won"), won: true, identifier: "maze.complete")
-                        Button {
-                            motionReset &+= 1
-                            if model.saveMaze(MazeBoard(difficulty: board.difficulty)) { blockedDirection = nil }
-                        } label: {
-                            Label(model.t("maze.next"), systemImage: "arrow.right.circle.fill")
-                                .font(.headline).frame(maxWidth: .infinity, minHeight: 48).contentShape(Rectangle())
-                        }.buttonStyle(.borderedProminent).accessibilityIdentifier("maze.next")
-                    }
-                    if board.isPaused || scenePhase != .active {
-                        PauseCard(game: .maze, action: resume).frame(minHeight: 260)
-                    } else {
-                        MazeMovementSurface(board: board, enabled: active, reset: motionReset,
-                                            positionText: positionText(board), move: move,
-                                            saveArrival: saveArrival, reportBlocked: reportBlocked)
-                        legend
-                        Text(positionText(board)).font(.subheadline).monospacedDigit()
-                            .multilineTextAlignment(.center).accessibilityIdentifier("maze.position")
-                        Text(blockedDirection.map { model.t("maze.blocked", model.t("maze.direction." + $0.rawValue)) } ?? model.t("maze.joystick.instructions"))
-                            .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("maze.feedback")
-                    }
+                    MazeMovementSurface(board: board, enabled: active, reset: motionReset,
+                                        positionText: positionText(board), move: move,
+                                        saveArrival: saveArrival, reportBlocked: reportBlocked)
+                    legend
+                    Text(positionText(board)).font(.subheadline).monospacedDigit()
+                        .multilineTextAlignment(.center).accessibilityIdentifier("maze.position")
+                    Text(blockedDirection.map { model.t("maze.blocked", model.t("maze.direction." + $0.rawValue)) } ?? model.t("maze.joystick.instructions"))
+                        .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("maze.feedback")
                 }.padding(16).frame(maxWidth: 632).frame(maxWidth: .infinity)
             }
         }.background(GameCanvas()).tint(GamePalette.tint(.maze))
-            .localizedNavigation().navigationTitle(model.gameTitle(.maze)).navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                Button(model.t("common.restart")) { motionReset &+= 1; restart = true }
-                    .accessibilityIdentifier("maze.restart")
+            .navigationTitle(model.gameTitle(.maze)).navigationBarTitleDisplayMode(.inline)
+            .gameSessionScreen(.maze)
+            .onChange(of: model.sessionIsPlaying(.maze)) { _, playing in
+                if !playing { motionReset &+= 1 }
             }
-            .confirmationDialog(model.t("maze.restart.confirm"), isPresented: $restart, titleVisibility: .visible) {
-                Button(model.t("common.restart"), role: .destructive) {
-                    motionReset &+= 1
-                    model.editMaze { $0.restart() }; blockedDirection = nil
-                }.accessibilityIdentifier("maze.confirmRestart")
-                Button(model.t("common.cancel"), role: .cancel) {}
-            }
-            .gameCompletionCelebration(completed: model.maze?.isComplete == true)
-            .modifier(GameplayActivity(game: .maze, active: active))
-            .modifier(SessionTimer(active: active, tick: {
-                model.editMaze { if $0.elapsedSeconds < Int.max { $0.elapsedSeconds += 1 } }
-            }))
             .onChange(of: scenePhase) { _, phase in
-                if phase != .active { motionReset &+= 1; model.editMaze { $0.pause() } }
+                if phase != .active { motionReset &+= 1 }
             }
-            .onDisappear { motionReset &+= 1; model.editMaze { $0.pause() } }
+            .onDisappear { motionReset &+= 1 }
     }
 
     private func header(_ board: MazeBoard) -> some View {
@@ -165,27 +142,10 @@ struct MazePlayView: View {
                 Text(model.t("maze.difficulty.option", model.t("difficulty." + board.difficulty.rawValue), board.size, board.size))
                     .font(.system(.headline, design: .rounded)).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
-                Button {
-                    if board.isPaused { resume() } else { motionReset &+= 1; model.editMaze { $0.pause() } }
-                } label: {
-                    Image(systemName: board.isPaused ? "play.fill" : "pause.fill")
-                        .font(.headline).frame(width: 44, height: 44)
-                        .background(GamePalette.tint(.maze).opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
-                        .contentShape(Rectangle())
-                }.buttonStyle(QuietPressStyle()).disabled(board.isComplete)
-                    .accessibilityLabel(model.t(board.isPaused ? "common.resume" : "common.pause"))
-                    .accessibilityIdentifier("maze.pause")
             }
-            ViewThatFits(in: .horizontal) {
-                HStack { metrics(board) }
-                VStack(alignment: .leading, spacing: 8) { metrics(board) }
-            }
+            GameMetric(symbol: "figure.walk", value: model.t("maze.moves", board.moves),
+                       tint: GamePalette.tint(.maze), identifier: "maze.moves")
         }
-    }
-
-    @ViewBuilder private func metrics(_ board: MazeBoard) -> some View {
-        GameMetric(symbol: "figure.walk", value: model.t("maze.moves", board.moves), tint: GamePalette.tint(.maze), identifier: "maze.moves")
-        GameMetric(symbol: "timer", value: model.t("common.seconds", board.elapsedSeconds), tint: GamePalette.tint(.maze), identifier: "maze.timer")
     }
 
     private var legend: some View {
@@ -226,6 +186,11 @@ private struct MazeMovementSurface: View {
     let move: (MazeBoard.Direction) -> Void
     let saveArrival: (MazeBoard) -> Bool
     let reportBlocked: (MazeBoard.Direction) -> Void
+
+    private var speed: Double {
+        let configured = model.gameSettings(for: .maze).mazeSpeed
+        return configured.isFinite ? min(1.2, max(0.8, configured)) : 1
+    }
 
     init(board: MazeBoard, enabled: Bool, reset: Int, positionText: String,
          move: @escaping (MazeBoard.Direction) -> Void, saveArrival: @escaping (MazeBoard) -> Bool,
@@ -268,8 +233,10 @@ private struct MazeMovementSurface: View {
         }
         .onReceive(clock.$frame) { frame in
             guard touching, !input.isZero, enabled, scenePhase == .active,
+                  model.sessionIsPlaying(.maze),
                   var next = model.maze else { return }
-            switch motion.advance(delta: frame.delta, input: input, board: &next) {
+            // MazeMotion still clamps suspended-frame time and commits only one legal center.
+            switch motion.advance(delta: frame.delta * speed, input: input, board: &next) {
             case .arrived:
                 if !saveArrival(next) { stopAndSettle() }
                 else if next.isComplete { stopInput() }
@@ -280,6 +247,8 @@ private struct MazeMovementSurface: View {
         .onAppear { replaceLayout() }
         .onDisappear { stopAndSettle() }
         .onChange(of: enabled) { _, value in if !value { stopAndSettle() } }
+        .onChange(of: model.sessionIsPlaying(.maze)) { _, value in if !value { stopAndSettle() } }
+        .onChange(of: speed) { _, _ in stopAndSettle() }
         .onChange(of: reset) { _, _ in stopAndSettle() }
         .onChange(of: scenePhase) { _, value in if value != .active { stopAndSettle() } }
         .onChange(of: board.position) { _, value in
@@ -304,7 +273,7 @@ private struct MazeMovementSurface: View {
                 .frame(width: 44, height: 44).offset(thumb)
         }.frame(width: 120, height: 120).contentShape(Circle())
             .highPriorityGesture(DragGesture(minimumDistance: 0).onChanged { value in
-                guard enabled, scenePhase == .active else { stopInput(); return }
+                guard enabled, scenePhase == .active, model.sessionIsPlaying(.maze) else { stopInput(); return }
                 let x = value.location.x - 60, y = value.location.y - 60
                 let distance = hypot(x, y)
                 let scale = distance > 38 ? 38 / distance : 1
