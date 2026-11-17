@@ -107,9 +107,13 @@ def validate_source_metadata(run, jobs, repo, run_id):
                 (name in ui_steps and step.get('conclusion') == 'failure') for name, step in steps.items()), 'Source failed outside UI execution.')
 
 
+def load_source_results(repo, run_id, read):
+    return historical.load_results(repo, run_id, read, include_selection=True)
+
+
 def gather_sources(repo, ids, sha, current_run, *, read=candidate.github, results_reader=None,
                    root=candidate.ROOT, tree_reader=None, ancestor=None):
-    results_reader = results_reader or historical.load_results
+    results_reader = results_reader or load_source_results
     tree_reader = tree_reader or (lambda commit: historical.git_tree(commit, root))
     ancestor = ancestor or (lambda commit: subprocess.run(['git', 'merge-base', '--is-ancestor', commit, sha], cwd=root,
                                                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0)
@@ -125,12 +129,21 @@ def gather_sources(repo, ids, sha, current_run, *, read=candidate.github, result
         validate_source_metadata(run, read(prefix + '/jobs?per_page=100&filter=latest'), repo, run_id)
         commit = run.get('head_sha', '')
         require(re.fullmatch(r'[0-9a-f]{40}', commit) is not None and ancestor(commit), 'Source commit is not an ancestor of the target.')
-        summary, actual = results_reader(repo, run_id, read)
+        raw = results_reader(repo, run_id, read)
+        summary, actual = raw[:2]
+        selection = raw[2] if len(raw) > 2 else None
         historical.summary_matches(summary, actual)
         source_fingerprints = fingerprints(tree_reader(commit))
         require(set(actual).issubset(source_fingerprints), 'Source log contains an undeclared case.')
         require(all(status in ('passed', 'failed', 'skipped') for status in actual.values()), 'Invalid actual source status.')
         records[run_id] = {'run_id': run_id, 'sha': commit, 'summary': summary, 'actual': actual, 'fingerprints': source_fingerprints}
+        if selection is not None:
+            require(isinstance(selection, dict) and selection.get('source_commit') == commit,
+                    'Original selected-scope report differs from the source commit.')
+            prior = selection.get('source_runs', [])
+            require(isinstance(prior, list) and len(prior) < MAX_RUNS and
+                    all(type(value) is int and 0 < value < run_id for value in prior), 'Invalid pre-execution source index.')
+            pending.extend(value for value in prior if value not in records)
         # A prior partial ledger is an index only. Every referenced run is independently
         # reloaded from GitHub raw results and source trees; its claimed pass is never trusted.
         artifacts = read(prefix + '/artifacts?per_page=100')
@@ -188,7 +201,7 @@ def make_evidence(sha, current_run, scope, summary, actual, tree, records):
 
 def validate_evidence(evidence, repo, sha, current_run, *, read=candidate.github, root=candidate.ROOT,
                       results_reader=None, tree_reader=None, ancestor=None):
-    results_reader = results_reader or historical.load_results
+    results_reader = results_reader or load_source_results
     require(isinstance(evidence, dict) and evidence.get('schema') == 3 and evidence.get('verification') == 'dependency-scoped', 'Unsupported scoped evidence.')
     prefix = f'repos/{repo}/actions/runs/{current_run}'
     run, jobs = read(prefix), read(prefix + '/jobs?per_page=100&filter=latest')
@@ -200,7 +213,7 @@ def validate_evidence(evidence, repo, sha, current_run, *, read=candidate.github
     require(isinstance(ids, list) and current_run in ids and len(ids) <= MAX_RUNS, 'Missing current run or excessive source ledger.')
     records = gather_sources(repo, [value for value in ids if value != current_run], sha, current_run, read=read,
                              root=root, results_reader=results_reader, tree_reader=tree_reader, ancestor=ancestor)
-    summary, actual = results_reader(repo, current_run, read)
+    summary, actual = results_reader(repo, current_run, read)[:2]
     tree = (tree_reader or (lambda commit: historical.git_tree(commit, root)))(sha)
     rebuilt = make_evidence(sha, current_run, evidence.get('scope'), summary, actual, tree, records)
     require(evidence == rebuilt, 'Scoped ledger differs from actual raw execution, dependencies or source provenance.')

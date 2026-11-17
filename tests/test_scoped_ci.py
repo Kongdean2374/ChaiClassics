@@ -1,6 +1,8 @@
 """Real A/B passes survive a C-only fix; missing/failed/changed execution never turns green."""
 import copy
 import json
+import io
+import zipfile
 from pathlib import Path
 import sys
 import unittest
@@ -231,6 +233,43 @@ class ProvenanceTests(unittest.TestCase):
         self.assertEqual(rebuilt['coverage'][C]['source_run'], 20)
         forged['source_runs'] = [20]
         with mock.patch.object(candidate, 'artifact_evidence', return_value=forged), self.assertRaises(candidate.CandidateError): self.verify()
+
+    def test_failed_scope_preexecution_index_keeps_prior_ab_without_success_artifact(self):
+        prefix = f'repos/{self.repo}/actions/runs/'
+        for suffix in ('', '/jobs?per_page=100&filter=latest', '/artifacts?per_page=100'):
+            self.responses[prefix + '5' + suffix] = copy.deepcopy(self.responses[prefix + '10' + suffix])
+        self.responses[prefix + '5']['id'] = 5
+        self.responses[prefix + '5']['conclusion'] = 'success'
+        for job in self.responses[prefix + '5/jobs?per_page=100&filter=latest']['jobs']:
+            job['conclusion'] = 'success'
+            for step in job['steps']: step['conclusion'] = 'success'
+        prior_ab = record(self.base, run=5)
+        failed_c = record(self.base, {C: 'failed'}, run=10)
+        expected = scoped.make_evidence(self.sha, 20, 'affected', summary(self.current_actual), self.current_actual, self.target, [prior_ab, failed_c])
+        selection = {'scope': 'maze', 'source_commit': 'a' * 40, 'source_runs': [5]}
+        def actual_results(_repo, run, _read):
+            if run == 5: return prior_ab['summary'], prior_ab['actual']
+            if run == 10: return failed_c['summary'], failed_c['actual'], selection
+            return summary(self.current_actual), self.current_actual
+        with mock.patch.object(self, 'results', side_effect=actual_results):
+            rebuilt = self.verify(expected)
+            self.assertEqual(rebuilt['source_runs'], [5, 10, 20])
+            self.assertEqual(rebuilt['coverage'][A]['source_run'], 5)
+            self.assertEqual(rebuilt['coverage'][B]['source_run'], 5)
+            selection['source_commit'] = 'c' * 40
+            with self.assertRaises(candidate.CandidateError): self.verify(expected)
+
+    def test_optional_raw_source_index_is_read_without_changing_legacy_result_shape(self):
+        selection = {'scope': 'maze', 'source_commit': 'a' * 40, 'source_runs': [5]}
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, 'w') as zipped:
+            zipped.writestr('build/UITests-summary.json', json.dumps(summary({C: 'failed'})))
+            zipped.writestr('build/UITests.log', "Test Case '-[ChaiClassicsUITests." + C.replace('/', ' ') + "]' failed (1.0 seconds).")
+            zipped.writestr('ui-selection.json', json.dumps(selection))
+        archive.seek(0)
+        self.assertEqual(len(scoped.historical.read_zip_results(archive)), 2)
+        archive.seek(0)
+        self.assertEqual(scoped.historical.read_zip_results(archive, include_selection=True)[2], selection)
 
     def test_run_id_inputs_are_bounded_positive_and_nonduplicated(self):
         self.assertEqual(scoped.parse_runs('10, 11'), [10, 11])

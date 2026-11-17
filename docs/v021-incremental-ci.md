@@ -6,8 +6,8 @@ All modes still execute current puzzle/save verification, all Core tests, and a 
 For a first pass, dispatch full UI or a game scope. For the next repair, set
 `ui_scope=affected`, `full_ui=true`, and `baseline_run` to the previous CI run ID.
 Multiple earlier IDs may be comma-separated. A previous partial ledger carries its
-underlying run IDs forward, so an A/B success followed by a C failure can retain the
-real A/B passes while rerunning C and any genuinely shared dependents.
+underlying run IDs forward. The pre-execution index is also preserved with raw
+results when C fails, so using that failed run ID still finds the real A/B passes while rerunning C and any genuinely shared dependents.
 
 Each case is bound to its exact test body, shared UI helpers, runtime/configuration,
 resources, preferences, animation clock and project tooling. Known game files only

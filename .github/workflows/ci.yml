@@ -37,6 +37,7 @@ jobs:
     env:
       COMPATIBILITY_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
       CHAI_UI_SCOPE: ${{ inputs.ui_scope || 'full' }}
+      CHAI_CI_SOURCE_RUNS: ${{ inputs.baseline_run || '' }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -52,9 +53,11 @@ jobs:
       - name: Record actual validation scope
         run: |
           python3 - <<'PY'
-          import json, os
+          import json, os, sys
           from pathlib import Path
-          Path('ui-selection.json').write_text(json.dumps({'scope': os.environ['CHAI_UI_SCOPE'], 'source_commit': os.environ['GITHUB_SHA']}) + '\n')
+          sys.path.insert(0, 'scripts')
+          from verify_scoped_ci import parse_runs
+          Path('ui-selection.json').write_text(json.dumps({'scope': os.environ['CHAI_UI_SCOPE'], 'source_commit': os.environ['GITHUB_SHA'], 'source_runs': parse_runs(os.environ['CHAI_CI_SOURCE_RUNS'])}) + '\n')
           PY
       - name: Verify puzzles, save compatibility and generated project
         run: bash scripts/ci.sh verify

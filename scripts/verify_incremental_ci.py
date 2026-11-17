@@ -254,7 +254,7 @@ def validate_target_metadata(run, jobs, repo, sha, current_run):
     require(all(step.get('conclusion') in ('success', 'skipped') for step in steps.values()), 'Targeted CI contains a failed or cancelled step.')
 
 
-def load_results(repo, run_id, read=candidate.github):
+def load_results(repo, run_id, read=candidate.github, *, include_selection=False):
     prefix = f'repos/{repo}/actions/runs/{run_id}'
     response = read(prefix + '/artifacts?per_page=100')
     require(response.get('total_count') == len(response.get('artifacts', [])), 'Incomplete raw result artifact list.')
@@ -287,17 +287,21 @@ def load_results(repo, run_id, read=candidate.github):
             with cached.open('xb') as output:
                 while chunk := archive.read(1024**2): output.write(chunk)
         archive.seek(0)
-        return read_zip_results(archive)
+        return read_zip_results(archive, include_selection=include_selection)
 
 
-def read_zip_results(archive):
+def read_zip_results(archive, *, include_selection=False):
     try:
         with zipfile.ZipFile(archive) as zipped:
             names = zipped.namelist()
             def member(name, limit):
                 require(names.count(name) == 1 and zipped.getinfo(name).file_size <= limit, 'Missing, duplicate or oversized actual result evidence.')
                 return zipped.read(name).decode('utf-8-sig')
-            return json.loads(member('build/UITests-summary.json', 2 * 1024**2)), candidate.parse_test_log(member('build/UITests.log', 16 * 1024**2))
+            result = (json.loads(member('build/UITests-summary.json', 2 * 1024**2)), candidate.parse_test_log(member('build/UITests.log', 16 * 1024**2)))
+            if include_selection:
+                selection = json.loads(member('ui-selection.json', 128 * 1024)) if 'ui-selection.json' in names else None
+                return (*result, selection)
+            return result
     except (OSError, ValueError, KeyError, zipfile.BadZipFile):
         raise candidate.CandidateError('Original test summary/log archive is invalid.') from None
 
