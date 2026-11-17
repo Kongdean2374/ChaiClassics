@@ -100,15 +100,24 @@ public struct TicTacToeBoard: Codable, Equatable, Sendable {
             if cells[4] == nil { return 4 }
             return available.first
         }
+        // Reaching the same board through a different move order has exactly
+        // the same minimax value. Keep a per-search transposition table rather
+        // than repeatedly visiting all permutations of the remaining moves.
+        // It is local: no save fields, shared mutable cache or changed tie-break.
+        var memo: [Int:Int] = [:]
         var best = Int.min, chosen: Int?
         for index in available {
             var next = cells; next[index] = currentPlayer
-            let score = Self.minimax(next, player: currentPlayer.opponent, actor: currentPlayer, depth: 1)
+            let score = Self.minimax(next, player: currentPlayer.opponent, actor: currentPlayer, depth: 1, memo: &memo)
             if score > best { best = score; chosen = index }
         }
         return chosen
     }
-    private static func minimax(_ grid: [DuelPlayer?], player: DuelPlayer, actor: DuelPlayer, depth: Int) -> Int {
+    private static func minimax(_ grid: [DuelPlayer?], player: DuelPlayer, actor: DuelPlayer, depth: Int, memo: inout [Int:Int]) -> Int {
+        // Actor and root depth are fixed for this table. For a given board,
+        // the number of occupied squares uniquely determines search depth.
+        let key = grid.reduce(0) { $0*3+($1?.rawValue ?? 0) }*3+player.rawValue
+        if let cached = memo[key] { return cached }
         let winning = line(in: grid)
         if let first = winning.first { return grid[first] == actor ? 10 - depth : depth - 10 }
         let empty = grid.indices.filter { grid[$0] == nil }
@@ -117,9 +126,10 @@ public struct TicTacToeBoard: Codable, Equatable, Sendable {
         var best = maximizing ? Int.min : Int.max
         for index in empty {
             var next = grid; next[index] = player
-            let score = minimax(next, player: player.opponent, actor: actor, depth: depth + 1)
+            let score = minimax(next, player: player.opponent, actor: actor, depth: depth + 1, memo: &memo)
             best = maximizing ? max(best, score) : min(best, score)
         }
+        memo[key] = best
         return best
     }
     private static let lines = [[0,1,2], [3,4,5], [6,7,8], [0,3,6], [1,4,7], [2,5,8], [0,4,8], [2,4,6]]

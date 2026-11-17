@@ -153,6 +153,37 @@ final class TicTacToeTests: XCTestCase {
         let start = Date(); XCTAssertNotNil(board.computerMove())
         XCTAssertLessThan(Date().timeIntervalSince(start), 5, "A full 3×3 search must remain bounded, including debug builds")
     }
+    func testMemoizedHardChoicesMatchIndependentBitboardOracleAtEveryReachablePosition() throws {
+        let wins = [0b000000111,0b000111000,0b111000000,0b001001001,0b010010010,0b100100100,0b100010001,0b001010100]
+        var scores: [Int:Int] = [:]
+        func oracle(_ x: Int,_ o: Int,_ player: Int,_ actor: Int) -> Int {
+            let key = (x | (o<<9))*4+(player-1)*2+actor-1
+            if let score = scores[key] { return score }
+            let occupied = x|o, weight = 10-occupied.nonzeroBitCount
+            if wins.contains(where:{x & $0 == $0}) { return actor==1 ? weight : -weight }
+            if wins.contains(where:{o & $0 == $0}) { return actor==2 ? weight : -weight }
+            if occupied==511 { return 0 }
+            let values = (0..<9).filter { occupied & (1<<$0)==0 }.map { index in
+                oracle(player==1 ? x | (1<<index) : x,player==2 ? o | (1<<index) : o,3-player,actor)
+            }
+            let score = player==actor ? values.max()! : values.min()!; scores[key] = score; return score
+        }
+        var seen = Set<Int>(), checked = 0
+        func visit(_ board: TicTacToeBoard) throws {
+            var x = 0, o = 0
+            for i in 0..<9 { if board.cells[i] == .first { x |= 1<<i }; if board.cells[i] == .second { o |= 1<<i } }
+            let key = x | (o<<9)
+            guard seen.insert(key).inserted, !board.isFinished else { return }
+            let player = board.currentPlayer.rawValue
+            let choices = (0..<9).filter{(x|o) & (1<<$0)==0}
+            func value(_ i: Int) -> Int { oracle(player==1 ? x | (1<<i) : x,player==2 ? o | (1<<i) : o,3-player,player) }
+            let selected = try XCTUnwrap(board.recommendedMove(difficulty:.hard,seed:UInt64(key)))
+            XCTAssertTrue(choices.contains(selected)); XCTAssertEqual(value(selected),choices.map(value).max())
+            checked += 1
+            for i in choices { var next = board; XCTAssertTrue(next.play(at:i,by:next.currentPlayer)); try visit(next) }
+        }
+        try visit(TicTacToeBoard()); XCTAssertEqual(seen.count,5478); XCTAssertEqual(checked,4520)
+    }
 }
 
 private extension Array where Element == Int {
