@@ -2,6 +2,7 @@
 import copy
 import json
 import io
+import plistlib
 import zipfile
 from pathlib import Path
 import sys
@@ -179,6 +180,118 @@ class ReviewedFlowProfileTests(unittest.TestCase):
             # Every journey intentionally visits another saved menu after deletion.
             self.assertNotEqual(self.before[key], sliding[key])
 
+    def test_zoom_board_audits_git_tree_and_scopes_only_the_actual_mines_consumers(self):
+        self.assertTrue(scoped.zoom_board_is_mines_only(self.base))
+        with mock.patch.object(Path, 'read_bytes', side_effect=AssertionError('Use the supplied Git tree, never the checkout')):
+            self.assertTrue(scoped.zoom_board_is_mines_only(self.base))
+        for path in ('App/MinesView.swift', scoped.ZOOM_BOARD_FILE):
+            with self.subTest(path=path):
+                after = self.changed(path)
+                invalidated = {name for name in self.before if self.before[name] != after[name]}
+                self.assertEqual(len(invalidated), 14)
+                self.assertEqual(len(self.before) - len(invalidated), 36)
+                self.assertIn('ChaiClassicsVisualSmokeTests/testMinesweeperCommonSessionLifecycleAndContinueDeletion', invalidated)
+                # This journey deliberately opens a saved Mines menu after deletion.
+                self.assertIn('ChaiClassicsVisualSmokeTests/testSlidingCommonSessionLifecycleAndContinueDeletion', invalidated)
+                self.assertNotIn('ChaiClassicsVisualSmokeTests/testMazeCommonSessionLifecycleAndContinueDeletion', invalidated)
+
+    def test_zoom_board_unknown_consumer_and_global_or_shared_declarations_restore_shared_fallback(self):
+        mode, original = self.base[scoped.ZOOM_BOARD_FILE]
+        variants = {
+            'global': original + b'\nvar globallySharedZoom = 0\n',
+            'shared extension': original + b'\nextension Color { static var sharedZoom: Int { 0 } }\n',
+            'static state': original.replace(b'    let size:', b'    static var sharedZoom = 0\n    let size:', 1),
+            'shared mutation': original.replace(b'        return scroll', b'        UserDefaults.standard.set(true, forKey: "global")\n        return scroll', 1),
+            'new import': b'import Foundation\n' + original,
+            'unknown nested declaration': original.replace(b'    let size:', b'    struct UnknownHelper {}\n    let size:', 1),
+            'unknown attribute': original.replace(b'    let size:', b'    @MainActor let size:', 1),
+            'malformed UTF8': original + b'\xff',
+        }
+        for label, data in variants.items():
+            with self.subTest(change=label):
+                target = copy.deepcopy(self.base); target[scoped.ZOOM_BOARD_FILE] = (mode, data)
+                self.assertFalse(scoped.zoom_board_is_mines_only(target))
+                after = scoped.fingerprints(target)
+                self.assertTrue(all(self.before[name] != after[name] for name in self.before))
+        for consumer in ('App/SudokuView.swift', 'App/UnexpectedView.swift'):
+            target = copy.deepcopy(self.base)
+            mode, data = target.get(consumer, ('100644', b''))
+            target[consumer] = (mode, data + b'\ntypealias AnotherZoomConsumer = ZoomBoard\n')
+            self.assertFalse(scoped.zoom_board_is_mines_only(target))
+            after = scoped.fingerprints(target)
+            self.assertTrue(all(self.before[name] != after[name] for name in self.before))
+        target = copy.deepcopy(self.base)
+        target[scoped.ZOOM_BOARD_FILE] = ('100755', original)
+        self.assertFalse(scoped.zoom_board_is_mines_only(target))
+        after = scoped.fingerprints(target)
+        self.assertTrue(all(self.before[name] != after[name] for name in self.before))
+
+    def privacy_fixture(self):
+        path = scoped.PRIVACY_MANIFEST_FILE
+        approved = (Path(__file__).resolve().parents[1] / path).read_bytes()
+        boot_entry = (b'\t\t<dict>\n\t\t\t<key>NSPrivacyAccessedAPIType</key>\n'
+                      b'\t\t\t<string>NSPrivacyAccessedAPICategorySystemBootTime</string>\n'
+                      b'\t\t\t<key>NSPrivacyAccessedAPITypeReasons</key>\n\t\t\t<array>\n'
+                      b'\t\t\t\t<string>35F9.1</string>\n\t\t\t</array>\n\t\t</dict>\n')
+        self.assertEqual(approved.count(boot_entry), 1)
+        legacy = approved.replace(boot_entry, b'')
+        self.assertEqual(scoped.hashlib.sha256(legacy).hexdigest(), scoped.PRIVACY_GAMEPLAY_DIGEST)
+        self.assertEqual(set(scoped.APPROVED_PRIVACY_MANIFESTS), {
+            scoped.hashlib.sha256(legacy).hexdigest(), scoped.hashlib.sha256(approved).hexdigest()})
+        target = copy.deepcopy(self.base); target[path] = ('100644', legacy)
+        return target, legacy, approved
+
+    def test_only_two_exact_validated_privacy_declarations_have_equal_shared_gameplay_hashes(self):
+        before, legacy, approved = self.privacy_fixture()
+        path = scoped.PRIVACY_MANIFEST_FILE
+        self.assertNotIn(path, scoped.PURE_EVIDENCE_SCRIPTS)
+        self.assertNotIn(path, scoped.ALL_GAME_FILES)
+        target = copy.deepcopy(before); target[path] = ('100644', approved)
+        self.assertEqual(scoped.fingerprints(before), scoped.fingerprints(target))
+        self.assertEqual(scoped.shared_content_digest(path, '100644', approved), scoped.PRIVACY_GAMEPLAY_DIGEST)
+        self.assertEqual(scoped.shared_content_digest('App/Resources/Other.xcprivacy', '100644', approved),
+                         scoped.hashlib.sha256(approved).hexdigest())
+        # Shared runtime edits still invalidate every case with the approved metadata.
+        for shared in ('App/GameSessionComponents.swift', 'App/PlayHistoryView.swift'):
+            mode, data = target.get(shared, ('100644', b''))
+            changed = copy.deepcopy(target); changed[shared] = (mode, data + b'\n// actual runtime change\n')
+            self.assertTrue(all(scoped.fingerprints(target)[name] != scoped.fingerprints(changed)[name]
+                                for name in scoped.fingerprints(target)))
+
+    def test_unapproved_privacy_values_xml_duplicates_modes_and_reencoding_invalidate_all_cases(self):
+        base, _legacy, approved = self.privacy_fixture()
+        path = scoped.PRIVACY_MANIFEST_FILE; before = scoped.fingerprints(base)
+        parsed = plistlib.loads(approved)
+        variants = {
+            'tracking': approved.replace(b'<false/>', b'<true/>'),
+            'unknown reason': approved.replace(b'35F9.1', b'35F9.2'),
+            'user defaults reason': approved.replace(b'CA92.1', b'CA92.2'),
+            'unknown category': approved.replace(b'SystemBootTime', b'FileTimestamp'),
+            'extra root key': approved.replace(b'<key>NSPrivacyTracking</key>', b'<key>Extra</key><false/><key>NSPrivacyTracking</key>'),
+            'duplicate root key': approved.replace(b'<key>NSPrivacyTracking</key>', b'<key>NSPrivacyTracking</key><false/><key>NSPrivacyTracking</key>'),
+            'duplicate API key': approved.replace(b'<key>NSPrivacyAccessedAPITypeReasons</key>', b'<key>NSPrivacyAccessedAPITypeReasons</key><array/><key>NSPrivacyAccessedAPITypeReasons</key>', 1),
+            'malformed': approved[:100],
+            'valid but unreviewed XML': plistlib.dumps(parsed),
+            'collected data': plistlib.dumps(dict(parsed, NSPrivacyCollectedDataTypes=[{'NSPrivacyCollectedDataType': 'Other'}])),
+        }
+        for label, data in variants.items():
+            with self.subTest(change=label):
+                self.assertNotIn(scoped.hashlib.sha256(data).hexdigest(), scoped.APPROVED_PRIVACY_MANIFESTS)
+                self.assertEqual(scoped.shared_content_digest(path, '100644', data), scoped.hashlib.sha256(data).hexdigest())
+                target = copy.deepcopy(base); target[path] = ('100644', data)
+                after = scoped.fingerprints(target)
+                self.assertTrue(all(before[name] != after[name] for name in before))
+        target = copy.deepcopy(base); target[path] = ('100755', approved)
+        self.assertEqual(scoped.shared_content_digest(path, '100755', approved), scoped.hashlib.sha256(approved).hexdigest())
+        self.assertTrue(all(before[name] != scoped.fingerprints(target)[name] for name in before))
+        target[path] = ('120000', approved)
+        with self.assertRaises(candidate.CandidateError): scoped.fingerprints(target)
+        # The static value check is independent of the byte allowlist.
+        for invalid in (variants['tracking'], variants['unknown reason'], variants['malformed']):
+            raw = scoped.hashlib.sha256(invalid).hexdigest()
+            with mock.patch.dict(scoped.APPROVED_PRIVACY_MANIFESTS, {raw: True}):
+                self.assertEqual(scoped.shared_content_digest(path, '100644', invalid), raw)
+
     def test_memory_play_change_preserves_unopened_flows_and_invalidates_six_real_dependents(self):
         after = self.changed('App/MemoryView.swift')
         changed = {test for test in self.before if self.before[test] != after[test]}
@@ -285,6 +398,62 @@ class CoverageTests(unittest.TestCase):
         self.assertFalse(proof['complete']); self.assertIn(A, proof['uncovered_tests'])
         self.assertEqual(set(proof['executed_current_tests']), set(actual))
 
+    def test_four_partitions_remain_partial_and_merge_actual_disjoint_coverage_then_home_sentinel(self):
+        target = scoped.fingerprints(self.target)
+        sources = []
+        for run, name in enumerate(scopes.PART_SCOPES, start=10):
+            selected = scopes.resolve(name, target)
+            actual = passed(selected)
+            proof = scoped.make_evidence('b' * 40, run, name, summary(actual), actual, self.target, [])
+            self.assertFalse(proof['complete'])
+            self.assertEqual(set(proof['executed_current_tests']), set(selected))
+            self.assertEqual(proof['source_runs'], [run])
+            sources.append(record(self.target, actual, run=run, sha='b' * 40))
+        needed = scoped.planned_tests(target, sources)
+        self.assertEqual(needed, [scoped.FAST_SENTINEL])
+        actual = passed(needed)
+        proof = scoped.make_evidence('b' * 40, 20, 'affected', summary(actual), actual, self.target, sources)
+        self.assertTrue(proof['complete'])
+        self.assertEqual(proof['uncovered_tests'], [])
+        self.assertEqual(set(proof['coverage']), set(target))
+        self.assertEqual(proof['source_runs'], [10, 11, 12, 13, 20])
+        # A missing or failed required lifecycle can never be supplied by Visual.
+        required = 'ChaiClassicsVisualSmokeTests/' + scopes.SESSION_VISUAL_TESTS[0]
+        failed_sources = copy.deepcopy(sources)
+        for source in failed_sources:
+            if required in source['actual']: source['actual'][required] = 'failed'
+        self.assertEqual(scoped.planned_tests(target, failed_sources), [required])
+        absent_sources = copy.deepcopy(sources)
+        for source in absent_sources: source['actual'].pop(required, None)
+        self.assertEqual(scoped.planned_tests(target, absent_sources), [required])
+
+    def test_beta_capture_requires_exact_three_actual_passes_and_remains_partial(self):
+        target = scoped.fingerprints(self.target)
+        selected = scopes.resolve('beta', target)
+        self.assertEqual(set(selected), {'ChaiClassicsVisualSmokeTests/' + name for name in (
+            'testSudokuCommonSessionLifecycleAndContinueDeletion',
+            'testSlidingCommonSessionLifecycleAndContinueDeletion',
+            'testPlayHistorySearchDismissesKeyboardWithoutSwallowingActions')})
+        actual = passed(selected)
+        proof = scoped.make_evidence('b' * 40, 20, 'beta', summary(actual), actual, self.target, [])
+        self.assertFalse(proof['complete'])
+        self.assertEqual(proof['source_runs'], [20])
+        self.assertEqual(proof['current_summary']['totalTestCount'], 3)
+        self.assertEqual(proof['current_summary']['passedTests'], 3)
+        self.assertEqual(proof['current_summary']['skippedTests'], 0)
+        self.assertEqual(set(proof['expected_tests']), set(target))
+        self.assertTrue(scopes.required_session_tests_for_paths(self.target).issubset(proof['expected_tests']))
+        with self.assertRaises(candidate.CandidateError):
+            scoped.make_evidence('b' * 40, 20, 'beta', summary(actual), actual, self.target, [record(self.target)])
+        for label in ('missing', 'extra', 'skipped', 'failed'):
+            changed = dict(actual); chosen = selected[0]
+            if label == 'missing': changed.pop(chosen)
+            if label == 'extra': changed[A] = 'passed'
+            if label == 'skipped': changed[chosen] = 'skipped'
+            if label == 'failed': changed[chosen] = 'failed'
+            with self.subTest(change=label), self.assertRaises(candidate.CandidateError):
+                scoped.make_evidence('b' * 40, 20, 'beta', summary(changed), changed, self.target, [])
+
     def test_latest_failed_case_requires_reexecution_even_with_older_identical_pass(self):
         older = record(self.base, run=8)
         coverage = scoped.inherited_coverage(scoped.fingerprints(self.base), [self.prior, older])
@@ -318,6 +487,7 @@ class CoverageTests(unittest.TestCase):
         needed = scoped.planned_tests(scoped.fingerprints(self.base), [record(self.base)])
         self.assertEqual(len(needed), 1)
         self.assertNotIn(needed[0].split('/')[-1], candidate.IPAD_TESTS)
+        self.assertEqual(needed, [scoped.FAST_SENTINEL])
 
 
 class ProvenanceTests(unittest.TestCase):
@@ -366,6 +536,48 @@ class ProvenanceTests(unittest.TestCase):
         for run in (10, 20):
             self.responses[f'repos/{self.repo}/actions/runs/{run}']['head_branch'] = 'develop/0.2.2'
         self.assertEqual(self.verify(), self.evidence)
+
+    def test_four_same_sha_parts_are_rebuilt_from_each_original_source_partition(self):
+        target = scoped.fingerprints(self.target)
+        records, raw = [], {}
+        template = f'repos/{self.repo}/actions/runs/20'
+        for run, part in enumerate(scopes.PART_SCOPES, start=11):
+            prefix = f'repos/{self.repo}/actions/runs/{run}'
+            for suffix in ('', '/jobs?per_page=100&filter=latest', '/artifacts?per_page=100'):
+                self.responses[prefix + suffix] = copy.deepcopy(self.responses[template + suffix])
+            self.responses[prefix]['id'] = run
+            actual = passed(scopes.resolve(part, target))
+            raw[run] = (summary(actual), actual, {'scope': part, 'source_commit': self.sha, 'source_runs': []})
+            records.append(record(self.target, actual, run=run, sha=self.sha))
+        sentinel = passed([scoped.FAST_SENTINEL])
+        raw[20] = (summary(sentinel), sentinel)
+        expected = scoped.make_evidence(self.sha, 20, 'affected', summary(sentinel), sentinel, self.target, records)
+        read_runs = []
+        def original_results(_repo, run, _read):
+            read_runs.append(run)
+            return raw[run]
+        def verify():
+            return scoped.validate_evidence(expected, self.repo, self.sha, 20, read=self.read,
+                results_reader=original_results, tree_reader=lambda _: self.target, ancestor=lambda sha: sha == self.sha)
+        self.assertEqual(verify(), expected)
+        self.assertEqual(set(read_runs), {11, 12, 13, 14, 20})
+        self.assertTrue(expected['complete'])
+        self.assertEqual(expected['executed_current_tests'], sentinel)
+        saved = copy.deepcopy(raw[11])
+        # A source cannot claim its neighbour's real case as its own partition.
+        foreign = next(name for name in target if name not in raw[11][1])
+        altered = dict(raw[11][1]); altered[foreign] = passed([foreign])[foreign]
+        raw[11] = (summary(altered), altered, saved[2])
+        with self.assertRaisesRegex(candidate.CandidateError, 'partition'): verify()
+        altered = dict(saved[1]); altered.pop(next(iter(altered)))
+        raw[11] = (summary(altered), altered, saved[2])
+        with self.assertRaisesRegex(candidate.CandidateError, 'omitted'): verify()
+        raw[11] = saved
+        # Independently reloaded failure beats any copied successful ledger.
+        altered = dict(saved[1]); affected = next(name for name in altered if name.split('/')[-1] not in candidate.IPAD_TESTS)
+        altered[affected] = 'failed'
+        raw[11] = (summary(altered), altered, saved[2])
+        with self.assertRaises(candidate.CandidateError): verify()
 
     def test_excluding_pure_tool_bytes_cannot_forge_actual_raw_statuses(self):
         for path in scoped.PURE_EVIDENCE_SCRIPTS:

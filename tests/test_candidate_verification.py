@@ -248,6 +248,77 @@ class CandidateVerificationTests(unittest.TestCase):
         visual.write_text(visual.read_text().replace('\nfunc ' + method + '() {}', ''))
         with self.assertRaises(candidate.CandidateError): candidate.expected_tests('visual', self.root)
 
+    def focused_visual_fixture(self):
+        (self.root / 'scripts').mkdir(exist_ok=True)
+        script = self.root / 'scripts/visual_smoke.sh'
+        script.write_text((Path(__file__).resolve().parents[1] / 'scripts/visual_smoke.sh').read_text())
+        visual = self.root / 'UITests/ChaiClassicsVisualSmokeTests.swift'
+        names = sorted(candidate.IPAD_TESTS) + [name.split('/')[-1] for name in candidate.VISUAL_FOCUS_TESTS]
+        visual.write_text('\n'.join('func ' + name + '() {}' for name in names))
+        return visual, script
+
+    def test_focused_visual_is_exact_four_only_for_reviewed_marker_and_session_runtime(self):
+        visual, script = self.focused_visual_fixture()
+        # The historical eight-case contract keeps four real phone passes and four iPad skips.
+        self.assertEqual(len(candidate.expected_tests('visual', self.root)), 8)
+        actual = {name: 'skipped' if name.split('/')[-1] in candidate.IPAD_TESTS else 'passed'
+                  for name in candidate.expected_tests('visual', self.root)}
+        old_summary = {'result': 'Passed', 'totalTestCount': 8, 'passedTests': 4, 'failedTests': 0, 'skippedTests': 4}
+        candidate.make_evidence('visual', old_summary, self.sha, executed_tests=actual, root=self.root)
+        (self.root / 'App').mkdir(exist_ok=True)
+        (self.root / 'App/GameSessionComponents.swift').write_text('struct GameSessionComponents {}')
+        visual.write_text(visual.read_text() + ''.join('\nfunc ' + name + '() {}' for name in candidate.scopes.SESSION_VISUAL_TESTS))
+        selected = candidate.expected_tests('visual', self.root)
+        self.assertEqual(selected, sorted(candidate.VISUAL_FOCUS_TESTS))
+        summary = {'result': 'Passed', 'totalTestCount': 4, 'passedTests': 4, 'failedTests': 0, 'skippedTests': 0}
+        evidence = candidate.make_evidence('visual', summary, self.sha, executed_tests=dict.fromkeys(selected, 'passed'), root=self.root)
+        self.assertEqual(evidence['summary']['passedTests'], 4)
+        for altered in (summary | {'skippedTests': 4}, old_summary):
+            with self.assertRaises(candidate.CandidateError):
+                candidate.make_evidence('visual', altered, self.sha, executed_tests=dict.fromkeys(selected, 'passed'), root=self.root)
+        original = script.read_text()
+        for bad in (original.replace(candidate.VISUAL_FOCUS_MARKER, candidate.VISUAL_FOCUS_MARKER + '\n' + candidate.VISUAL_FOCUS_MARKER),
+                    original.replace('/testScreenshotGallery', ''),
+                    original + '\n# -only-testing:ChaiClassicsUITests/ChaiClassicsVisualSmokeTests/testHistory\n'):
+            script.write_text(bad)
+            with self.assertRaises(candidate.CandidateError): candidate.expected_tests('visual', self.root)
+        script.write_text(original.replace(candidate.VISUAL_FOCUS_MARKER, '# unreviewed focus'))
+        self.assertEqual(len(candidate.expected_tests('visual', self.root)), 17)
+
+    def test_visual_four_passes_never_replace_any_of_the_nine_mandatory_ci_journeys(self):
+        visual, _script = self.focused_visual_fixture()
+        (self.root / 'App').mkdir(exist_ok=True)
+        (self.root / 'App/GameSessionComponents.swift').write_text('struct GameSessionComponents {}')
+        visual.write_text(visual.read_text() + ''.join('\nfunc ' + name + '() {}' for name in candidate.scopes.SESSION_VISUAL_TESTS))
+        for kind in ('ci', 'visual'):
+            tests = candidate.expected_tests(kind, self.root)
+            actual = {name: 'skipped' if name.split('/')[-1] in candidate.IPAD_TESTS else 'passed' for name in tests}
+            counts = {'result': 'Passed', 'totalTestCount': len(tests), 'passedTests': sum(state == 'passed' for state in actual.values()),
+                      'failedTests': 0, 'skippedTests': sum(state == 'skipped' for state in actual.values())}
+            self.evidence[kind] = candidate.make_evidence(kind, counts, self.sha, executed_tests=actual, root=self.root)
+            artifact = f'repos/{self.repo}/actions/artifacts/{self.runs[kind] * 10}/zip'
+            self.responses[artifact] = self.archive(kind)
+        self.assertEqual(self.verify()['workflows']['visual']['summary']['passedTests'], 4)
+        artifact = f'repos/{self.repo}/actions/artifacts/{self.runs["ci"] * 10}/zip'
+        for method in candidate.scopes.SESSION_VISUAL_TESTS:
+            missing = copy.deepcopy(self.evidence['ci'])
+            del missing['executed_tests']['ChaiClassicsVisualSmokeTests/' + method]
+            missing['summary']['totalTestCount'] -= 1; missing['summary']['passedTests'] -= 1
+            self.responses[artifact] = self.archive('ci', evidence=missing)
+            with self.subTest(missing=method), self.assertRaises(candidate.CandidateError): self.verify()
+
+    def test_beta_three_passes_remain_partial_for_the_full_formal_candidate_gate(self):
+        visual, _script = self.focused_visual_fixture()
+        (self.root / 'App').mkdir(exist_ok=True)
+        (self.root / 'App/GameSessionComponents.swift').write_text('struct GameSessionComponents {}')
+        visual.write_text(visual.read_text() + ''.join('\nfunc ' + name + '() {}' for name in candidate.scopes.SESSION_VISUAL_TESTS))
+        source, counts, actual = self.prepare_scoped_evidence('beta')
+        self.assertEqual(len(actual), 3)
+        self.assertEqual(counts['passedTests'], 3)
+        self.assertEqual(counts['skippedTests'], 0)
+        with mock.patch.object(scoped.historical, 'git_tree', return_value=source), mock.patch.object(scoped.historical, 'load_results', return_value=(counts, actual)):
+            with self.assertRaisesRegex(candidate.CandidateError, 'partial'): self.verify()
+
     def assert_development_version_stays_exact_sha_and_unsigned(self, version):
         tag = f'v{version}-rc.1'; branch = f'develop/{version}'
         self.responses[f'repos/{self.repo}/git/ref/heads/{branch}'] = {'object': {'sha': self.sha}}

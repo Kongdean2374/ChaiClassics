@@ -9,9 +9,11 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import plistlib
 import re
 import subprocess
 import sys
+from xml.parsers.expat import ExpatError
 
 import ui_test_scope as scopes
 import verify_candidate as candidate
@@ -20,9 +22,19 @@ import verify_incremental_ci as historical
 require = candidate.require
 BRANCHES = ('main', 'develop/0.2.0', 'develop/0.2.1', 'develop/0.2.2')
 MAX_RUNS = 20
+FAST_SENTINEL = 'ChaiClassicsUITests/testHomeHasExactlyThreeColumns'
+ZOOM_BOARD_FILE = 'App/ZoomBoard.swift'
+PRIVACY_MANIFEST_FILE = 'App/Resources/PrivacyInfo.xcprivacy'
+# Exact reviewed XML bytes: 9d74409's UserDefaults-only declaration, then the
+# declaration-only addition of the already used relative SystemBootTime API.
+APPROVED_PRIVACY_MANIFESTS = {
+    '6452295a6ad29254c92c668038f2c6a2cfd440c07cda81f814e996ac215b8415': False,
+    '23ac8b6d794ba1806448fbc70f698f6864d32bbf8ba339af668b63dc44383947': True,
+}
+PRIVACY_GAMEPLAY_DIGEST = '6452295a6ad29254c92c668038f2c6a2cfd440c07cda81f814e996ac215b8415'
 GAME_FILES = {
     'sudoku': {'Core/Sudoku.swift', 'App/SudokuView.swift'},
-    'mines': {'Core/Minesweeper.swift', 'App/MinesView.swift'},
+    'mines': {'Core/Minesweeper.swift', 'App/MinesView.swift', ZOOM_BOARD_FILE},
     'sliding': {'Core/SlidingPuzzle.swift', 'Core/SlidingInput.swift', 'App/SlidingView.swift'},
     'tictactoe': {'Core/TicTacToe.swift', 'App/TicTacToeView.swift'},
     'connectfour': {'Core/ConnectFour.swift', 'Core/ConnectFourPresentation.swift', 'App/ConnectFourView.swift'},
@@ -96,7 +108,7 @@ PURE_EVIDENCE_SCRIPTS = {'scripts/verify_scoped_ci.py', 'scripts/verify_candidat
 
 # Reviewed v0.2.2 Visual flows: a case body AND all shared helpers must match.
 # The previous helper digest retains genuine pre-migration source provenance.
-VISUAL_SCAFFOLD_DIGEST = 'f17e3f5ab1195307ea6212a99b1d1d16397fe22d93d54a7bf4faaa293e89cab5'
+VISUAL_SCAFFOLD_DIGEST = '3e2c25589adc902d17e51727c5f0b4d70c4fd688a8aac1fcc373f25caaaffacf'
 PREVIOUS_VISUAL_SCAFFOLD_DIGEST = '40dfb0eaa2ebcf7f8e10b2b438ea41d25517d46af3a59128d65b3e2c0c5e397d'
 SESSION_BODY_PROFILES = {
     'ChaiClassicsVisualSmokeTests/testConnectFourCommonSessionLifecycleAndContinueDeletion': (
@@ -120,7 +132,7 @@ SESSION_BODY_PROFILES = {
     'ChaiClassicsVisualSmokeTests/testMinesweeperCommonSessionLifecycleAndContinueDeletion': (
         '2e34e2eec5daa7d288a7531b68195f58015fdf8d0dbfba13854debadb523f41c', ('mines', 'sliding')),
     'ChaiClassicsVisualSmokeTests/testPlayHistorySearchDismissesKeyboardWithoutSwallowingActions': (
-        'c12db3a72d500c643758def28e29614d425050bac605b0343d7ea624495c51b6', ('sliding',)),
+        'bc50d5283f2dd005f2bf60e7b8bdd6bc2469e5e20e5232fc78bf23c68403adf6', ('sliding',)),
     'ChaiClassicsVisualSmokeTests/testReducedMotionSuppressesCelebrationButStillCompletesGame': (
         '70c41d41386e486704ba65b90e4d642b01d43d6cd44c0dd9a7606b29296139eb', ('sliding',)),
     'ChaiClassicsVisualSmokeTests/testScreenshotGallery': (
@@ -166,6 +178,82 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
+def shared_content_digest(path, mode, data):
+    """Keep PrivacyInfo shared; only two exact, validated declarations project alike.
+
+    Unsupported XML (including duplicate keys), reasons, modes and formatting
+    retain their raw hash. This is not an exemption for arbitrary privacy edits.
+    """
+    raw = hashlib.sha256(data).hexdigest()
+    if path != PRIVACY_MANIFEST_FILE or mode != '100644' or raw not in APPROVED_PRIVACY_MANIFESTS:
+        return raw
+    expected_apis = [{'NSPrivacyAccessedAPIType': 'NSPrivacyAccessedAPICategoryUserDefaults',
+                      'NSPrivacyAccessedAPITypeReasons': ['CA92.1']}]
+    if APPROVED_PRIVACY_MANIFESTS[raw]:
+        expected_apis.append({'NSPrivacyAccessedAPIType': 'NSPrivacyAccessedAPICategorySystemBootTime',
+                              'NSPrivacyAccessedAPITypeReasons': ['35F9.1']})
+    try:
+        manifest = plistlib.loads(data)
+    except (ValueError, TypeError, plistlib.InvalidFileException, ExpatError):
+        return raw
+    if (type(manifest) is not dict or set(manifest) != {
+            'NSPrivacyTracking', 'NSPrivacyCollectedDataTypes', 'NSPrivacyAccessedAPITypes'}
+            or manifest['NSPrivacyTracking'] is not False
+            or manifest['NSPrivacyCollectedDataTypes'] != []
+            or manifest['NSPrivacyAccessedAPITypes'] != expected_apis):
+        return raw
+    return PRIVACY_GAMEPLAY_DIGEST
+
+
+def zoom_board_is_mines_only(tree):
+    """Audit this Git tree, not the current checkout, before narrowing the helper.
+
+    Only the reviewed two top-level types and nested host/coordinator are known.
+    New consumers, globals, shared state/hooks, imports or declarations fall back
+    to a shared resource until separately reviewed. Ordinary per-instance board
+    layout/accessibility fixes can still be scoped to the sole Mines consumer.
+    """
+    if ZOOM_BOARD_FILE not in tree or tree[ZOOM_BOARD_FILE][0] != '100644':
+        return False
+    try:
+        source = tree[ZOOM_BOARD_FILE][1].decode('utf-8')
+        consumers = {path for path, (_mode, data) in tree.items()
+                     if path.endswith('.swift') and path != ZOOM_BOARD_FILE
+                     and re.search(r'\b(?:ZoomBoard|CenteredBoardScrollView)\b', data.decode('utf-8'))}
+        mask = historical.swift_mask(source)
+    except (UnicodeDecodeError, candidate.CandidateError):
+        return False
+    if consumers != {'App/MinesView.swift'}:
+        return False
+    # Mask only complete top-level bodies; any additional declaration survives
+    # and prevents this exact reviewed outer structure from matching.
+    outer, cursor = [], 0
+    while cursor < len(mask):
+        if mask[cursor] != '{':
+            outer.append(mask[cursor]); cursor += 1; continue
+        depth, cursor = 1, cursor + 1
+        while cursor < len(mask) and depth:
+            depth += (mask[cursor] == '{') - (mask[cursor] == '}'); cursor += 1
+        if depth:
+            return False
+        outer.append('{BODY}')
+    structure = (r'\s*import\s+SwiftUI\s+import\s+UIKit\s+import\s+ChaiCore\s+'
+                 r'struct\s+ZoomBoard\s*<\s*Content\s*:\s*View\s*>\s*:\s*UIViewRepresentable\s*\{BODY\}\s*'
+                 r'final\s+class\s+CenteredBoardScrollView\s*:\s*UIScrollView\s*\{BODY\}\s*')
+    if re.fullmatch(structure, ''.join(outer)) is None:
+        return False
+    declarations = re.findall(r'\b(?:struct|class|enum|actor|protocol|extension)\s+(\w+)', mask)
+    if declarations != ['ZoomBoard', 'HostedContent', 'Coordinator', 'CenteredBoardScrollView']:
+        return False
+    if (re.search(r'\b(?:static|class)\s+(?:let|var|subscript)\b', mask)
+            or re.findall(r'\bstatic\s+func\s+(\w+)', mask) != ['dismantleUIView']
+            or re.search(r'\bclass\s+func\b|\b(?:UserDefaults|UIApplication|NotificationCenter|ProcessInfo|FileManager|URLSession)\b', mask)
+            or re.search(r'\.\s*(?:shared|standard|appearance)\b', mask)
+            or any(attribute not in {'Environment', 'ViewBuilder', 'escaping'} for attribute in re.findall(r'@\s*(\w+)', mask))):
+        return False
+    return True
+
+
 def fingerprints(tree):
     """Include literal assertions, shared helpers/resources/prefs/clocks and project/runtime tooling.
 
@@ -176,6 +264,7 @@ def fingerprints(tree):
     bytes remain shared, so editing C's test body alone does not invalidate unchanged A/B.
     """
     methods, scaffolds, shared, helper_fingerprints = {}, [], [], {}
+    mines_only_zoom = zoom_board_is_mines_only(tree)
     for path, (mode, data) in sorted(tree.items()):
         require(mode in ('100644', '100755'), 'Source symlinks/submodules cannot establish scoped evidence.')
         if path.startswith('UITests/') and path.endswith('.swift'):
@@ -190,8 +279,9 @@ def fingerprints(tree):
                     scaffold = scaffold[:start] + '{TEST_BODY}' + scaffold[end:]
             helper_fingerprints[Path(path).stem] = hashlib.sha256(scaffold.encode()).hexdigest()
             scaffolds.append((path, mode, helper_fingerprints[Path(path).stem]))
-        elif (path in SHARED_SESSION_FILES or path not in ALL_GAME_FILES or path.startswith('Core/')) and path not in PURE_EVIDENCE_SCRIPTS and not path.startswith(('docs/', 'tests/')) and path != 'README.md':
-            shared.append((path, mode, hashlib.sha256(data).hexdigest()))
+        elif (path in SHARED_SESSION_FILES or path not in ALL_GAME_FILES or path.startswith('Core/')
+              or (path == ZOOM_BOARD_FILE and not mines_only_zoom)) and path not in PURE_EVIDENCE_SCRIPTS and not path.startswith(('docs/', 'tests/')) and path != 'README.md':
+            shared.append((path, mode, shared_content_digest(path, mode, data)))
     require(methods, 'No declared UI tests available for fingerprints.')
     require(scopes.required_session_tests_for_paths(tree).issubset(methods),
             'Session runtime requires all eight lifecycle journeys and the history interaction journey.')
@@ -267,6 +357,11 @@ def gather_sources(repo, ids, sha, current_run, *, read=candidate.github, result
             require(isinstance(prior, list) and len(prior) < MAX_RUNS and
                     all(type(value) is int and 0 < value < run_id for value in prior), 'Invalid pre-execution source index.')
             pending.extend(value for value in prior if value not in records)
+            if selection.get('scope') in scopes.PART_SCOPES:
+                partition = set(scopes.resolve(selection['scope'], source_fingerprints))
+                require(set(actual).issubset(partition), 'Raw source cases do not belong to their source-declared partition.')
+                if run.get('conclusion') == 'success':
+                    require(set(actual) == partition, 'Successful source partition omitted required actual cases.')
         # A prior partial ledger is an index only. Every referenced run is independently
         # reloaded from GitHub raw results and source trees; its claimed pass is never trusted.
         artifacts = read(prefix + '/artifacts?per_page=100')
@@ -303,10 +398,12 @@ def planned_tests(target_fingerprints, records):
     coverage = inherited_coverage(target_fingerprints, records)
     missing = sorted(test for test in target_fingerprints if not covered(test, coverage.get(test)))
     # Never turn an empty selector into an accidentally unfiltered or fictional green run.
-    return missing or [next(test for test in sorted(target_fingerprints) if test.split('/')[-1] not in candidate.IPAD_TESTS)]
+    return missing or [FAST_SENTINEL if FAST_SENTINEL in target_fingerprints else
+                       next(test for test in sorted(target_fingerprints) if test.split('/')[-1] not in candidate.IPAD_TESTS)]
 
 
 def make_evidence(sha, current_run, scope, summary, actual, tree, records):
+    require(scope != 'beta' or not records, 'Beta critical UI evidence must execute directly without inherited coverage.')
     target = fingerprints(tree)
     selected = planned_tests(target, records) if scope == 'affected' else scopes.resolve(
         scope, sorted(target), include_sessions=bool(scopes.required_session_tests_for_paths(tree)))
@@ -349,7 +446,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('mode', choices=('plan', 'capture'))
     parser.add_argument('--source-runs', default='')
-    parser.add_argument('--scope', choices=tuple(scopes.SCOPES) + ('affected',))
+    parser.add_argument('--scope', choices=tuple(scopes.SCOPES) + tuple(scopes.PART_SCOPES) + ('affected',))
     parser.add_argument('--summary', type=Path)
     parser.add_argument('--log', type=Path)
     parser.add_argument('--output', required=True, type=Path)

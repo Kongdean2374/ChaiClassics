@@ -35,6 +35,13 @@ JOBS = {'ci': {'test', 'codesign-extraction', 'release-tooling'}, 'visual': {'vi
 MAX_EVIDENCE_BYTES = 2 * 1024 * 1024
 TRUSTED_BRANCHES = ('main', 'develop/0.2.0', 'develop/0.2.1', 'develop/0.2.2')
 PURE_EVIDENCE_SCRIPTS = {'scripts/verify_candidate.py', 'scripts/verify_scoped_ci.py'}
+VISUAL_FOCUS_MARKER = '# CHAI_VISUAL_FOCUS_V1: original-phone-four; all-session-journeys-required-in-ci'
+VISUAL_FOCUS_TESTS = tuple('ChaiClassicsVisualSmokeTests/' + name for name in (
+    'testFreshWinCelebratesOnceAndRestoredWinDoesNotReplay',
+    'testReducedMotionSuppressesCelebrationButStillCompletesGame',
+    'testLowPowerSuppressesCelebrationButStillCompletesGame',
+    'testScreenshotGallery',
+))
 
 
 class CandidateError(ValueError):
@@ -55,6 +62,16 @@ def expected_tests(kind, root=ROOT):
     require(declared_ipad == IPAD_TESTS, 'All four original iPad screenshot tests must remain declared.')
     if kind != 'ipad':
         require(scopes.required_session_tests(root).issubset(tests), 'All eight session lifecycle journeys and the history interaction journey must remain declared.')
+    if kind == 'visual' and scopes.required_session_tests(root):
+        script = root / 'scripts/visual_smoke.sh'
+        text = script.read_text() if script.is_file() else ''
+        if VISUAL_FOCUS_MARKER in text.splitlines():
+            selections = re.findall(r'-only-testing:([A-Za-z_][A-Za-z0-9_/]*)', text)
+            require(text.splitlines().count(VISUAL_FOCUS_MARKER) == 1
+                    and selections == ['ChaiClassicsUITests/' + name for name in VISUAL_FOCUS_TESTS],
+                    'Focused Visual marker requires exactly the four reviewed original phone selections.')
+            require(set(VISUAL_FOCUS_TESTS).issubset(tests), 'An original focused Visual capture is missing.')
+            return sorted(VISUAL_FOCUS_TESTS)
     return sorted(name for name in tests if kind != 'ipad' or name.split('/')[-1] in IPAD_TESTS)
 
 
@@ -116,7 +133,7 @@ def make_evidence(kind, summary, sha, *, report=None, games_summary=None, test_l
                   executed_tests=None, executed_game_tests=None, root=ROOT):
     require(re.fullmatch(r'[0-9a-f]{40}', sha) is not None, 'A full source commit SHA is required.')
     tests = expected_tests(kind, root)
-    skipped = 0 if kind == 'ipad' else 4
+    skipped = 0 if kind == 'ipad' else sum(name.split('/')[-1] in IPAD_TESTS for name in tests)
     result = {'schema': 1, 'kind': kind, 'source_commit': sha, 'expected_tests': tests,
               'summary': validate_summary(summary, len(tests), skipped)}
     actual = parse_test_log(test_log) if test_log is not None else executed_tests

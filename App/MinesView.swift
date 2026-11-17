@@ -176,6 +176,7 @@ private struct MinesGrid: View {
     let tap: (Int) -> Void
     let flag: (Int) -> Void
     @EnvironmentObject var model: AppModel
+    private var acceptsInput: Bool { enabled && model.sessionIsPlaying(.minesweeper) }
     var body: some View {
         VStack(spacing: 0) {
             ForEach(0..<board.configuration.height, id: \.self) { row in
@@ -186,21 +187,28 @@ private struct MinesGrid: View {
                         let marked = board.flags.contains(i)
                         MinesCellFace(board: board, index: i).frame(width: 34, height: 34).contentShape(Rectangle())
                             .gesture(LongPressGesture(minimumDuration: 0.45, maximumDistance: 12).exclusively(before: TapGesture()).onEnded { value in
-                                guard enabled else { return }
+                                guard enabled, model.sessionIsPlaying(.minesweeper) else { return }
                                 switch value { case .first: flag(i); case .second: tap(i) }
                             })
                             .accessibilityElement().accessibilityAddTraits(.isButton)
                             .accessibilityLabel(model.t("mines.cell.label", row + 1, col + 1, marked ? model.t("mines.flagged") : open ? model.t("mines.revealed", board.adjacentMines(i)) : model.t("mines.covered")))
                             .accessibilityValue(model.t(marked ? "mines.flagged" : open ? "mines.revealed.value" : "mines.covered"))
                             .accessibilityHint(model.t("mines.cell.hint"))
-                            .accessibilityAction { if enabled { tap(i) } }
-                            .accessibilityAction(named: model.t(marked ? "mines.unflag" : "mines.flag")) { if enabled { flag(i) } }
+                            .accessibilityAction {
+                                guard enabled, model.sessionIsPlaying(.minesweeper) else { return }
+                                tap(i)
+                            }
+                            .accessibilityAction(named: model.t(marked ? "mines.unflag" : "mines.flag")) {
+                                guard enabled, model.sessionIsPlaying(.minesweeper) else { return }
+                                flag(i)
+                            }
                             .accessibilityIdentifier("mines.cell.\(i)")
-                            .disabled(!enabled)
+                            .accessibilityHidden(!model.sessionIsPlaying(.minesweeper))
+                            .disabled(!acceptsInput)
                     }
                 }
             }
-        }.background(GameMaterial.navy).allowsHitTesting(enabled)
+        }.background(GameMaterial.navy).allowsHitTesting(acceptsInput).disabled(!acceptsInput)
     }
 }
 

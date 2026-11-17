@@ -6,20 +6,25 @@ on:
         description: 'Version (e.g. 0.2.2)'
         required: true
         default: '0.2.2'
+      validation_mode:
+        description: 'Beta: critical operations and save checks; Full: complete release regression'
+        type: choice
+        options: [beta, full]
+        default: beta
       candidate_tag:
         description: 'Required for 0.2.x: explicit vVERSION-rc.N tag at this main SHA'
         required: false
         type: string
       ci_run:
-        description: 'Required for 0.2.x: verified full or complete dependency-scoped CI run ID'
+        description: 'Required for 0.2.x: successful exact-SHA beta or full CI run ID'
         required: false
         type: string
       visual_run:
-        description: 'Required for 0.2.x: successful iPhone Visual Smoke run ID'
+        description: 'Full mode only: successful focused iPhone Visual Smoke run ID'
         required: false
         type: string
       ipad_run:
-        description: 'Required for 0.2.x: successful four-gallery iPad Screenshots run ID'
+        description: 'Full mode only: successful four-gallery iPad Screenshots run ID'
         required: false
         type: string
       apple_team_id:
@@ -45,7 +50,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Require complete exact-SHA candidate verification before 0.2.x signing
+      - name: Verify exact-SHA TestFlight candidate
         if: startsWith(inputs.version, '0.2.')
         env:
           GH_TOKEN: ${{ github.token }}
@@ -54,11 +59,22 @@ jobs:
           CHAI_CANDIDATE_VISUAL_RUN: ${{ inputs.visual_run }}
           CHAI_CANDIDATE_IPAD_RUN: ${{ inputs.ipad_run }}
           CHAI_CANDIDATE_VERSION: ${{ inputs.version }}
+          CHAI_VALIDATION_MODE: ${{ inputs.validation_mode || 'beta' }}
         run: |
-          python3 scripts/verify_candidate.py verify --repo "$GITHUB_REPOSITORY" \
-            --sha "$GITHUB_SHA" --version "$CHAI_CANDIDATE_VERSION" --tag "$CHAI_CANDIDATE_TAG" \
-            --ci-run "$CHAI_CANDIDATE_CI_RUN" --visual-run "$CHAI_CANDIDATE_VISUAL_RUN" \
-            --ipad-run "$CHAI_CANDIDATE_IPAD_RUN" --output build/candidate-proof.json
+          case "$CHAI_VALIDATION_MODE" in
+            beta)
+              python3 scripts/verify_beta_candidate.py --repo "$GITHUB_REPOSITORY" \
+                --sha "$GITHUB_SHA" --version "$CHAI_CANDIDATE_VERSION" --tag "$CHAI_CANDIDATE_TAG" \
+                --ci-run "$CHAI_CANDIDATE_CI_RUN" --branch main --output build/candidate-proof.json
+              ;;
+            full)
+              python3 scripts/verify_candidate.py verify --repo "$GITHUB_REPOSITORY" \
+                --sha "$GITHUB_SHA" --version "$CHAI_CANDIDATE_VERSION" --tag "$CHAI_CANDIDATE_TAG" \
+                --ci-run "$CHAI_CANDIDATE_CI_RUN" --visual-run "$CHAI_CANDIDATE_VISUAL_RUN" \
+                --ipad-run "$CHAI_CANDIDATE_IPAD_RUN" --output build/candidate-proof.json
+              ;;
+            *) echo 'Unknown candidate validation mode.' >&2; exit 64 ;;
+          esac
       - name: Preserve verified release candidate proof
         if: startsWith(inputs.version, '0.2.')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

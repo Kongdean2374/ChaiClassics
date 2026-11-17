@@ -1,4 +1,5 @@
 name: CI
+run-name: CI · ${{ inputs.ui_scope || 'core-build' }} · ${{ github.ref_name }}
 on:
   push:
     branches: [main, develop/0.2.0, develop/0.2.1, develop/0.2.2]
@@ -13,7 +14,7 @@ on:
       ui_scope:
         description: Full integration, or only the affected game UI
         type: choice
-        options: [full, affected, sliding, memory, tictactoe, connectfour, twentyfour, maze, catalog, legacy]
+        options: [full, beta, affected, part_a, part_b, part_c, part_d, sliding, memory, tictactoe, connectfour, twentyfour, maze, catalog, legacy]
         default: full
       baseline_run:
         description: Optional prior CI run IDs, comma-separated; only matching actual passes carry forward
@@ -97,7 +98,11 @@ jobs:
       - name: Explain selected verification scope
         if: always() && inputs.full_ui == true && env.CHAI_UI_SCOPE != 'full'
         run: |
-          echo "Selected UI scope: $CHAI_UI_SCOPE. These are targeted results; full or independently verified incremental evidence is required for release." >> "$GITHUB_STEP_SUMMARY"
+          if [ "$CHAI_UI_SCOPE" = beta ]; then
+            echo 'Selected UI scope: beta; three current critical journeys support the TestFlight Beta gate with manual QA for remaining checks, while formal full release requires complete CI, Visual and iPad evidence.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Selected UI scope: $CHAI_UI_SCOPE; these targeted results require complete independently verified CI plus Visual and iPad evidence for formal full release." >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Export full UI screenshots for visual review
         if: always()
         run: |

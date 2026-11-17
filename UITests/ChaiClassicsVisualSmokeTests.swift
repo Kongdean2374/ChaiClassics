@@ -48,9 +48,18 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
 
     private func tap(_ id: String, app: XCUIApplication) {
         let button = app.buttons.matching(identifier: id).firstMatch
-        if id == "history.filters" || id == "history.keyboard.done" || id == "gameSettings.done" || id.hasSuffix(".menu.settings") || id.hasSuffix(".session.settings") {
-            XCTAssertTrue(button.waitForExistence(timeout: 10), "Missing action: " + id)
-            XCTAssertTrue(button.isHittable)
+        if id == "history.filters" || id == "history.keyboard.done" || id == "history.search.clear" || id == "gameSettings.done" || id.hasSuffix(".menu.settings") || id.hasSuffix(".session.settings") || id.hasSuffix(".session.pause") {
+            let exists = button.waitForExistence(timeout: 10)
+            if !exists { attachUIEvidence(app, name: "fixed-action-missing-" + id) }
+            XCTAssertTrue(exists, "Missing action: " + id)
+            guard exists else { return }
+            let frame = button.frame
+            let visible = frame.width > 0 && frame.height > 0 && app.frame.contains(frame)
+            if !visible { attachUIEvidence(app, name: "fixed-action-clipped-" + id) }
+            XCTAssertTrue(visible, "Fixed action must be fully visible without scrolling: " + id)
+            let hittable = button.isHittable
+            if !hittable { attachUIEvidence(app, name: "fixed-action-not-hittable-" + id) }
+            XCTAssertTrue(hittable, "Fixed action must be tappable: " + id)
         } else {
             scrollFullyIntoView(button, app: app)
             XCTAssertTrue(button.waitForExistence(timeout: 10), "Missing action: " + id)
@@ -59,8 +68,70 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         button.tap()
     }
 
+    private func tapNativeMenuItem(_ label: String, app: XCUIApplication) {
+        // A SwiftUI Menu becomes native UIActions. Select its displayed action
+        // without assuming SwiftUI's identifier or the exported element role.
+        let matches = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label))
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            matches.allElementsBoundByIndex.contains { $0.isHittable && $0.isEnabled }
+        }, object: nil)
+        let result = XCTWaiter.wait(for: [ready], timeout: 10)
+        if result != .completed { attachUIEvidence(app, name: "native-menu-action-missing-" + label) }
+        XCTAssertEqual(result, .completed, "The native menu must expose its displayed action: " + label)
+        guard let item = matches.allElementsBoundByIndex.first(where: { $0.isHittable && $0.isEnabled }) else {
+            attachUIEvidence(app, name: "native-menu-action-disappeared-" + label)
+            XCTFail("The native menu action disappeared before selection: " + label)
+            return
+        }
+        let frame = item.frame
+        let visible = frame.width > 0 && frame.height > 0 && app.frame.contains(frame)
+        if !visible { attachUIEvidence(app, name: "native-menu-action-clipped-" + label) }
+        XCTAssertTrue(visible, "The native menu action must be fully visible: " + label)
+        let hittable = item.isHittable
+        if !hittable { attachUIEvidence(app, name: "native-menu-action-not-hittable-" + label) }
+        XCTAssertTrue(hittable)
+        item.tap()
+    }
+
     private func continueID(_ game: String) -> String {
         (game == "minesweeper" ? "mines" : game) + ".continue"
+    }
+
+    private func continueDeleteAction(_ game: String, app: XCUIApplication) -> XCUIElement? {
+        let identified = app.buttons.matching(identifier: game + ".continue.delete")
+        if let action = identified.allElementsBoundByIndex.first(where: { $0.isHittable && $0.isEnabled }) {
+            return action
+        }
+        // Native Form swipe actions can export their displayed label without
+        // the SwiftUI identifier. Sudoku retains its custom ScrollView action.
+        let native = app.buttons.matching(NSPredicate(format: "label IN %@", ["Delete progress", "刪除進度"]))
+        return native.allElementsBoundByIndex.first { $0.isHittable && $0.isEnabled }
+    }
+
+    private func tapContinueDelete(_ game: String, current: XCUIElement, app: XCUIApplication) {
+        if continueDeleteAction(game, app: app) == nil {
+            scrollFullyIntoView(current, app: app)
+            current.swipeLeft()
+        }
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            self.continueDeleteAction(game, app: app) != nil
+        }, object: nil)
+        let result = XCTWaiter.wait(for: [ready], timeout: 10)
+        if result != .completed { attachUIEvidence(app, name: "continue-delete-action-missing-" + game) }
+        XCTAssertEqual(result, .completed, "A real left swipe must reveal the enabled Delete progress action.")
+        guard let action = continueDeleteAction(game, app: app) else {
+            attachUIEvidence(app, name: "continue-delete-action-disappeared-" + game)
+            XCTFail("The Continue deletion action disappeared before selection.")
+            return
+        }
+        let frame = action.frame
+        let visible = frame.width > 0 && frame.height > 0 && app.frame.contains(frame)
+        if !visible { attachUIEvidence(app, name: "continue-delete-action-clipped-" + game) }
+        XCTAssertTrue(visible, "The actual deletion action must be fully visible.")
+        let hittable = action.isHittable
+        if !hittable { attachUIEvidence(app, name: "continue-delete-action-not-hittable-" + game) }
+        XCTAssertTrue(hittable)
+        action.tap()
     }
 
     private func openMenu(_ game: String, app: XCUIApplication) {
@@ -174,7 +245,9 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
             if element.exists {
                 let frame = element.frame
                 if frame.width > 0 && frame.height > 0 && usable.contains(frame) {
-                    XCTAssertTrue(element.isHittable, "Fully visible control must be tappable: " + element.identifier)
+                    let hittable = element.isHittable
+                    if !hittable { attachUIEvidence(app, name: "visible-control-not-hittable-" + element.identifier) }
+                    XCTAssertTrue(hittable, "Fully visible control must be tappable: " + element.identifier)
                     return
                 }
                 if frame.height > 0 {
@@ -739,14 +812,12 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         let current = app.buttons.matching(identifier: continueID(game)).firstMatch
         XCTAssertTrue(current.waitForExistence(timeout: 10), "Done must return to the game's menu.")
         XCTAssertFalse(node(game + ".session.result", app: app).exists)
-        scrollFullyIntoView(current, app: app); current.swipeLeft()
-        let delete = app.buttons[game + ".continue.delete"]
-        XCTAssertTrue(delete.waitForExistence(timeout: 10))
-        tap(game + ".continue.delete", app: app)
+        tapContinueDelete(game, current: current, app: app)
         XCTAssertTrue(app.buttons[game + ".delete.confirm"].waitForExistence(timeout: 10))
         tap(game + ".delete.cancel", app: app)
+        waitUI("Cancel must dismiss the actual deletion confirmation.") { !app.buttons[game + ".delete.confirm"].exists }
         XCTAssertTrue(current.exists, "Cancelling deletion must preserve the saved round.")
-        tap(game + ".continue.delete", app: app)
+        tapContinueDelete(game, current: current, app: app)
         let confirm = app.buttons[game + ".delete.confirm"]
         XCTAssertTrue(confirm.waitForExistence(timeout: 10)); confirm.doubleTap()
         waitUI("Confirmed deletion must remove only this Continue row.") { !current.exists }
@@ -820,7 +891,7 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
         tap("history.filters", app: app)
         waitUI("Opening filters must dismiss the keyboard without swallowing the filter action.") { app.keyboards.count == 0 }
-        tap("history.filter.sort", app: app)
+        tapNativeMenuItem("Sort order", app: app)
         XCTAssertTrue(app.navigationBars["Sort order"].waitForExistence(timeout: 10))
         let order = app.buttons.matching(NSPredicate(format: "label == %@", "Moves: fewest first")).firstMatch
         XCTAssertTrue(order.waitForExistence(timeout: 10)); order.tap()

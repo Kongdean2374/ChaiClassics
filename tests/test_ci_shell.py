@@ -117,6 +117,16 @@ class CIShellTests(unittest.TestCase):
                                  ['-only-testing:' + method for method in selectors])
                 self.assertFalse(any(arg.startswith('-skip-testing') for arg in args))
 
+    def test_each_partition_uses_only_its_source_declared_methods(self):
+        for name in SCOPES.PART_SCOPES:
+            with self.subTest(scope=name):
+                result, calls = self.run_ui(name)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                args = self.invocation(calls)
+                self.assertEqual([arg for arg in args if arg.startswith('-only-testing:')],
+                                 ['-only-testing:ChaiClassicsUITests/' + test for test in SCOPES.resolve(name, self.declared)])
+                self.assertFalse(any(arg.startswith('-skip-testing') for arg in args))
+
     def test_affected_scope_checks_current_plan_and_emits_every_declared_case(self):
         self.assertGreaterEqual(len(self.declared), 41)
         self.plan({'source_commit': SHA, 'tests': self.declared})

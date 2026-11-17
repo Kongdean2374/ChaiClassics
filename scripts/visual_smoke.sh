@@ -11,6 +11,7 @@ case "$CHAI_VISUAL_PHASE" in
 esac
 # Explicit, credential-free selection. The full game UI suite remains available
 # through CI's full_ui option and is not added to routine pushes or TestFlight.
+# CHAI_VISUAL_FOCUS_V1: original-phone-four; all-session-journeys-required-in-ci
 CHAI_VISUAL_SIM=$(python3 - <<'PY'
 import json,subprocess
 data=json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','--json']))
@@ -35,7 +36,10 @@ test() {
   # Intel measured the complete fresh-win/restore/restart case at 207 seconds.
   # Keep every assertion; do not interrupt healthy work at the former 180s limit.
   xcodebuild "${CHAI_VISUAL_ARGS[@]}" -resultBundlePath build/VisualSmoke.xcresult \
-    -only-testing:ChaiClassicsUITests/ChaiClassicsVisualSmokeTests \
+    -only-testing:ChaiClassicsUITests/ChaiClassicsVisualSmokeTests/testFreshWinCelebratesOnceAndRestoredWinDoesNotReplay \
+    -only-testing:ChaiClassicsUITests/ChaiClassicsVisualSmokeTests/testReducedMotionSuppressesCelebrationButStillCompletesGame \
+    -only-testing:ChaiClassicsUITests/ChaiClassicsVisualSmokeTests/testLowPowerSuppressesCelebrationButStillCompletesGame \
+    -only-testing:ChaiClassicsUITests/ChaiClassicsVisualSmokeTests/testScreenshotGallery \
     -parallel-testing-enabled NO -test-timeouts-enabled YES \
     -default-test-execution-time-allowance 300 -maximum-test-execution-time-allowance 360 test-without-building 2>&1 | tee build/VisualSmoke.log
 }

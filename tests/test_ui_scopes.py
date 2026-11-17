@@ -27,6 +27,49 @@ class UIScopeTests(unittest.TestCase):
                 if len(fields) == 3:
                     self.assertIn('func ' + fields[2] + '(', source.read_text())
 
+    def test_four_partitions_are_disjoint_source_sorted_complete_and_exact_cli_filters(self):
+        declared = scope.declared_tests(ROOT)
+        self.assertEqual(len(declared), 50)
+        partitions = []
+        for name, index in scope.PART_SCOPES.items():
+            selected = scope.resolve(name, reversed(declared), include_sessions=False)
+            self.assertEqual(selected, declared[index::4])
+            self.assertEqual(len(selected), 13 if index < 2 else 12)
+            result = subprocess.run(['python3', str(ROOT / 'scripts/ui_test_scope.py'), name], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.splitlines(), ['-only-testing:ChaiClassicsUITests/' + test for test in selected])
+            self.assertFalse(any(set(selected) & set(previous) for previous in partitions))
+            partitions.append(selected)
+        combined = [test for partition in partitions for test in partition]
+        self.assertEqual(sorted(combined), declared)
+        self.assertTrue(scope.required_session_tests(ROOT).issubset(combined))
+        for invalid in ([], ['Example/testA'] * 2, ['invalid'], [None]):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError): scope.resolve('part_a', invalid)
+        with self.assertRaises(ValueError): scope.resolve('part_d', ['Example/testA'])
+
+    def test_partition_source_inventory_rejects_missing_session_case_and_duplicates(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary); (root / 'UITests').mkdir(); (root / 'App').mkdir()
+            (root / 'App/GameSessionComponents.swift').write_text('struct GameSessionComponents {}')
+            file = root / 'UITests/ChaiClassicsVisualSmokeTests.swift'
+            file.write_text('\n'.join('func ' + name + '() {}' for name in scope.SESSION_VISUAL_TESTS[:-1]))
+            with self.assertRaises(ValueError): scope.declared_tests(root)
+            file.write_text(file.read_text() + '\nfunc ' + scope.SESSION_VISUAL_TESTS[-1] + '() {}')
+            self.assertEqual(len(scope.declared_tests(root)), 9)
+            file.write_text(file.read_text() + '\nfunc ' + scope.SESSION_VISUAL_TESTS[-1] + '() {}')
+            with self.assertRaises(ValueError): scope.declared_tests(root)
+
+    def test_beta_scope_is_exact_three_real_critical_journeys(self):
+        expected = ['ChaiClassicsVisualSmokeTests/' + name for name in (
+            'testSudokuCommonSessionLifecycleAndContinueDeletion',
+            'testSlidingCommonSessionLifecycleAndContinueDeletion',
+            'testPlayHistorySearchDismissesKeyboardWithoutSwallowingActions')]
+        self.assertEqual(scope.resolve('beta', scope.declared_tests(ROOT)), sorted(expected))
+        result = subprocess.run(['python3', str(ROOT / 'scripts/ui_test_scope.py'), 'beta'], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), ['-only-testing:ChaiClassicsUITests/' + name for name in expected])
+        with self.assertRaises(ValueError): scope.resolve('beta', expected, include_sessions=False)
+
     def test_sliding_retries_both_failed_methods_and_direct_gesture_regression(self):
         methods = scope.SCOPES['sliding']
         for required in ['testSlidingCanStartAndRestore', 'testFreshWinCelebratesOnceAndRestoredWinDoesNotReplay', 'testSlidingSwipesInAllFourDirectionsAndRestoresExactlyOneMove']:

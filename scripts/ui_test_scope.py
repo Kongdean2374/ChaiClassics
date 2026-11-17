@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fixed XCTest selections; 'full' emits no filter and retains every test."""
+"""Source-bound XCTest selections; 'full' emits no filter and retains every test."""
 import json
 from pathlib import Path
 import re
@@ -22,8 +22,10 @@ SESSION_LIFECYCLE_TESTS = {
 HISTORY_TEST = 'testPlayHistorySearchDismissesKeyboardWithoutSwallowingActions'
 SESSION_VISUAL_TESTS = tuple(SESSION_LIFECYCLE_TESTS.values()) + (HISTORY_TEST,)
 SESSION_RUNTIME_FILES = ('App/GameSessionComponents.swift', 'Core/GameSessionData.swift')
+PART_SCOPES = {f'part_{name}': index for index, name in enumerate('abcd')}
 SCOPES = {
     'full': [],
+    'beta': [S + SESSION_LIFECYCLE_TESTS['sudoku'], S + SESSION_LIFECYCLE_TESTS['sliding'], S + HISTORY_TEST],
     'sliding': [L + 'testSlidingCanStartAndRestore',
                 L + 'testSlidingSwipesInAllFourDirectionsAndRestoresExactlyOneMove',
                 S + 'testFreshWinCelebratesOnceAndRestoredWinDoesNotReplay'],
@@ -58,6 +60,18 @@ def required_session_tests_for_paths(paths):
     return {'ChaiClassicsVisualSmokeTests/' + name for name in SESSION_VISUAL_TESTS} if set(SESSION_RUNTIME_FILES).intersection(paths) else set()
 
 def resolve(scope, tests, *, include_sessions=True):
+    if scope == 'beta' and not include_sessions:
+        raise ValueError('Beta scope requires the shared session runtime and its real journeys.')
+    if scope in PART_SCOPES:
+        supplied = list(tests)
+        if (not supplied or not all(isinstance(name, str) and re.fullmatch(r'[A-Za-z_]\w*/test\w+', name) for name in supplied)
+                or len(supplied) != len(set(supplied))):
+            raise ValueError('Partitions require unique declared XCTest identities.')
+        ordered = sorted(supplied)
+        selected = ordered[PART_SCOPES[scope]::len(PART_SCOPES)]
+        if not selected:
+            raise ValueError('A partition must select actual XCTest cases.')
+        return selected
     if scope == 'full':
         return sorted(tests)
     if scope not in SCOPES:
@@ -72,6 +86,14 @@ def resolve(scope, tests, *, include_sessions=True):
             raise ValueError('A selected UI case is no longer declared: ' + identity)
         selected.update(matches)
     return sorted(selected)
+
+
+def declared_tests(root):
+    tests = [path.stem + '/' + name for path in sorted((root / 'UITests').glob('*.swift'))
+             for name in re.findall(r'\bfunc\s+(test\w+)\s*\(', path.read_text())]
+    if not tests or len(tests) != len(set(tests)) or not required_session_tests(root).issubset(tests):
+        raise ValueError('Missing, duplicate or incomplete source-declared XCTest inventory.')
+    return sorted(tests)
 
 
 def affected_selectors():
@@ -89,6 +111,15 @@ def affected_selectors():
 
 
 def main(argv):
+    if len(argv) == 1 and argv[0] in PART_SCOPES:
+        try:
+            selected = resolve(argv[0], declared_tests(Path(__file__).resolve().parents[1]))
+        except (OSError, ValueError) as error:
+            print('Cannot select source partition: ' + str(error), file=sys.stderr)
+            return 64
+        for method in selected:
+            print('-only-testing:ChaiClassicsUITests/' + method)
+        return 0
     if argv == ['affected']:
         try:
             methods = affected_selectors()

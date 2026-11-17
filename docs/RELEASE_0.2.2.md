@@ -21,7 +21,7 @@
 - 普通 CI push 清單新增 `develop/0.2.2`，保留 `main`、`develop/0.2.0` 與 `develop/0.2.1`。
 - Visual Smoke 與 iPad Screenshots 的手動、免簽署驗證信任 `develop/0.2.2`，保留原有分支及手動觸發限制。
 - 候選版、依賴範圍及歷史窄範圍重用驗證器接受新的明確分支名稱。原有 SHA、祖先關係、測試本文、執行結果、artifact digest 與完整覆蓋檢查保留；開發分支證據本身仍不能授權上傳。歷史窄範圍路徑繼續綁定原來的基準，不因版號更新而放寬可重用內容。
-- TestFlight 的版本輸入預設與唯讀狀態查詢預設改為 `0.2.2`。簽署／上傳 job、Secrets 對應、match readonly、main-only、候選版門檻與 App Store 不送審界線不變。普通 develop 提交不自動上傳。
+- TestFlight 的版本輸入預設與唯讀狀態查詢預設改為 `0.2.2`。簽署／上傳 job、Secrets 對應、match readonly、main-only 與 App Store 不送審界線不變。普通 develop 提交不自動上傳。
 - 0.2.1 的 App／Core／共享 UI 已有改動時，不能把舊版截圖或舊測試成功直接當成 0.2.2 的完整驗收；需要依現有證據工具判斷並重新執行受影響流程。
 
 ## 驗證方法
@@ -45,7 +45,19 @@ bash scripts/ci.sh build
 CHAI_UI_SCOPE=full bash scripts/ci.sh ui
 ```
 
-再以同一候選 SHA 執行受信任分支上的 Visual Smoke 與 iPad Screenshots，核對原始 PNG、XCTest summary/log、八款開始／暫停／背景／離開／恢復／結算／查看棋盤，以及設定隔離、歷史紀錄與匯入／匯出的確認及失敗路徑。AI、翻牌、落子與迷宮的暫停／背景取消必須使用真實遊戲狀態測試。
+完整回歸模式另以同一候選 SHA 執行受信任分支上的 Visual Smoke 與 iPad Screenshots，核對原始 PNG、XCTest summary/log、八款開始／暫停／背景／離開／恢復／結算／查看棋盤，以及設定隔離、歷史紀錄與匯入／匯出的確認及失敗路徑。AI、翻牌、落子與迷宮的暫停／背景取消必須使用真實遊戲狀態測試。完整測試保留，可分別手動執行；本次 Beta 不等待全套截圖與完整 UI 回歸。
+
+### 本次 TestFlight Beta 門檻
+
+依本次使用者要求，`TestFlight` 新增預設 `validation_mode: beta`，另保留 `full`。Beta 要求同一 SHA 的三組 CI 工作全部成功，包含 Python／Ruby 工具與安全檢查、遊戲／存檔 Swift 測試、iOS Simulator 編譯，以及 `full_ui: true`、`ui_scope: beta` 真正執行以下三項：
+
+- 數獨的開始、計時、暫停、恢復、結算、查看棋盤及繼續進度刪除。
+- 滑塊拼圖的共用對局流程及繼續進度刪除。
+- 遊玩紀錄搜尋、篩選與鍵盤收起時保留原有操作。
+
+獨立的 `scripts/verify_beta_candidate.py` 核對 main、版本、候選 tag、受信任手動 CI、原始結果 ZIP 的 SHA-256、三項實際通過且零略過，以及沒有繼承舊 UI 結果。它只產生 `beta_verified`，明確標示 `full_regression_complete: false`，不能當成完整回歸或 App Store 上架證明。原有 50 項 UI 測試與完整候選驗證器仍保留，完整模式另需 Visual Smoke／iPad 的成功證據。
+
+真機安裝、ProMotion／120 Hz 手感、觸覺回饋、Files 匯入匯出、iPad 輔助使用與其餘模式由開發者及外部 Beta 測試者繼續檢查。TestFlight 觸發後回報連結，不等待 Apple 處理；觸發成功不代表 IPA 已上傳或 Beta 已可下載。
 
 發布驗收另外記錄來源 commit、候選 tag、CI／Visual／iPad run URL、裝置與通過數，以及 TestFlight 的上傳、Apple 處理、內部可用與外部 Beta 審查狀態。此版本文件不代表其中任何 Apple 步驟已完成，也不會自行觸發工作流程。
 
@@ -54,7 +66,7 @@ CHAI_UI_SCOPE=full bash scripts/ci.sh ui
 2026-11-17 的未提交 0.2.2 工作樹已完成以下版本／工具檢查：
 
 - 58 項針對版本、候選版、依賴範圍與歷史窄範圍證據的 Python 測試通過，包含新分支不能直接授權發布及 SHA 不符拒絕。
-- `tests/workflow_config_test.rb` 通過，解析十份 workflow YAML，保留原有 Secrets、main／manual、簽署與上傳隔離檢查。
-- 專案重複生成內容一致，當時所有 `App/*.swift` 均有收錄；TestFlight 的所有 job（包含 signed upload）與修改前逐位元組相同，只有版本輸入的說明與預設更新。
+- `tests/workflow_config_test.rb` 檢查所有 workflow YAML，保留原有 Secrets、main／manual、簽署與上傳隔離檢查；新增 Beta／完整模式與未知模式拒絕的回歸檢查。
+- 專案重複生成內容一致，所有 `App/*.swift` 均有收錄；TestFlight 的 signed upload job 與修改前逐位元組相同。只調整免簽署預檢的 Beta／完整候選選擇。
 
 這些是本機版本／工具檢查，不代表完整 Python／Swift、iOS Simulator、CI 或 TestFlight 已通過。完整驗收結果須由最終 commit 的原始產物補充。

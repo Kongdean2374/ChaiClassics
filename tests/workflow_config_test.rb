@@ -104,6 +104,9 @@ check(test_job.dig('env', 'CHAI_UI_SCOPE') == "${{ inputs.ui_scope || 'full' }}"
 check(ci_workflow['permissions'] == {'contents' => 'read', 'actions' => 'read'}, 'baseline reads receive only read permission')
 scope_inputs = ci_triggers.dig('workflow_dispatch', 'inputs', 'ui_scope')
 check(scope_inputs['type'] == 'choice' && scope_inputs['default'] == 'full' && scope_inputs['options'].include?('memory') && scope_inputs['options'].include?('sliding'), 'manual CI exposes explicit game selections')
+check(%w[part_a part_b part_c part_d].all? { |scope| scope_inputs['options'].include?(scope) }, 'manual CI exposes all four disjoint source partitions')
+check(scope_inputs['options'].include?('beta'), 'manual CI exposes the explicit three-journey Beta scope')
+check(ci_workflow['run-name'].include?('inputs.ui_scope') && test_job['name'].nil?, 'CI run title identifies scope without changing verification job identities')
 check(test_job['timeout-minutes'] == 90, 'unsigned ARM CI has a bounded total runtime')
 ci_script = File.read(File.join(root, 'scripts/ci.sh'))
 check(ci_script.include?('-test-timeouts-enabled YES') && ci_script.include?('-default-test-execution-time-allowance 420') && ci_script.include?('-maximum-test-execution-time-allowance 600'), 'complete UI allowance stays enabled and bounded on ARM or Intel')
@@ -113,7 +116,7 @@ puts 'PASS: visible ordered CI phases, bounded UI/total runtimes and rejected un
 check(flight.fetch('jobs').keys.sort == %w[preflight upload], 'TestFlight has only fast preflight and real signed upload')
 preflight = flight.fetch('jobs').fetch('preflight')
 check(preflight['runs-on'] == 'ubuntu-24.04' && !preflight.key?('env') && !preflight.key?('environment') && !preflight.key?('secrets'), 'preflight runs without Apple/signing credentials')
-candidate_steps = preflight['steps'].reject { |step| ['Require complete exact-SHA candidate verification before 0.2.x signing', 'Preserve verified release candidate proof'].include?(step['name']) }
+candidate_steps = preflight['steps'].reject { |step| ['Verify exact-SHA TestFlight candidate', 'Preserve verified release candidate proof'].include?(step['name']) }
 check(candidate_steps.first.dig('with', 'fetch-depth') == 0, 'release proof can independently compare complete git trees')
 normalized_steps = candidate_steps.map do |step|
   copy = Marshal.load(Marshal.dump(step))
@@ -164,6 +167,9 @@ visual_source = File.read(File.join(root, '.github/workflows/visual-smoke.yml'))
 check(!visual_source.include?('secrets.') && !visual_source.include?('run_signing_lane') && !visual_source.include?('fastlane'), 'visual smoke cannot sign or upload an Apple build')
 visual_script = File.read(File.join(root, 'scripts/visual_smoke.sh'))
 check(visual_script.include?('-only-testing:ChaiClassicsUITests/ChaiClassicsVisualSmokeTests') && visual_script.include?('CODE_SIGNING_ALLOWED=NO'), 'visual smoke selects focused Simulator tests without signing')
+visual_selections = visual_script.scan(/-only-testing:(\S+)/).flatten
+check(visual_selections == %w[testFreshWinCelebratesOnceAndRestoredWinDoesNotReplay testReducedMotionSuppressesCelebrationButStillCompletesGame testLowPowerSuppressesCelebrationButStillCompletesGame testScreenshotGallery].map { |name| 'ChaiClassicsUITests/ChaiClassicsVisualSmokeTests/' + name }, 'Visual executes exactly the four original phone captures; session journeys stay mandatory in CI')
+check(visual_script.include?('# CHAI_VISUAL_FOCUS_V1: original-phone-four; all-session-journeys-required-in-ci'), 'Visual focus contract is explicit in the tested source')
 check(visual_job.fetch('steps').any? { |step| step['run'] == 'bash scripts/visual_smoke.sh build' } && visual_job.fetch('steps').any? { |step| step['run'] == 'bash scripts/visual_smoke.sh test' }, 'visual build and execution are independently visible')
 check(visual_script.include?('build-for-testing') && visual_script.include?('test-without-building') && visual_script.include?('simctl bootstatus'), 'visual tests reuse one build after explicit Simulator startup')
 check(visual_job['timeout-minutes'] == 55 && visual_script.include?('-default-test-execution-time-allowance 300') && visual_script.include?('-maximum-test-execution-time-allowance 360'), 'measured 207s Intel case has bounded time for assertions and result finalization')
@@ -215,15 +221,24 @@ check(ci_script.include?('Pro Max') && ci_script.include?('Plus'), 'full UI pref
   check(entry.fetch('if').include?("github.ref == 'refs/heads/develop/0.2.1'"), '0.2.1 keeps exact-SHA unsigned visual/iPad evidence')
   check(entry.fetch('if').include?("github.ref == 'refs/heads/develop/0.2.2'"), '0.2.2 supports exact-SHA unsigned visual/iPad evidence')
 end
-candidate_gate = preflight.fetch('steps').find { |step| step['name'] == 'Require complete exact-SHA candidate verification before 0.2.x signing' }
-check(candidate_gate && candidate_gate['if'] == "startsWith(inputs.version, '0.2.')", '0.2.0 signing requires a candidate gate')
+candidate_gate = preflight.fetch('steps').find { |step| step['name'] == 'Verify exact-SHA TestFlight candidate' }
+check(candidate_gate && candidate_gate['if'] == "startsWith(inputs.version, '0.2.')", '0.2.x TestFlight signing requires an exact-SHA candidate gate')
 check(flight.fetch('permissions') == {'contents' => 'read', 'actions' => 'read'}, 'candidate reads receive no repository or Actions write permission')
 check(candidate_gate.dig('env', 'GH_TOKEN') == '${{ github.token }}', 'candidate metadata reads use the short-lived read-only workflow token')
-check(candidate_gate.fetch('run').include?('scripts/verify_candidate.py verify') && candidate_gate.fetch('run').include?('--sha "$GITHUB_SHA"'), 'candidate gate validates the actual immutable dispatch SHA')
+validation_mode = (flight['on'] || flight[true]).dig('workflow_dispatch', 'inputs', 'validation_mode')
+check(validation_mode['type'] == 'choice' && validation_mode['options'] == %w[beta full] && validation_mode['default'] == 'beta', 'explicit user-selected TestFlight policy defaults to critical Beta checks and retains optional full regression')
+check(candidate_gate.dig('env', 'CHAI_VALIDATION_MODE') == "${{ inputs.validation_mode || 'beta' }}", 'candidate gate receives the explicit Beta/full policy')
+gate_run = candidate_gate.fetch('run')
+beta_case = gate_run.match(/beta\)\n(.*?)\n\s*;;/m)&.captures&.first
+full_case = gate_run.match(/full\)\n(.*?)\n\s*;;/m)&.captures&.first
+check(beta_case && beta_case.include?('scripts/verify_beta_candidate.py') && beta_case.include?('--sha "$GITHUB_SHA"') && beta_case.include?('--branch main') && beta_case.include?('--ci-run "$CHAI_CANDIDATE_CI_RUN"'), 'Beta independently verifies the exact main/tag SHA and real critical CI evidence')
+check(!beta_case.include?('--visual-run') && !beta_case.include?('--ipad-run'), 'Beta does not require the optional full Visual/iPad regression')
+check(full_case && full_case.include?('scripts/verify_candidate.py verify') && full_case.include?('--sha "$GITHUB_SHA"') && full_case.include?('--visual-run "$CHAI_CANDIDATE_VISUAL_RUN"') && full_case.include?('--ipad-run "$CHAI_CANDIDATE_IPAD_RUN"'), 'Full mode retains all three exact-SHA workflow evidence requirements')
+check(gate_run.include?('case "$CHAI_VALIDATION_MODE" in') && gate_run.include?("*) echo 'Unknown candidate validation mode.' >&2; exit 64"), 'unknown validation modes fail instead of bypassing verification')
 %w[candidate_tag ci_run visual_run ipad_run].each do |input|
   check((flight['on'] || flight[true]).dig('workflow_dispatch', 'inputs', input, 'type') == 'string', 'candidate evidence input is explicit: ' + input)
 end
-check(!candidate_gate.fetch('run').include?('--branch'), 'TestFlight cannot select a development-only proof')
+check(!full_case.include?('--branch') && beta_case.scan('--branch main').length == 1, 'both TestFlight proof modes remain main-only')
 %w[ci visual ipad].each do |kind|
   workflow = kind == 'ci' ? ci_workflow : kind == 'visual' ? visual : ipad
   steps = workflow.fetch('jobs').values.flat_map { |entry| entry.fetch('steps', []) }
@@ -292,4 +307,4 @@ check(status_job.fetch('steps').any? { |step| step['run'] == 'ruby scripts/testf
 status_source = File.read(File.join(root, 'scripts/testflight_status.rb'))
 check(status_source.include?('Net::HTTP::Get.new') && !status_source.match?(/Net::HTTP::(?:Post|Put|Patch|Delete)|upload_to_testflight|match\(/), 'status performs GET only, with no signing or upload')
 check(tooling_runs.include?('ruby tests/testflight_status_test.rb'), 'read-only Apple state separation is tested without credentials')
-puts 'PASS: explicit exact-SHA candidate gate, complete iPhone UI and separate 4+5 iPad evidence; read-only Apple processing/internal/external status remains separate from upload.'
+puts 'PASS: explicit exact-SHA Beta critical checks and optional full CI/Visual/4+5 iPad regression; read-only Apple processing/internal/external status remains separate from upload.'

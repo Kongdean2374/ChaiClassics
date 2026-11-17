@@ -90,8 +90,14 @@ class AppResourceTests(unittest.TestCase):
         manifest=plistlib.loads((ROOT/'App/Resources/PrivacyInfo.xcprivacy').read_bytes())
         self.assertIs(manifest['NSPrivacyTracking'],False)
         self.assertEqual(manifest['NSPrivacyCollectedDataTypes'],[])
-        self.assertEqual(manifest['NSPrivacyAccessedAPITypes'],[{'NSPrivacyAccessedAPIType':'NSPrivacyAccessedAPICategoryUserDefaults','NSPrivacyAccessedAPITypeReasons':['CA92.1']}])
+        # Apple's 35F9.1 covers relative in-app timers. Only elapsed durations,
+        # not raw system uptime/boot anchors, belong in user-exported game data.
+        self.assertCountEqual(manifest['NSPrivacyAccessedAPITypes'],[
+            {'NSPrivacyAccessedAPIType':'NSPrivacyAccessedAPICategoryUserDefaults','NSPrivacyAccessedAPITypeReasons':['CA92.1']},
+            {'NSPrivacyAccessedAPIType':'NSPrivacyAccessedAPICategorySystemBootTime','NSPrivacyAccessedAPITypeReasons':['35F9.1']},
+        ])
         code='\n'.join(p.read_text() for folder in ['App','Core'] for p in (ROOT/folder).glob('*.swift'))
+        self.assertIn('ProcessInfo.processInfo.systemUptime',code)
         for prohibited in ['import AdSupport','import AppTrackingTransparency','import CloudKit','import StoreKit','URLSession.shared','WKWebView']:
             self.assertNotIn(prohibited,code)
     def test_v010_rules_saves_and_puzzles_are_unchanged(self):
@@ -119,12 +125,12 @@ class AppResourceTests(unittest.TestCase):
         header=actual.split(b'jobs:\n',1)[0]
         self.assertEqual(header.count(b"'Version (e.g. 0.2.2)'"),1)
         self.assertEqual(header.count(b"        default: '0.2.2'\n"),1)
-        # v0.2.1 adds a read-only same-SHA candidate evidence gate. The actual
-        # signing/upload job below remains byte-frozen to the released pipeline.
-        # Only the documented current-version description/default may differ.
+        # v0.2.2's reviewed header adds the user-requested Beta/full policy input.
+        # The actual signing/upload job below stays byte-frozen to the released
+        # pipeline; normalize only the documented current-version label/default.
         stable_header=header.replace(b"'Version (e.g. 0.2.2)'", b"'Version (e.g. 0.2.1)'")
         stable_header=stable_header.replace(b"        default: '0.2.2'\n", b"        default: '0.2.1'\n")
-        self.assertEqual(hashlib.sha256(stable_header).hexdigest(),'85771cd921b95f4ba50e226b2e94114413228de2d6395c305cc2e5f4fc531bd5')
+        self.assertEqual(hashlib.sha256(stable_header).hexdigest(),'2defbc7d5d5a431f189b5d6c029bc881b4ba13a67a8e06471367e49f63dd9a82')
         upload=b'  upload:\n'+actual.split(b'  upload:\n',1)[1]
         self.assertEqual(upload.count(b'    needs: preflight\n'),1)
         self.assertEqual(upload.count(b'    runs-on: macos-15-intel\n'),1)

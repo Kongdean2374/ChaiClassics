@@ -135,43 +135,65 @@ struct ContinueGameRow<Label: View>: View {
     }
     @EnvironmentObject private var model: AppModel
     @State private var revealed = false
-    @State private var dragging = false
+    @GestureState private var dragging = false
+    @State private var suppressContinueUntil: TimeInterval = 0
     @State private var confirmDelete = false
     @State private var deletionSession: UUID?
     private var continueID: String { (game == .minesweeper ? "mines" : game == .twentyFour ? "twentyfour" : game.rawValue) + ".continue" }
+
     var body: some View {
-        HStack(spacing: 12) {
-            Button {
-                guard !dragging, !confirmDelete, !model.navigationTouchLocked else { return }
-                if revealed { revealed = false } else { action() }
-            } label: { label.frame(maxWidth: .infinity) }
-                .buttonStyle(.plain).accessibilityIdentifier(continueID)
-                .accessibilityAction(named: model.t("session.delete.action")) { requestDeletion() }
-            if revealed {
-                Button(role: .destructive) { requestDeletion() } label: {
-                    Image(systemName: "trash.fill").font(.title3).frame(width: 52, height: 64)
-                        .foregroundStyle(.white).background(.red, in: RoundedRectangle(cornerRadius: 16))
-                }.buttonStyle(.plain).accessibilityLabel(model.t("session.delete.action"))
-                    .accessibilityIdentifier(game.rawValue + ".continue.delete")
+        Group {
+            if game == .sudoku {
+                // Sudoku's level/menu pages use ScrollView rather than List.
+                customScrollRow
+            } else {
+                continueButton.swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    Button(role: .destructive) { requestDeletion() } label: {
+                        Label(model.t("session.delete.action"), systemImage: "trash")
+                    }.accessibilityIdentifier(game.rawValue + ".continue.delete")
+                }
             }
         }
-        .contentShape(Rectangle())
-        .simultaneousGesture(DragGesture(minimumDistance: 18).onChanged { value in
-            if abs(value.translation.width) > abs(value.translation.height) * 1.4 {
-                dragging = true
-                if value.translation.width < -35 { revealed = true }
-                if value.translation.width > 35 { revealed = false }
-            }
-        }.onEnded { _ in
-            // Keep the drag lock until the button's release event has finished.
-            DispatchQueue.main.async { dragging = false }
-        })
         .modifier(GameActionConfirmation(title: model.t("session.delete.title"), message: model.t("session.delete.detail"),
             isPresented: $confirmDelete, confirmTitle: model.t("session.delete.action"), prefix: game.rawValue + ".delete",
             onConfirm: {
                 if let deletionSession, model.deleteCurrentGame(game, expectedSessionID: deletionSession) { revealed = false }
                 deletionSession = nil
             }, onCancel: { deletionSession = nil }))
+    }
+    private var continueButton: some View {
+        Button {
+            guard !dragging, ProcessInfo.processInfo.systemUptime >= suppressContinueUntil,
+                  !confirmDelete, !model.navigationTouchLocked else { return }
+            if revealed { revealed = false } else { action() }
+        } label: { label.frame(maxWidth: .infinity).contentShape(Rectangle()) }
+            .buttonStyle(.plain).accessibilityIdentifier(continueID)
+    }
+    private var customScrollRow: some View {
+        HStack(spacing: 12) {
+            continueButton
+                .accessibilityAction(named: model.t("session.delete.action")) { requestDeletion() }
+                .simultaneousGesture(DragGesture(minimumDistance: 18)
+                    .updating($dragging) { _, active, _ in active = true }
+                    .onChanged { value in
+                        guard abs(value.translation.width) > abs(value.translation.height) * 1.4 else { return }
+                        suppressContinueUntil = ProcessInfo.processInfo.systemUptime + 0.28
+                        if value.translation.width < -35 { revealed = true }
+                        if value.translation.width > 35 { revealed = false }
+                    }.onEnded { _ in
+                        // GestureState resets on both completion and cancellation;
+                        // the remaining release cannot activate Continue underneath.
+                        suppressContinueUntil = ProcessInfo.processInfo.systemUptime + 0.28
+                    })
+            if revealed {
+                Button(role: .destructive) { requestDeletion() } label: {
+                    Image(systemName: "trash.fill").font(.title3).frame(width: 52, height: 64)
+                        .foregroundStyle(.white).background(.red, in: RoundedRectangle(cornerRadius: 16))
+                        .contentShape(Rectangle())
+                }.buttonStyle(.plain).accessibilityLabel(model.t("session.delete.action"))
+                    .accessibilityIdentifier(game.rawValue + ".continue.delete")
+            }
+        }
     }
     private func requestDeletion() {
         guard !confirmDelete, !model.navigationTouchLocked else { return }
