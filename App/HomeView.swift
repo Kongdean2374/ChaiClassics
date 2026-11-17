@@ -92,6 +92,7 @@ private struct GameMenuDestination: View {
         case .twentyFour: TwentyFourMenuView()
         case .memory: MemoryMenuView()
         case .maze: MazeMenuView()
+        default: ExpandedGameMenuView(game:game)
         }
     }
 }

@@ -29,6 +29,10 @@ class BetaCandidateTests(unittest.TestCase):
         self.tree = {path: ('100644', (candidate.ROOT / path).read_bytes()) for path in beta.SOURCE_FILES}
         self.tree.update({str(path.relative_to(candidate.ROOT)): ('100644', path.read_bytes())
                           for path in (candidate.ROOT / 'UITests').glob('*.swift')})
+        # This suite preserves the released 0.2.2 Beta contract, independently of the current marketing version.
+        project = 'ChaiClassics.xcodeproj/project.pbxproj'
+        mode, data = self.tree[project]
+        self.tree[project] = (mode, data.replace(b'0.3.0', b'0.2.2'))
         self.actual = dict.fromkeys(beta.BETA_TESTS, 'passed')
         self.summary = {'result': 'Passed', 'totalTestCount': 3, 'passedTests': 3, 'failedTests': 0, 'skippedTests': 0}
         self.selection = {'scope': 'beta', 'source_commit': self.sha, 'source_runs': []}

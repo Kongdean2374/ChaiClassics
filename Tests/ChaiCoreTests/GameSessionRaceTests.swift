@@ -153,7 +153,7 @@ final class GameSessionRaceTests: XCTestCase {
         for game in GameID.allCases { initial.sessions[game] = GameSessionState(gameID: game, startedAt: start) }
         try first.saveSessionData(initial)
         let lock = NSLock(); var failures = 0
-        DispatchQueue.concurrentPerform(iterations: 64) { index in
+        DispatchQueue.concurrentPerform(iterations: GameID.allCases.count * 8) { index in
             let game = GameID.allCases[index % GameID.allCases.count]
             do {
                 _ = try (index.isMultiple(of: 2) ? first : second).updateSessionData { metadata in
@@ -183,7 +183,7 @@ final class GameSessionRaceTests: XCTestCase {
             }
         }
         XCTAssertEqual(repeated, finished)
-        XCTAssertEqual(repeated.records.count, 8)
+        XCTAssertEqual(repeated.records.count, GameID.allCases.count)
         for game in GameID.allCases {
             XCTAssertEqual(repeated.statistics[game]?.total, 1)
             XCTAssertEqual(repeated.statistics[game]?.moves, 8)

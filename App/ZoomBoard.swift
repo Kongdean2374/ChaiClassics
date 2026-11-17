@@ -7,15 +7,17 @@ struct ZoomBoard<Content: View>: UIViewRepresentable {
     let size: CGSize
     let inputEnabled: Bool
     let accessibilityHidden: Bool
+    let identifier: String
     let content: () -> Content
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.isEnabled) private var inheritedInputEnabled
 
-    init(size: CGSize, inputEnabled: Bool = true, accessibilityHidden: Bool = false,
+    init(size: CGSize, inputEnabled: Bool = true, accessibilityHidden: Bool = false, identifier: String = "mines.zoomBoard",
          @ViewBuilder content: @escaping () -> Content) {
         self.size = size
         self.inputEnabled = inputEnabled
         self.accessibilityHidden = accessibilityHidden
+        self.identifier = identifier
         self.content = content
     }
 
@@ -34,7 +36,7 @@ struct ZoomBoard<Content: View>: UIViewRepresentable {
         scroll.contentInsetAdjustmentBehavior = .never
         scroll.scrollsToTop = false
         scroll.isAccessibilityElement = false
-        scroll.accessibilityIdentifier = "mines.zoomBoard"
+        scroll.accessibilityIdentifier = identifier
         let host = context.coordinator.host.view!
         host.backgroundColor = .clear
         host.autoresizingMask = []
@@ -45,6 +47,7 @@ struct ZoomBoard<Content: View>: UIViewRepresentable {
         return scroll
     }
     func updateUIView(_ scroll: CenteredBoardScrollView, context: Context) {
+        scroll.accessibilityIdentifier = identifier
         context.coordinator.host.rootView = hostedContent
         context.coordinator.host.overrideUserInterfaceStyle = colorScheme == .dark ? .dark : .light
         updateAccessState(scroll, host: context.coordinator.host.view)

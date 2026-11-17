@@ -2,7 +2,7 @@ name: CI
 run-name: CI · ${{ inputs.ui_scope || 'core-build' }} · ${{ github.ref_name }}
 on:
   push:
-    branches: [main, develop/0.2.0, develop/0.2.1, develop/0.2.2]
+    branches: [main, develop/0.2.0, develop/0.2.1, develop/0.2.2, develop/0.3.0]
   pull_request:
     branches: [main]
   workflow_dispatch:

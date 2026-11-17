@@ -398,7 +398,7 @@ private struct HistoryRecordDetail: View {
         case "singlePlayer", "localTwoPlayer": return "tictactoe.mode." + value
         case "answer": return "sudoku.answerPen"
         case "pencil": return "sudoku.pencil"
-        default: return nil
+        default: return GameID(rawValue:value).map { "game."+$0.rawValue }
         }
     }
     static func mode(_ value: String, model: AppModel) -> String {

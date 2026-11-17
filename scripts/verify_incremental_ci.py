@@ -32,7 +32,7 @@ QA_FILES = set(HELPERS) | {
     'scripts/verify_candidate.py', 'scripts/verify_incremental_ci.py',
     '.github/workflows/ci.yml', '.github/workflows/testflight.yml',
 }
-TRUSTED_BRANCHES = ('main', 'develop/0.2.0', 'develop/0.2.2')
+TRUSTED_BRANCHES = ('main', 'develop/0.2.0', 'develop/0.2.2', 'develop/0.3.0')
 require = candidate.require
 
 

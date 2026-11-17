@@ -84,31 +84,31 @@ public enum GameCatalog {
         .init(.twentyFour, .playable(.twentyFour), .logic, "plus.forwardslash.minus", .coral),
         .init(.memory, .playable(.memory), .puzzles, "square.on.square", .teal),
         .init(.maze, .playable(.maze), .puzzles, "point.topleft.down.curvedto.point.bottomright.up", .indigo),
-        .init(.nonogram, .comingSoon, .logic, "square.grid.3x3.fill", .violet),
-        .init(.kakuro, .comingSoon, .logic, "sum", .coral),
-        .init(.klotski, .comingSoon, .puzzles, "rectangle.split.2x2", .amber),
-        .init(.gomoku, .comingSoon, .strategy, "circle.grid.cross", .blue, parent: .boardGames),
-        .init(.reversi, .comingSoon, .strategy, "circle.lefthalf.filled", .slate, parent: .boardGames),
-        .init(.xiangqi, .comingSoon, .strategy, "circle.grid.3x3", .coral, parent: .boardGames),
-        .init(.banqi, .comingSoon, .strategy, "rectangle.split.2x2", .amber, parent: .boardGames),
-        .init(.chess, .comingSoon, .strategy, "checkerboard.rectangle", .slate, parent: .boardGames),
-        .init(.shogi, .comingSoon, .strategy, "pentagon", .indigo, parent: .boardGames),
+        .init(.nonogram, .playable(.nonogram), .logic, "square.grid.3x3.fill", .violet),
+        .init(.kakuro, .playable(.kakuro), .logic, "sum", .coral),
+        .init(.klotski, .playable(.klotski), .puzzles, "rectangle.split.2x2", .amber),
+        .init(.gomoku, .playable(.gomoku), .strategy, "circle.grid.cross", .blue, parent: .boardGames),
+        .init(.reversi, .playable(.reversi), .strategy, "circle.lefthalf.filled", .slate, parent: .boardGames),
+        .init(.xiangqi, .playable(.xiangqi), .strategy, "circle.grid.3x3", .coral, parent: .boardGames),
+        .init(.banqi, .playable(.banqi), .strategy, "rectangle.split.2x2", .amber, parent: .boardGames),
+        .init(.chess, .playable(.chess), .strategy, "checkerboard.rectangle", .slate, parent: .boardGames),
+        .init(.shogi, .playable(.shogi), .strategy, "pentagon", .indigo, parent: .boardGames),
         .init(.solitaire, .folder, .solitaire, "suit.spade.fill", .jade),
-        .init(.klondike, .comingSoon, .solitaire, "suit.spade.fill", .jade, parent: .solitaire),
-        .init(.spider, .comingSoon, .solitaire, "suit.club.fill", .violet, parent: .solitaire),
-        .init(.freecell, .comingSoon, .solitaire, "rectangle.on.rectangle", .blue, parent: .solitaire),
-        .init(.pyramid, .comingSoon, .solitaire, "triangle", .amber, parent: .solitaire),
-        .init(.tripeaks, .comingSoon, .solitaire, "mountain.2", .teal, parent: .solitaire),
-        .init(.snake, .comingSoon, .arcade, "point.3.connected.trianglepath.dotted", .jade),
-        .init(.fallingBlocks, .comingSoon, .arcade, "square.stack.3d.up", .rose),
-        .init(.brickBreaker, .comingSoon, .arcade, "rectangle.split.3x1", .coral)
+        .init(.klondike, .playable(.klondike), .solitaire, "suit.spade.fill", .jade, parent: .solitaire),
+        .init(.spider, .playable(.spider), .solitaire, "suit.club.fill", .violet, parent: .solitaire),
+        .init(.freecell, .playable(.freecell), .solitaire, "rectangle.on.rectangle", .blue, parent: .solitaire),
+        .init(.pyramid, .playable(.pyramid), .solitaire, "triangle", .amber, parent: .solitaire),
+        .init(.tripeaks, .playable(.tripeaks), .solitaire, "mountain.2", .teal, parent: .solitaire),
+        .init(.snake, .playable(.snake), .arcade, "point.3.connected.trianglepath.dotted", .jade),
+        .init(.fallingBlocks, .playable(.fallingBlocks), .arcade, "square.stack.3d.up", .rose),
+        .init(.brickBreaker, .playable(.brickBreaker), .arcade, "rectangle.split.3x1", .coral)
     ]
 
     /// 25 logical games, including both folders' children, never the folders.
     public static let games = items.filter { $0.kind != .folder }
     public static let playableGames = games.filter { $0.gameID != nil }
     public static let comingSoonGames = games.filter { $0.kind == .comingSoon }
-    /// Six playable games, six individual previews, and two folders.
+    /// Twelve playable games and two folders on the Home screen.
     public static let homeItems = items.filter { $0.parentID == nil }
 
     public static func item(_ id: CatalogItemID) -> CatalogItem? {

@@ -20,7 +20,7 @@ import verify_candidate as candidate
 import verify_incremental_ci as historical
 
 require = candidate.require
-BRANCHES = ('main', 'develop/0.2.0', 'develop/0.2.1', 'develop/0.2.2')
+BRANCHES = ('main', 'develop/0.2.0', 'develop/0.2.1', 'develop/0.2.2', 'develop/0.3.0')
 MAX_RUNS = 20
 FAST_SENTINEL = 'ChaiClassicsUITests/testHomeHasExactlyThreeColumns'
 ZOOM_BOARD_FILE = 'App/ZoomBoard.swift'

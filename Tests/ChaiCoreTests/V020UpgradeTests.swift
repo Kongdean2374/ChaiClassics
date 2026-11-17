@@ -136,7 +136,7 @@ final class V020UpgradeTests: XCTestCase {
         XCTAssertEqual(try restarted.load(MazeBoard.self, namespace: "maze"), maze)
         let savedFiles = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
             .filter { $0.pathExtension == "json" }.map { $0.deletingPathExtension().lastPathComponent }
-        XCTAssertEqual(Set(savedFiles), Set(GameID.allCases.map(\.rawValue)))
+        XCTAssertEqual(Set(savedFiles), Set(GameID.legacyGames.map(\.rawValue)))
         try assertLegacyBytes(originals, directory: directory)
     }
 
@@ -168,14 +168,14 @@ final class V020UpgradeTests: XCTestCase {
 
     func testPersistentGameIDsContainExactlyEightPlayableGamesAndPreserveV010RawValues() throws {
         let expected = Set(["sudoku", "minesweeper", "sliding", "tictactoe", "connectfour", "twentyfour", "memory", "maze"])
-        XCTAssertEqual(GameID.allCases.count, 8)
-        XCTAssertEqual(Set(GameID.allCases.map(\.rawValue)), expected)
+        XCTAssertEqual(GameID.legacyGames.count, 8)
+        XCTAssertEqual(Set(GameID.legacyGames.map(\.rawValue)), expected)
         XCTAssertEqual(Set(GameCatalog.playableGames.compactMap(\.gameID)), Set(GameID.allCases))
         for namespace in expected {
             XCTAssertEqual(try JSONDecoder().decode(GameID.self, from: JSONEncoder().encode(namespace)).rawValue, namespace)
         }
         let previewsAndFolders = GameCatalog.items.filter { $0.gameID == nil }
-        XCTAssertEqual(previewsAndFolders.count, 19)
+        XCTAssertEqual(previewsAndFolders.count, 2)
         for item in previewsAndFolders {
             XCTAssertNil(GameID(rawValue: item.id.rawValue))
             XCTAssertThrowsError(try JSONDecoder().decode(GameID.self, from: JSONEncoder().encode(item.id.rawValue)))

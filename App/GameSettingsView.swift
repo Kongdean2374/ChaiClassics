@@ -108,6 +108,21 @@ struct GameSettingsView: View {
                     Text(model.t("gameSettings.speed.normal")).tag(1.0)
                     Text(model.t("gameSettings.speed.fast")).tag(1.2)
                 }.accessibilityIdentifier("gameSettings.maze.speed")
+            default:
+                if SolitaireVariant(rawValue:game.rawValue)==nil { difficultyPicker(selection:value(\.duelDifficulty)) }
+                if game.isStrategy {
+                    Picker(model.t("gameSettings.duel.mode"),selection:value(\.duelMode)) {
+                        Text(model.t("tictactoe.mode.singlePlayer")).tag("singlePlayer")
+                        Text(model.t("tictactoe.mode.localTwoPlayer")).tag("localTwoPlayer")
+                    }.accessibilityIdentifier("gameSettings.duel.mode")
+                    Picker(model.t("gameSettings.duel.first"),selection:value(\.humanPlayer)) {
+                        Text(model.t("gameSettings.duel.humanFirst")).tag(1)
+                        Text(model.t("gameSettings.duel.computerFirst")).tag(2)
+                    }.accessibilityIdentifier("gameSettings.duel.first")
+                }
+                ExpandedOptionsControls(game:game,options:Binding(
+                    get:{ preferences.expanded ?? .init() },
+                    set:{ next in model.updateGameSettings(for:game){ $0.expanded = next } }))
             }
         } header: {
             Text(model.t("gameSettings.preferences"))

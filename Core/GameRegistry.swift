@@ -6,7 +6,14 @@ public enum GameID: String, Codable, CaseIterable, Identifiable, Sendable {
     case connectFour = "connectfour"
     case twentyFour = "twentyfour"
     case memory, maze
+    case nonogram, kakuro, klotski, gomoku, reversi, xiangqi, banqi, chess, shogi
+    case klondike, spider, freecell, pyramid, tripeaks, snake
+    case fallingBlocks = "fallingblocks"
+    case brickBreaker = "brickbreaker"
     public var id: String { rawValue }
+    public static let legacyGames: Set<GameID> = [.sudoku,.minesweeper,.sliding,.ticTacToe,.connectFour,.twentyFour,.memory,.maze]
+    public var isExpanded: Bool { !Self.legacyGames.contains(self) }
+    public var isStrategy: Bool { [.gomoku,.reversi,.xiangqi,.banqi,.chess,.shogi].contains(self) }
 }
 
 /// Only playable games have a save identity. Catalog folders and previews use

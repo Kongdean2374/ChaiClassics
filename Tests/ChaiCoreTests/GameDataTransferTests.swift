@@ -30,6 +30,9 @@ final class GameDataTransferTests: XCTestCase {
         try saves.save(TwentyFourBoard(seed: 3), namespace: "twentyfour")
         try saves.save(MemoryBoard(seed: 4), namespace: "memory")
         try saves.save(MazeBoard(difficulty: .easy, seed: 5), namespace: "maze")
+        for game in GameID.allCases where game.isExpanded {
+            try saves.save(try XCTUnwrap(ExpandedGameSave(game:game,seed:6,difficulty:.easy)),namespace:game.rawValue)
+        }
     }
     private func edit(_ data: Data, _ change: (inout [String: Any]) -> Void) throws -> Data {
         var object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -42,7 +45,7 @@ final class GameDataTransferTests: XCTestCase {
         let before = try bytes(folder)
         let store = try GameDataTransferStore(directory: folder)
         let archive = try store.validateArchive(store.exportArchive(preferences: AppPreferences()))
-        XCTAssertEqual(archive.games.count, 8)
+        XCTAssertEqual(archive.games.count, 25)
         XCTAssertEqual(Set(archive.games.map(\.gameID)), Set(GameID.allCases))
         XCTAssertTrue(archive.metadata.records.isEmpty)
         XCTAssertEqual(try bytes(folder), before)

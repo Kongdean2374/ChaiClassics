@@ -70,8 +70,8 @@ class AppResourceTests(unittest.TestCase):
             for file in ['Localizable.strings','InfoPlist.strings','Privacy.md','Terms.md','Support.md']:
                 self.assertIn(f'App/Resources/{language}.lproj/{file}',project)
         for file in (ROOT/'App').glob('*.swift'):self.assertIn('App/'+file.name,project)
-        self.assertIn('MARKETING_VERSION = 0.2.2',project)
-        self.assertIn('CHAI_RELEASE_VERSION = 0.2.2',project)
+        self.assertIn('MARKETING_VERSION = 0.3.0',project)
+        self.assertIn('CHAI_RELEASE_VERSION = 0.3.0',project)
         info=plistlib.loads((ROOT/'App/Info.plist').read_bytes())
         self.assertEqual(info['CFBundleLocalizations'],['zh-Hant','en'])
         self.assertEqual(info['CFBundleIdentifier'],'$(PRODUCT_BUNDLE_IDENTIFIER)')

@@ -16,7 +16,8 @@ final class GamePlayPreferencesTests: XCTestCase {
             .map { ($0.lastPathComponent, try Data(contentsOf: $0)) })
     }
 
-    private func preferences(_ index: Int) -> GamePlayPreferences {
+    private func preferences(_ sourceIndex: Int) -> GamePlayPreferences {
+        let index = (sourceIndex % 10 + 10) % 10
         var value = GamePlayPreferences()
         value.haptics = index.isMultiple(of: 2)
         value.sudokuPencilByDefault = !index.isMultiple(of: 2)
@@ -25,7 +26,7 @@ final class GamePlayPreferencesTests: XCTestCase {
         value.duelMode = index.isMultiple(of: 2) ? "singlePlayer" : "localTwoPlayer"
         value.duelDifficulty = levels[(index + 1) % 3]; value.humanPlayer = 1 + index % 2
         value.twentyFourDifficulty = levels[(index + 2) % 3]
-        value.memoryMode = levels[index % 3]; value.memoryRevealSeconds = 0.5 + Double(index) * 0.1
+        value.memoryMode = levels[index % 3]; value.memoryRevealSeconds = 0.5 + Double(index % 10) * 0.1
         value.mazeDifficulty = levels[(index + 1) % 3]; value.mazeSpeed = [0.8, 1.0, 1.2][index % 3]
         return value
     }

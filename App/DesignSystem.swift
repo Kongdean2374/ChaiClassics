@@ -157,12 +157,17 @@ struct GameArtwork: View {
 /// A single source keeps the artwork consistent and avoids eight large textures.
 private enum GameIllustration {
     static let images: [GameID: UIImage] = {
-        let sheets: [(String, [GameID])] = [("ClassicIllustrations", [.ticTacToe, .connectFour, .twentyFour, .memory]), ("PuzzleIllustrations", [.sudoku, .minesweeper, .sliding, .maze])]
-        return Dictionary(uniqueKeysWithValues: sheets.flatMap { name, games -> [(GameID, UIImage)] in
+        let sheets: [(String, Int, [GameID])] = [
+            ("ClassicIllustrations",2,[.ticTacToe,.connectFour,.twentyFour,.memory]),
+            ("PuzzleIllustrations",2,[.sudoku,.minesweeper,.sliding,.maze]),
+            ("StrategyIllustrations",3,[.nonogram,.kakuro,.klotski,.gomoku,.reversi,.xiangqi,.banqi,.chess,.shogi]),
+            ("CardsArcadeIllustrations",3,[.klondike,.spider,.freecell,.pyramid,.tripeaks,.snake,.fallingBlocks,.brickBreaker])
+        ]
+        return Dictionary(uniqueKeysWithValues: sheets.flatMap { name, columns, games -> [(GameID, UIImage)] in
             guard let source = UIImage(named: name)?.cgImage else { return [] }
-            let width = source.width / 2, height = source.height / 2
+            let width = source.width / columns, height = source.height / columns
             return games.enumerated().compactMap { index, game in
-            let rect = CGRect(x: CGFloat((index % 2) * width), y: CGFloat((index / 2) * height), width: CGFloat(width), height: CGFloat(height))
+            let rect = CGRect(x: CGFloat((index % columns) * width), y: CGFloat((index / columns) * height), width: CGFloat(width), height: CGFloat(height))
             guard let cropped = source.cropping(to: rect) else { return nil }
             return (game, UIImage(cgImage: cropped))
             }

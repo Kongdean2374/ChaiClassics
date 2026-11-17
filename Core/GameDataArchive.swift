@@ -19,6 +19,7 @@ public enum GameSavePayload: Codable, Equatable, Sendable {
     case twentyFour(TwentyFourBoard)
     case memory(MemoryBoard)
     case maze(MazeBoard)
+    case expanded(ExpandedGameSave)
 
     public var gameID: GameID {
         switch self {
@@ -30,6 +31,7 @@ public enum GameSavePayload: Codable, Equatable, Sendable {
         case .twentyFour: return .twentyFour
         case .memory: return .memory
         case .maze: return .maze
+        case .expanded(let board): return board.gameID
         }
     }
 
@@ -47,6 +49,7 @@ public enum GameSavePayload: Codable, Equatable, Sendable {
         case .twentyFour(let board): return board.isValidSave
         case .memory(let board): return board.isValidSave
         case .maze(let board): return board.isValidSave && board.elapsedSeconds <= 315_360_000
+        case .expanded(let board): return board.isValidSave
         }
     }
 
@@ -78,6 +81,7 @@ public enum GameSavePayload: Codable, Equatable, Sendable {
 
     public func snapshot(catalog: [SudokuPuzzle]) -> GameRunSnapshot? {
         switch self {
+        case .expanded(let board): return board.snapshot
         case .sudoku(let progress):
             guard let id = progress.currentID, let board = progress.boards[id], let puzzle = catalog.first(where: { $0.id == id }) else { return nil }
             let ended = board.isComplete(puzzle: puzzle)
@@ -115,6 +119,7 @@ public enum GameSavePayload: Codable, Equatable, Sendable {
 
     func envelopeData() throws -> Data {
         switch self {
+        case .expanded(let value): return try JSONEncoder().encode(GameDataEnvelope(payload: value))
         case .sudoku(let value): return try JSONEncoder().encode(GameDataEnvelope(payload: value))
         case .minesweeper(let value): return try JSONEncoder().encode(GameDataEnvelope(payload: value))
         case .sliding(let value): return try JSONEncoder().encode(GameDataEnvelope(payload: value))
@@ -137,6 +142,10 @@ public enum GameSavePayload: Codable, Equatable, Sendable {
         case .twentyFour: return .twentyFour(try decoder.decode(GameDataEnvelope<TwentyFourBoard>.self, from: data).payload)
         case .memory: return .memory(try decoder.decode(GameDataEnvelope<MemoryBoard>.self, from: data).payload)
         case .maze: return .maze(try decoder.decode(GameDataEnvelope<MazeBoard>.self, from: data).payload)
+        default:
+            let board = try decoder.decode(GameDataEnvelope<ExpandedGameSave>.self, from:data).payload
+            guard board.gameID == game else { throw SaveStore.StoreError.corrupt }
+            return .expanded(board)
         }
     }
 }
@@ -166,10 +175,12 @@ public struct GameDataArchive: Codable, Equatable, Sendable {
     }
 
     public func isValid(catalog: [SudokuPuzzle]) -> Bool {
-        let allowed = Set(scope.gameIDs)
+        let allowed = Set(games.map(\.gameID))
+        let completeScope = Set(scope.gameIDs)
+        let releasedBackup = scope == .all && allowed == GameID.legacyGames
         guard format == "ChaiClassics.GameDataArchive", version == Self.currentVersion,
               createdAt.timeIntervalSince1970.isFinite, (0...253_402_300_799).contains(createdAt.timeIntervalSince1970),
-              games.count == allowed.count, Set(games.map(\.gameID)) == allowed,
+              games.count == allowed.count, allowed == completeScope || releasedBackup,
               metadata.isValid,
               metadata.records.allSatisfy({ allowed.contains($0.gameID) }),
               Set(metadata.sessions.keys).isSubset(of: allowed), Set(metadata.gamePreferences.keys).isSubset(of: allowed),

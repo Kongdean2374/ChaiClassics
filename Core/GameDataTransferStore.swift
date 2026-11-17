@@ -123,7 +123,13 @@ public final class GameDataTransferStore {
         try recoverInterruptedTransaction()
         var metadata: GameSessionData
         switch archive.scope {
-        case .all: metadata = archive.metadata
+        case .all:
+            if Set(archive.games.map(\.gameID)) == GameID.legacyGames {
+                // A released 0.2.2 backup predates the new namespaces. Restore
+                // exactly its eight games without clearing newer game data.
+                metadata = try loadSessionData()
+                for entry in archive.games { try metadata.replace(entry.gameID, with: archive.metadata) }
+            } else { metadata = archive.metadata }
         case .game(let game):
             metadata = try loadSessionData()
             try metadata.replace(game, with: archive.metadata)

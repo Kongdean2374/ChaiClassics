@@ -13,6 +13,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var twentyFour: TwentyFourBoard?
     @Published private(set) var memory: MemoryBoard?
     @Published private(set) var maze: MazeBoard?
+    @Published private(set) var expandedGames: [GameID: ExpandedGameSave] = [:]
     @Published private(set) var puzzles: [SudokuPuzzle] = []
     @Published private(set) var preferences = AppPreferences()
     @Published var notice: Notice?
@@ -104,6 +105,9 @@ final class AppModel: ObservableObject {
         twentyFour = restore(TwentyFourBoard.self, game: .twentyFour) { $0.isValidSave }
         memory = restore(MemoryBoard.self, game: .memory) { $0.isValidSave }
         maze = restore(MazeBoard.self, game: .maze) { $0.isValidSave }
+        for game in GameID.allCases where game.isExpanded {
+            expandedGames[game] = restore(ExpandedGameSave.self, game: game) { $0.gameID == game && $0.isValidSave }
+        }
         if sessionStorageAvailable {
             // Preserve real pre-0.2.2 totals without inventing dated records.
             // Zero markers also stop a new install from reclassifying future wins.
@@ -156,6 +160,7 @@ final class AppModel: ObservableObject {
             case .twentyFour: twentyFour = nil
             case .memory: memory = nil
             case .maze: maze = nil
+            default: expandedGames[game] = nil
             }
             blocked.remove(game); notice = nil; return true
         } catch { notice = .writeFailed; return false }
@@ -421,6 +426,8 @@ extension AppModel {
                 exists = true; ended = board.isComplete; outcome = ended ? .completed : nil
                 elapsed = board.elapsedSeconds; moves = board.moves; difficulty = board.difficulty.rawValue; mode = "\(board.size)×\(board.size)"
             }
+        default:
+            if let board = expandedGames[game] { return board.snapshot }
         }
         return GameRunSnapshot(game: game, exists: exists, ended: ended, outcome: outcome, elapsedSeconds: elapsed,
                                moves: moves, difficulty: difficulty, mode: mode)
@@ -569,6 +576,7 @@ extension AppModel {
         case .twentyFour: if var board = twentyFour { board.elapsedSeconds = seconds; _ = saveTwentyFour(board) }
         case .memory: if var board = memory { board.elapsedSeconds = seconds; _ = saveMemory(board) }
         case .maze: if var board = maze { board.elapsedSeconds = seconds; _ = saveMaze(board) }
+        default: if var board = expandedGames[game] { board.elapsedSeconds = seconds; _ = saveExpanded(board) }
         }
     }
     func finishSessionIfNeeded(_ game: GameID, resultReady: Bool) {
@@ -635,7 +643,7 @@ extension AppModel {
     func previewGameDataImport(_ data: Data) throws -> GameDataImportPreview {
         guard let transferStore else { throw GameDataTransferStore.TransferError.unavailable }
         let archive = try transferStore.validateArchive(data)
-        return GameDataImportPreview(createdAt: archive.createdAt, games: archive.scope.gameIDs,
+        return GameDataImportPreview(createdAt: archive.createdAt, games: archive.games.map(\.gameID),
                                      recordCount: archive.metadata.records.count, includesPreferences: archive.preferences != nil)
     }
     func importGameData(_ data: Data) throws {
@@ -671,7 +679,30 @@ extension AppModel {
             case .twentyFour: twentyFour = restore(TwentyFourBoard.self, game: game) { $0.isValidSave }
             case .memory: memory = restore(MemoryBoard.self, game: game) { $0.isValidSave }
             case .maze: maze = restore(MazeBoard.self, game: game) { $0.isValidSave }
+            default: expandedGames[game] = restore(ExpandedGameSave.self, game:game) { $0.gameID == game && $0.isValidSave }
             }
         }
+    }
+
+    @discardableResult func saveExpanded(_ candidate: ExpandedGameSave) -> Bool {
+        let game = candidate.gameID
+        guard game.isExpanded, candidate.isValidSave else { return false }
+        if pendingNewGame == game {
+            guard persistNewGamePayload(.expanded(candidate)) else { return false }
+            expandedGames[game] = candidate; return true
+        }
+        flushSessionClock(game)
+        var next = candidate
+        next.elapsedSeconds = max(next.elapsedSeconds, sessionData.sessions[game]?.elapsedSeconds ?? 0)
+        guard persist(next, game:game, validate:{$0.gameID == game && $0.isValidSave}) else { return false }
+        expandedGames[game] = next; syncSessionMoves(game,next.state.moves)
+        finishSessionIfNeeded(game,resultReady:true); return true
+    }
+
+    @discardableResult func editExpanded(_ game: GameID, _ change: (inout ExpandedGameState) -> Bool) -> Bool {
+        guard sessionIsPlaying(game), var board = expandedGames[game], board.outcome == nil else { return false }
+        let before = board.state
+        guard change(&board.state), board.state != before, saveExpanded(board) else { return false }
+        feedback(for:game); return true
     }
 }

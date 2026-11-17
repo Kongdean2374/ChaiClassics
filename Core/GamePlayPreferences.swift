@@ -17,12 +17,14 @@ public struct GamePlayPreferences: Codable, Equatable, Sendable {
     public var memoryRevealSeconds = 0.65
     public var mazeDifficulty = "normal"
     public var mazeSpeed = 1.0
+    /// Optional so every released 0.2.2 preference still decodes unchanged.
+    public var expanded: ExpandedGamePreferences?
 
     public init() {}
 
     public var isValid: Bool {
         let levels = ["easy", "normal", "hard"]
-        return (try? MineConfiguration(width: minesWidth, height: minesHeight, mines: minesCount)) != nil &&
+        return (expanded?.isValid ?? true) && (try? MineConfiguration(width: minesWidth, height: minesHeight, mines: minesCount)) != nil &&
             (3...5).contains(slidingSize) && levels.contains(slidingDifficulty) &&
             ["singlePlayer", "localTwoPlayer"].contains(duelMode) && levels.contains(duelDifficulty) &&
             [1, 2].contains(humanPlayer) && levels.contains(twentyFourDifficulty) && levels.contains(memoryMode) &&
