@@ -185,26 +185,34 @@ private struct MinesGrid: View {
                         let i = row * board.configuration.width + col
                         let open = board.revealed.contains(i)
                         let marked = board.flags.contains(i)
-                        MinesCellFace(board: board, index: i).frame(width: 34, height: 34).contentShape(Rectangle())
-                            .gesture(LongPressGesture(minimumDuration: 0.45, maximumDistance: 12).exclusively(before: TapGesture()).onEnded { value in
-                                guard enabled, model.sessionIsPlaying(.minesweeper) else { return }
-                                switch value { case .first: flag(i); case .second: tap(i) }
-                            })
-                            .accessibilityElement().accessibilityAddTraits(.isButton)
-                            .accessibilityLabel(model.t("mines.cell.label", row + 1, col + 1, marked ? model.t("mines.flagged") : open ? model.t("mines.revealed", board.adjacentMines(i)) : model.t("mines.covered")))
-                            .accessibilityValue(model.t(marked ? "mines.flagged" : open ? "mines.revealed.value" : "mines.covered"))
-                            .accessibilityHint(model.t("mines.cell.hint"))
-                            .accessibilityAction {
-                                guard enabled, model.sessionIsPlaying(.minesweeper) else { return }
-                                tap(i)
-                            }
-                            .accessibilityAction(named: model.t(marked ? "mines.unflag" : "mines.flag")) {
-                                guard enabled, model.sessionIsPlaying(.minesweeper) else { return }
-                                flag(i)
-                            }
-                            .accessibilityIdentifier("mines.cell.\(i)")
-                            .accessibilityHidden(!model.sessionIsPlaying(.minesweeper))
-                            .disabled(!acceptsInput)
+                        if acceptsInput {
+                            MinesCellFace(board: board, index: i).frame(width: 34, height: 34).contentShape(Rectangle())
+                                .gesture(LongPressGesture(minimumDuration: 0.45, maximumDistance: 12).exclusively(before: TapGesture()).onEnded { value in
+                                    guard enabled, model.sessionIsPlaying(.minesweeper) else { return }
+                                    switch value { case .first: flag(i); case .second: tap(i) }
+                                })
+                                .accessibilityElement().accessibilityAddTraits(.isButton)
+                                .accessibilityLabel(model.t("mines.cell.label", row + 1, col + 1, marked ? model.t("mines.flagged") : open ? model.t("mines.revealed", board.adjacentMines(i)) : model.t("mines.covered")))
+                                .accessibilityValue(model.t(marked ? "mines.flagged" : open ? "mines.revealed.value" : "mines.covered"))
+                                .accessibilityHint(model.t("mines.cell.hint"))
+                                .accessibilityAction {
+                                    guard enabled, model.sessionIsPlaying(.minesweeper) else { return }
+                                    tap(i)
+                                }
+                                .accessibilityAction(named: model.t(marked ? "mines.unflag" : "mines.flag")) {
+                                    guard enabled, model.sessionIsPlaying(.minesweeper) else { return }
+                                    flag(i)
+                                }
+                                .accessibilityIdentifier("mines.cell.\(i)")
+                                .accessibilityHidden(!model.sessionIsPlaying(.minesweeper))
+                                .disabled(!acceptsInput)
+                        } else {
+                            // A disabled separately hosted SwiftUI button may remain in
+                            // UIKit's accessibility snapshot. Keep the actual board face
+                            // under the blur, but create no action, button trait or cell ID.
+                            MinesCellFace(board: board, index: i)
+                                .frame(width: 34, height: 34).accessibilityHidden(true)
+                        }
                     }
                 }
             }
