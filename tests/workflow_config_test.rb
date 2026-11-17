@@ -220,6 +220,7 @@ check(!candidate_gate.fetch('run').include?('--branch'), 'TestFlight cannot sele
 end
 games_step = ipad_steps.find { |step| step['id'] == 'games' }
 check(games_step && games_step['run'] == 'bash scripts/ipad_screenshots.sh games', 'all five new journeys run on the selected iPad')
+check(games_step['if'] == "${{ !cancelled() && steps.build.outcome == 'success' && steps.boot.outcome == 'success' }}" && !games_step.key?('continue-on-error'), 'independent iPad journeys survive gallery failure only after successful build and boot, without ignoring failure')
 check(ipad_script.include?('IPadGames.xcresult') && ipad_script.include?('games-summary.json'), 'iPad game journeys retain an independent result and actual summary')
 check(ipad_script.scan('-only-testing:ChaiClassicsUITests/ChaiClassicsV020UITests/').length == 5, 'exactly five new game journeys are selected separately from four gallery tests')
 check(ipad_steps.any? { |step| step.dig('with', 'path') == 'build/ipad-screenshots/IPadGames.xcresult' }, 'all five iPad journey results remain reviewable')

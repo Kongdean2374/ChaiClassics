@@ -54,6 +54,9 @@ jobs:
         run: bash scripts/ipad_screenshots.sh test
       - name: Run all five new game journeys on the same iPad
         id: games
+        # Preserve independent game evidence after a gallery assertion fails.
+        # The failed gallery step still fails the job and candidate proof.
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.boot.outcome == 'success' }}
         timeout-minutes: 35
         run: bash scripts/ipad_screenshots.sh games
       - name: Export XCTest screenshots and diagnostics

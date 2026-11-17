@@ -49,6 +49,9 @@ The original xcresult bundles remain available separately as listed above.
 Attachment export runs even after test failure whenever its result bundle
 exists. An export failure remains a failed step, with available originals and
 diagnostics preserved for review.
+The five iPad game journeys also run after a gallery assertion fails, provided
+the unsigned build and Simulator boot succeeded. A failed gallery or journey
+still fails the workflow and cannot produce an eligible candidate proof.
 
 The phone selector prefers the newest installed Pro Max/Plus because the layout
 suite tests actual widths through 430pt inside its real Simulator window. A

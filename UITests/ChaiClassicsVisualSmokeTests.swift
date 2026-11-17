@@ -64,7 +64,11 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
 
     private func scrollFullyIntoView(_ element: XCUIElement, app: XCUIApplication) {
         let window = app.frame
-        let usable = CGRect(x: window.minX + 10, y: window.minY + 150, width: window.width - 20, height: window.height - 240)
+        let navigation = app.navigationBars.firstMatch
+        let top = navigation.exists ? navigation.frame.maxY : window.minY
+        var usable = CGRect(x: window.minX + 10, y: top, width: window.width - 20, height: window.maxY - 20 - top)
+        let viewport = app.scrollViews.firstMatch
+        if viewport.exists { usable = usable.intersection(viewport.frame) }
         for _ in 0..<5 {
             if element.exists {
                 let frame = element.frame
@@ -359,9 +363,14 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         for digit in digits { assertIPadVisible(digit, app: app); XCTAssertTrue(digit.isEnabled) }
         let seededBlueDigit = app.buttons["sudoku.cell.2"]
         XCTAssertEqual(seededBlueDigit.value as? String, "4")
-        app.segmentedControls["sudoku.tools"].buttons["答案筆"].tap()
+        // The upgrade fixture intentionally restores Pencil mode. Exercise it,
+        // then require the real native Answer segment to select before writing.
+        XCTAssertTrue(app.segmentedControls["sudoku.tools"].buttons["鉛筆"].isSelected)
         let empty = app.buttons["sudoku.cell.3"]
         XCTAssertEqual(empty.value as? String, "空白"); empty.tap()
+        app.buttons["sudoku.digit.6"].tap()
+        XCTAssertEqual(empty.value as? String, "候選：6")
+        selectNativeSegment("sudoku.tools", label: "答案筆", index: 0, app: app)
         app.buttons["sudoku.digit.6"].tap()
         XCTAssertEqual(empty.value as? String, "6")
         app.buttons["sudoku.erase"].tap()

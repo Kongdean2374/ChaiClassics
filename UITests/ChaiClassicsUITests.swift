@@ -1,6 +1,32 @@
 import XCTest
 import UIKit
 
+extension XCTestCase {
+    /// Tap the intended segment using the native control's geometry, independent
+    /// of individual child accessibility bounds. Require the actual selection
+    /// before allowing a subsequent game input.
+    func selectNativeSegment(_ identifier: String, label: String, index: Int, app: XCUIApplication,
+                             file: StaticString = #filePath, line: UInt = #line) {
+        let control = app.segmentedControls.matching(identifier: identifier).firstMatch
+        XCTAssertTrue(control.waitForExistence(timeout: 5), file: file, line: line)
+        let segments = control.buttons
+        let count = segments.count
+        guard index >= 0, index < count else {
+            XCTFail("Missing native segment: " + label, file: file, line: line)
+            return
+        }
+        let target = segments.element(boundBy: index)
+        XCTAssertEqual(target.label, label, file: file, line: line)
+        XCTAssertTrue(control.isHittable, file: file, line: line)
+        control.coordinate(withNormalizedOffset: CGVector(dx: (CGFloat(index) + 0.5) / CGFloat(count), dy: 0.5)).tap()
+        let selected = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            target.exists && target.isSelected
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [selected], timeout: 5), .completed,
+                       "Native segment did not select: " + label, file: file, line: line)
+    }
+}
+
 final class ChaiClassicsUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
     private func launch(_ profile: String, legacy: Bool = false) -> XCUIApplication {
@@ -35,7 +61,11 @@ final class ChaiClassicsUITests: XCTestCase {
     }
     private func scrollFullyIntoView(_ element: XCUIElement, app: XCUIApplication) {
         let window = app.frame
-        let usable = CGRect(x: window.minX + 10, y: window.minY + 150, width: window.width - 20, height: window.height - 240)
+        let navigation = app.navigationBars.firstMatch
+        let top = navigation.exists ? navigation.frame.maxY : window.minY
+        var usable = CGRect(x: window.minX + 10, y: top, width: window.width - 20, height: window.maxY - 20 - top)
+        let viewport = app.scrollViews.firstMatch
+        if viewport.exists { usable = usable.intersection(viewport.frame) }
         for _ in 0..<6 {
             if element.exists {
                 let frame = element.frame
@@ -96,17 +126,19 @@ final class ChaiClassicsUITests: XCTestCase {
         app.buttons["sudoku.easy.0001"].tap()
         let cell = app.buttons["sudoku.cell.1"]
         XCTAssertTrue(cell.waitForExistence(timeout: 5)); cell.tap()
-        app.segmentedControls["sudoku.tools"].buttons["鉛筆"].tap()
+        selectNativeSegment("sudoku.tools", label: "鉛筆", index: 1, app: app)
         app.buttons["sudoku.digit.2"].tap(); app.buttons["sudoku.digit.7"].tap()
         XCTAssertTrue((cell.value as? String ?? "").contains("2, 7"))
         XCTAssertGreaterThan(try blueInkPixels(in: cell, app: app), 5)
-        app.segmentedControls["sudoku.tools"].buttons["答案筆"].tap(); app.buttons["sudoku.digit.8"].tap()
+        selectNativeSegment("sudoku.tools", label: "答案筆", index: 0, app: app)
+        app.buttons["sudoku.digit.8"].tap()
         XCTAssertEqual(cell.value as? String, "8") // Answer entry clears pencil notes.
         XCTAssertGreaterThan(try blueInkPixels(in: cell, app: app), 5)
         XCTAssertEqual(try blueInkPixels(in: app.buttons["sudoku.cell.0"], app: app), 0)
         screenshot(app,"sudoku-blue-player-ink")
         app.buttons["sudoku.erase"].tap(); XCTAssertEqual(cell.value as? String, "空白")
-        app.segmentedControls["sudoku.tools"].buttons["鉛筆"].tap(); app.buttons["sudoku.digit.7"].tap()
+        selectNativeSegment("sudoku.tools", label: "鉛筆", index: 1, app: app)
+        app.buttons["sudoku.digit.7"].tap()
         XCTAssertTrue(app.segmentedControls.buttons["鉛筆"].isSelected)
         app.terminate(); app.launch()
         app.buttons["game.sudoku"].tap(); app.buttons["sudoku.continue"].tap()
