@@ -20,6 +20,8 @@ public struct ChessBoard: Codable, Equatable, Sendable {
     public private(set) var halfMoves = 0
     public private(set) var moves = 0
     private var positions: [String: Int] = [:]
+    // A missing value denotes a save from before claims were available.
+    private var drawClaimed: Bool? = false
     public init() {
         cells = [-4,-2,-3,-5,-6,-3,-2,-4] + Array(repeating:-1,count:8) + Array(repeating:0,count:32) + Array(repeating:1,count:8) + [4,2,3,5,6,3,2,4]
         positions[positionKey] = 1
@@ -83,6 +85,12 @@ public struct ChessBoard: Codable, Equatable, Sendable {
         }
         return false
     }
+    private var enPassantTarget: Int? {
+        guard let square = enPassant, cells.indices.contains(square),
+              square / 8 == (sign == 1 ? 2 : 5), cells[square] == 0,
+              cells.indices.contains(square + sign * 8), cells[square + sign * 8] == -sign else { return nil }
+        return square
+    }
     private func pseudoMoves(from: Int) -> [ChessMove] {
         let piece = cells[from], side = sign, x = from%8, y = from/8
         guard piece*side>0 else { return [] }
@@ -99,6 +107,7 @@ public struct ChessBoard: Codable, Equatable, Sendable {
         switch abs(piece) {
         case 1:
             let ny = y-side
+            let ep = enPassantTarget
             if (0..<8).contains(ny) {
                 if cells[ny*8+x]==0 {
                     destinations.append(ny*8+x)
@@ -106,7 +115,7 @@ public struct ChessBoard: Codable, Equatable, Sendable {
                 }
                 for nx in [x-1,x+1] where (0..<8).contains(nx) {
                     let target = ny*8+nx
-                    if cells[target]*side<0 && abs(cells[target]) != 6 || enPassant==target && cells[y*8+nx] == -side { destinations.append(target) }
+                    if cells[target]*side<0 && abs(cells[target]) != 6 || ep==target { destinations.append(target) }
                 }
             }
         case 2: for (dx,dy) in [(1,2),(2,1),(-1,2),(-2,1),(1,-2),(2,-1),(-1,-2),(-2,-1)] { append(dx,dy,sliding:false) }
@@ -136,7 +145,7 @@ public struct ChessBoard: Codable, Equatable, Sendable {
     }
     private mutating func apply(_ move: ChessMove) {
         let piece = cells[move.from], captured = cells[move.to], side = piece>0 ? 1 : -1
-        if abs(piece)==1, move.to==enPassant, captured==0 { cells[move.to+8*side] = 0 }
+        if abs(piece)==1, move.from%8 != move.to%8, move.to==enPassant, captured==0 { cells[move.to+8*side] = 0 }
         cells[move.to] = (move.promotion ?? abs(piece))*side; cells[move.from] = 0
         if abs(piece)==6 {
             let offset = side==1 ? 0 : 2; castling[offset] = false; castling[offset+1] = false
@@ -149,8 +158,8 @@ public struct ChessBoard: Codable, Equatable, Sendable {
         enPassant = abs(piece)==1 && abs(move.to-move.from)==16 ? (move.from+move.to)/2 : nil
         halfMoves = abs(piece)==1 || captured != 0 ? 0 : halfMoves+1; moves += 1; currentPlayer = currentPlayer.opponent
     }
-    private var positionKey: String {
-        let effectiveEP = enPassant.flatMap { square -> Int? in
+    var positionKey: String {
+        let effectiveEP = enPassantTarget.flatMap { square -> Int? in
             // Count an en-passant field only when an actual legal capture exists.
             let fromRow = square/8+sign
             return [square%8-1,square%8+1].contains { x in
@@ -160,18 +169,59 @@ public struct ChessBoard: Codable, Equatable, Sendable {
         }
         return cells.map(String.init).joined(separator:",")+"/\(currentPlayer.rawValue)/\(castling)/\(effectiveEP ?? -1)"
     }
-    public var result: StrategyResult {
-        let legal = legalMoves()
+    private var currentRepetitions: Int { positions[positionKey, default: 0] }
+    private var claimThreshold: Bool { halfMoves >= 100 || currentRepetitions >= 3 }
+
+    public var result: StrategyResult { result(with: legalMoves()) }
+
+    private func result(with legal: [ChessMove]) -> StrategyResult {
         if legal.isEmpty { return isInCheck(currentPlayer) ? .won(currentPlayer.opponent) : .draw }
+        if drawClaimed == true || halfMoves >= 150 || currentRepetitions >= 5 { return .draw }
+        // Preserve terminal games from builds that applied these claims automatically.
+        if drawClaimed == nil, claimThreshold { return .draw }
         let remaining = cells.enumerated().filter { $0.element != 0 && abs($0.element) != 6 }
-        let minorOnly = remaining.allSatisfy { [2,3].contains(abs($0.element)) }
+        let loneMinor = remaining.count == 1 && [2, 3].contains(abs(remaining[0].element))
         let bishopsOnlySameColor = remaining.allSatisfy { abs($0.element)==3 } && Set(remaining.map { ($0.offset/8+$0.offset%8)%2 }).count <= 1
-        if halfMoves>=100 || positions[positionKey,default:0]>=3 || minorOnly && (remaining.count<=1 || bishopsOnlySameColor) { return .draw }
+        if remaining.isEmpty || loneMinor || bishopsOnlySameColor { return .draw }
         return .playing
     }
+
+    public var canClaimDraw: Bool {
+        claimThreshold && result == .playing
+    }
+
+    private func reachesClaimThreshold(_ move: ChessMove) -> Bool {
+        var next = self
+        next.apply(move)
+        return next.halfMoves >= 100 || positions[next.positionKey, default: 0] >= 2
+    }
+
+    public var drawClaimMoves: [ChessMove] {
+        guard halfMoves >= 99 || positions.values.contains(where: { $0 >= 2 }) else { return [] }
+        let legal = legalMoves()
+        guard result(with: legal) == .playing else { return [] }
+        return legal.filter(reachesClaimThreshold)
+    }
+
+    /// A claim based on a proposed move ends the game before that move is played.
+    @discardableResult public mutating func claimDraw(after move: ChessMove? = nil) -> Bool {
+        guard isValidSave else { return false }
+        let legal = legalMoves()
+        guard result(with: legal) == .playing else { return false }
+        if let move {
+            guard legal.contains(move), reachesClaimThreshold(move) else { return false }
+        } else if !claimThreshold { return false }
+        drawClaimed = true
+        return true
+    }
     @discardableResult public mutating func play(_ move: ChessMove) -> Bool {
-        guard isValidSave, result == .playing, legalMoves().contains(move) else { return false }
-        apply(move); positions[positionKey,default:0] += 1; return true
+        guard isValidSave else { return false }
+        let legal = legalMoves()
+        guard result(with: legal) == .playing, legal.contains(move) else { return false }
+        apply(move)
+        drawClaimed = false
+        positions[positionKey,default:0] += 1
+        return true
     }
     public func recommendedMove(difficulty: DuelDifficulty, seed: UInt64) -> ChessMove? {
         let legal = legalMoves(); guard result == .playing else { return nil }

@@ -10,7 +10,7 @@ final class V030PuzzleTests: XCTestCase {
         XCTAssertEqual(NonogramBoard.solutions(rows:[[2],[0]],columns:[[1],[1]]),[[true,true,false,false]])
     }
     func testNonogramGeneratedBoardsAreUniqueDeterministicAndPlayable() throws {
-        for size in [5,10,15] { for seed in 0..<12 {
+        for size in [5,10,15] { for seed in [0, 1, 7, 42] {
             var board = NonogramBoard(size:size,seed:UInt64(seed))
             XCTAssertTrue(board.isValidSave); XCTAssertFalse(board.isComplete)
             XCTAssertEqual(board,NonogramBoard(size:size,seed:UInt64(seed)))
@@ -23,17 +23,40 @@ final class V030PuzzleTests: XCTestCase {
             XCTAssertEqual(try JSONDecoder().decode(NonogramBoard.self,from:JSONEncoder().encode(board)),board)
         }}
     }
+    func testNonogramFallbackFamiliesRemainUniqueAfterReorientation() {
+        for (size, templates) in NonogramBoard.fallbackRows {
+            var signatures = Set<[Bool]>()
+            for (index, template) in templates.enumerated() {
+                let picture = NonogramBoard.transformedTemplate(template, transform: index + 2)
+                let rows = (0..<size).map { row in
+                    NonogramBoard.clues(Array(picture[(row * size)..<((row + 1) * size)]))
+                }
+                let columns = (0..<size).map { column in
+                    NonogramBoard.clues((0..<size).map { picture[$0 * size + column] })
+                }
+                XCTAssertTrue((rows + columns).contains { $0.count >= 2 })
+                XCTAssertEqual(NonogramBoard.solutions(rows: rows, columns: columns), [picture])
+                signatures.insert(picture)
+            }
+            XCTAssertEqual(signatures.count, templates.count)
+        }
+    }
     func testKakuroGeneratedCrossesHaveUniqueDistinctDigitSolutions() throws {
-        for size in [4,6,8] { for seed in 0..<4 {
-            var board = KakuroBoard(size:size,seed:UInt64(seed))
-            XCTAssertTrue(board.isValidSave); XCTAssertFalse(board.isComplete)
-            XCTAssertEqual(board,KakuroBoard(size:size,seed:UInt64(seed)))
-            XCTAssertEqual(KakuroBoard.solutions(cells:board.givens,runs:board.runs),[board.solution])
-            XCTAssertFalse(board.enter(1,at:0)); XCTAssertFalse(board.enter(10,at:size+1))
-            for i in board.cells.indices where board.givens[i]==0 { XCTAssertTrue(board.enter(board.solution[i],at:i)) }
-            XCTAssertTrue(board.isComplete); XCTAssertTrue(board.isValidSave)
-            XCTAssertEqual(try JSONDecoder().decode(KakuroBoard.self,from:JSONEncoder().encode(board)),board)
-        }}
+        for size in [4,6,8] {
+            var shapes = Set<[Bool]>()
+            for seed in [0, 1, 7, 42] {
+                var board = KakuroBoard(size:size,seed:UInt64(seed))
+                XCTAssertTrue(board.isValidSave); XCTAssertFalse(board.isComplete)
+                shapes.insert(board.solution.map { $0 < 0 })
+                XCTAssertEqual(board,KakuroBoard(size:size,seed:UInt64(seed)))
+                XCTAssertEqual(KakuroBoard.solutions(cells:board.givens,runs:board.runs),[board.solution])
+                XCTAssertFalse(board.enter(1,at:0)); XCTAssertFalse(board.enter(10,at:size+1))
+                for i in board.cells.indices where board.givens[i]==0 { XCTAssertTrue(board.enter(board.solution[i],at:i)) }
+                XCTAssertTrue(board.isComplete); XCTAssertTrue(board.isValidSave)
+                XCTAssertEqual(try JSONDecoder().decode(KakuroBoard.self,from:JSONEncoder().encode(board)),board)
+            }
+            XCTAssertGreaterThan(shapes.count, 1, "Seeded boards should vary in shape at size \(size).")
+        }
     }
     func testKakuroRejectsRepeatedDigitsEvenWhenTheirSumMatches() {
         let board = KakuroBoard(size:4,seed:42)

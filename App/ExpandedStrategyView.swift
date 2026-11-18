@@ -9,6 +9,7 @@ struct ExpandedStrategyView: View {
     @State private var drop: Int?
     @State private var promotions: [ExpandedStrategyAction] = []
     @State private var choosingPromotion = false
+    @State private var choosingChessDrawMove = false
     private var save: ExpandedGameSave? { model.expandedGames[game] }
     private var active: Bool { model.sessionIsPlaying(game) }
     private var humanTurn: Bool { active && save?.isComputerTurn == false && save?.outcome == nil }
@@ -16,7 +17,12 @@ struct ExpandedStrategyView: View {
     private var rows: Int { game == .xiangqi ? 10 : game == .banqi ? 8 : columns }
     private var unit: Int { game == .gomoku ? 34 : game == .banqi ? 58 : 42 }
     private var taskKey: String { "\(active)/\(save?.seed ?? 0)/\(save?.state.moves ?? -1)/\(save?.isComputerTurn ?? false)" }
-    private var actions: [ExpandedStrategyAction] { save?.state.legalStrategyActions ?? [] }
+    private var actions: [ExpandedStrategyAction] {
+        if choosingChessDrawMove, case .chess(let board) = save?.state {
+            return board.drawClaimMoves.map(ExpandedStrategyAction.chess)
+        }
+        return save?.state.legalStrategyActions ?? []
+    }
     private var targets: Set<Int> {
         Set(actions.filter { action in
             if game == .gomoku || game == .reversi { return action.from == nil }
@@ -50,6 +56,7 @@ struct ExpandedStrategyView: View {
                     .opacity(save?.isComputerTurn == true ? 1 : 0).accessibilityHidden(save?.isComputerTurn != true)
                     .accessibilityIdentifier(game.rawValue+".thinking")
                 if game == .shogi { shogiHand(.second) }
+                if game == .chess { chessDrawControls }
                 board
                 if game == .shogi {
                     shogiHand(.first)
@@ -71,12 +78,45 @@ struct ExpandedStrategyView: View {
             }.padding(16).frame(maxWidth:680).frame(maxWidth:.infinity)
         }
         .task(id:taskKey) { await computerMove() }
-        .onChange(of:active) { _,value in if !value { selected = nil; drop = nil; choosingPromotion = false; promotions = [] } }
+        .onChange(of:active) { _,value in
+            if !value {
+                selected = nil; drop = nil; choosingPromotion = false; promotions = []
+                choosingChessDrawMove = false
+            }
+        }
         .confirmationDialog(model.t("expanded.promotion"),isPresented:$choosingPromotion,titleVisibility:.visible) {
             ForEach(Array(promotions.enumerated()),id:\.offset) { _,action in
                 Button(promotionTitle(action)) { apply(action) }.accessibilityIdentifier(game.rawValue+".promotion.\(action.promotion ?? 0)")
             }
             Button(model.t("common.cancel"),role:.cancel) { promotions = [] }
+        }
+    }
+    @ViewBuilder private var chessDrawControls: some View {
+        if humanTurn, case .chess(let board) = save?.state {
+            if board.canClaimDraw {
+                Button(model.t("expanded.chess.claimDraw")) { claimChessDraw() }
+                    .buttonStyle(.bordered).accessibilityIdentifier("chess.claimDraw")
+            } else if choosingChessDrawMove {
+                Text(model.t("expanded.chess.claimMoveHelp"))
+                    .font(.caption).multilineTextAlignment(.center)
+                Button(model.t("common.cancel")) { choosingChessDrawMove = false; selected = nil }
+                    .buttonStyle(.bordered).accessibilityIdentifier("chess.claimDraw.cancel")
+            } else if !board.drawClaimMoves.isEmpty {
+                Button(model.t("expanded.chess.claimWithMove")) { choosingChessDrawMove = true; selected = nil }
+                    .buttonStyle(.bordered).accessibilityIdentifier("chess.claimDraw.withMove")
+            }
+        }
+    }
+
+    private func claimChessDraw(after move: ChessMove? = nil) {
+        guard humanTurn else { return }
+        if model.editExpanded(game, { state in
+            guard case .chess(var board) = state, board.claimDraw(after: move) else { return false }
+            state = .chess(board)
+            return true
+        }) {
+            selected = nil
+            choosingChessDrawMove = false
         }
     }
     private var checked: Bool {
@@ -94,7 +134,7 @@ struct ExpandedStrategyView: View {
         // cell. Shogi hands can produce hundreds of legal actions; repeating
         // the same result search 81 times stalls input and the session clock.
         let isActive = active, canPlay = humanTurn
-        let showTargets = model.gameSettings(for:game).expanded?.showLegalMoves ?? true
+        let showTargets = choosingChessDrawMove || (model.gameSettings(for:game).expanded?.showLegalMoves ?? true)
         return ZoomBoard(size:CGSize(width:columns*unit,height:rows*unit),inputEnabled:isActive,accessibilityHidden:!isActive,
                          identifier:game.rawValue+".zoomBoard") {
             VStack(spacing:0) {
@@ -228,6 +268,10 @@ struct ExpandedStrategyView: View {
     }
     private func apply(_ action: ExpandedStrategyAction) {
         guard humanTurn else { return }
+        if choosingChessDrawMove, case .chess(let move) = action {
+            claimChessDraw(after: move)
+            return
+        }
         if model.editExpanded(game,{$0.playStrategy(action)}) { selected = nil; drop = nil; promotions = [] }
     }
     @MainActor private func computerMove() async {

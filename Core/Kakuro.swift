@@ -34,20 +34,50 @@ public struct KakuroBoard: Codable, Equatable, Sendable {
     public init(size: Int, seed: UInt64) {
         self.size = [4, 6, 8].contains(size) ? size : 4; self.seed = seed
         var random = SeededRandom(seed: seed), digits = Array(1...9); digits.shuffle(using: &random)
+        let side = self.size - 1
+        let layout = Self.layouts[side]!.randomElement(using: &random)!
+        let transform = Int.random(in: 0..<8, using: &random)
+        let rowOffsets = Array(0..<9).shuffled(using: &random)
+        let columnOffsets = Array(0..<9).shuffled(using: &random)
         var answer = Array(repeating: -1, count: self.size * self.size)
-        for r in 1..<self.size { for c in 1..<self.size { answer[r * self.size + c] = digits[(r + c) % 9] } }
+        for i in 0..<(side * side) {
+            let source = PuzzleSymmetry.sourceIndex(i, size: side, transform: transform)
+            guard layout[source / side] & (1 << (source % side)) != 0 else { continue }
+            let row = i / side, column = i % side
+            answer[(row + 1) * self.size + column + 1] = digits[(rowOffsets[row] + columnOffsets[column]) % 9]
+        }
         solution = answer
+        let clues = Self.runs(answer, size: self.size)
         var fixed = answer
         // Remove givens only after the independent solver proves uniqueness.
         // Starting with a complete valid cross avoids an exponential search on
         // a large empty board. A bounded inconclusive search keeps the given.
         var order = answer.indices.filter { answer[$0] > 0 }; order.shuffle(using: &random)
-        for index in order {
+        var budget = 1_800
+        for index in order where budget > 0 {
             fixed[index] = 0
-            if Self.solutions(cells: fixed, runs: Self.runs(answer, size: self.size), limit: 2).count != 1 { fixed[index] = answer[index] }
+            var used = 0
+            let results = Self.solve(cells: fixed, runs: clues, limit: 2, nodeLimit: min(128, budget), nodes: &used)
+            budget -= used
+            if results.count != 1 { fixed[index] = answer[index] }
         }
         givens = fixed; cells = fixed
     }
+    // Inner rows as bitmasks. Each playable cell belongs to two runs of at
+    // least two cells, with the clue border kept outside all transformations.
+    private static let layouts: [Int: [[Int]]] = [
+        3: [[0b111, 0b111, 0b111], [0b111, 0b111, 0b011], [0b110, 0b111, 0b011]],
+        5: [
+            [0b11100, 0b11111, 0b11011, 0b11111, 0b00111],
+            [0b11100, 0b11100, 0b11111, 0b00111, 0b00111],
+            [0b01111, 0b01111, 0b11011, 0b11110, 0b11110]
+        ],
+        7: [
+            [0b1111000, 0b1111000, 0b1111111, 0b1110111, 0b1111111, 0b0001111, 0b0001111],
+            [0b1111110, 0b1111110, 0b1111111, 0b1110111, 0b1111111, 0b0111111, 0b0111111],
+            [0b1111100, 0b1111100, 0b1111111, 0b1100011, 0b1111111, 0b0011111, 0b0011111]
+        ]
+    ]
     @discardableResult public mutating func enter(_ value: Int, at index: Int) -> Bool {
         guard isValidSave, !isComplete, cells.indices.contains(index), givens[index] == 0, (0...9).contains(value), cells[index] != value, moves < 1_000_000 else { return false }
         cells[index] = value; moves += 1; return true
@@ -68,23 +98,52 @@ public struct KakuroBoard: Codable, Equatable, Sendable {
         return result
     }
     public static func solutions(cells: [Int], runs: [KakuroRun], limit: Int = 2) -> [[Int]] {
-        guard (1...2).contains(limit), !runs.isEmpty, runs.allSatisfy({ (2...9).contains($0.cells.count) && $0.cells.allSatisfy(cells.indices.contains) }) else { return [] }
-        var board = cells, answers: [[Int]] = [], nodes = 0, exhausted = false
+        var nodes = 0
+        return solve(cells: cells, runs: runs, limit: limit, nodeLimit: 256, nodes: &nodes)
+    }
+
+    private static let digitMasks: [[Int]] = {
+        var masks = Array(repeating: [Int](), count: 10 * 46)
+        for mask in 0..<512 {
+            let sum = (1...9).reduce(0) { $0 + (mask & (1 << ($1 - 1)) != 0 ? $1 : 0) }
+            masks[mask.nonzeroBitCount * 46 + sum].append(mask)
+        }
+        return masks
+    }()
+
+    private static func solve(cells: [Int], runs: [KakuroRun], limit: Int, nodeLimit: Int, nodes: inout Int) -> [[Int]] {
+        guard (1...2).contains(limit), !runs.isEmpty, runs.allSatisfy({ run in
+            (2...9).contains(run.cells.count) && (1...45).contains(run.total) &&
+                run.cells.allSatisfy { cells.indices.contains($0) && (0...9).contains(cells[$0]) }
+        }) else { return [] }
+        var affected = Array(repeating: [Int](), count: cells.count)
+        for (i, run) in runs.enumerated() { for cell in run.cells { affected[cell].append(i) } }
+        guard cells.indices.allSatisfy({ cells[$0] != 0 || !affected[$0].isEmpty }) else { return [] }
+        var board = cells, answers: [[Int]] = [], exhausted = false
         func legal(_ run: KakuroRun) -> Bool {
-            let set = run.cells.map { board[$0] }, values = set.filter { $0 > 0 }, missing = set.filter { $0 == 0 }.count
-            guard Set(values).count == values.count else { return false }
-            let available = (1...9).filter { !values.contains($0) }, remaining = run.total - values.reduce(0,+)
-            return missing == 0 ? remaining == 0 : available.prefix(missing).reduce(0,+) <= remaining && available.suffix(missing).reduce(0,+) >= remaining
+            var used = 0, missing = 0, remaining = run.total
+            for cell in run.cells {
+                let digit = board[cell]
+                if digit == 0 { missing += 1; continue }
+                let bit = 1 << (digit - 1)
+                guard used & bit == 0 else { return false }
+                used |= bit
+                remaining -= digit
+            }
+            guard (0...45).contains(remaining) else { return false }
+            return digitMasks[missing * 46 + remaining].contains { $0 & used == 0 }
         }
         func search() {
-            guard answers.count < limit else { return }
-            guard nodes < 256 else { exhausted = true; return }; nodes += 1
+            guard !exhausted, answers.count < limit else { return }
+            guard nodes < nodeLimit else { exhausted = true; return }; nodes += 1
             guard runs.allSatisfy(legal) else { return }
             var chosen: Int?, options: [Int] = []
             for i in board.indices where board[i] == 0 {
-                let affected = runs.filter { $0.cells.contains(i) }
                 var possible: [Int] = []
-                for value in 1...9 { board[i] = value; if affected.allSatisfy(legal) { possible.append(value) } }
+                for value in 1...9 {
+                    board[i] = value
+                    if affected[i].allSatisfy({ legal(runs[$0]) }) { possible.append(value) }
+                }
                 board[i] = 0
                 if possible.isEmpty { return }
                 if chosen == nil || possible.count < options.count { chosen = i; options = possible }

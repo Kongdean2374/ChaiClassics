@@ -61,6 +61,14 @@ final class V030StrategyTests: XCTestCase {
         XCTAssertTrue(ep.play(.init(from:28,to:19))); XCTAssertEqual(ep.cells[27],0); XCTAssertEqual(ep.cells[19],1)
         let pinnedEP = try XCTUnwrap(ChessBoard(fen:"k3r3/8/8/3pP3/8/8/8/4K3 w - d6 0 1"))
         XCTAssertFalse(pinnedEP.legalMoves().contains(.init(from:28,to:19)))
+        let pinnedWithoutEP = try XCTUnwrap(ChessBoard(fen:"k3r3/8/8/3pP3/8/8/8/4K3 w - - 0 1"))
+        XCTAssertEqual(pinnedEP.positionKey, pinnedWithoutEP.positionKey)
+        let noPawn = try XCTUnwrap(ChessBoard(fen:"7k/8/8/4P3/8/8/8/7K w - d6 0 1"))
+        let noPawnWithoutEP = try XCTUnwrap(ChessBoard(fen:"7k/8/8/4P3/8/8/8/7K w - - 0 1"))
+        XCTAssertEqual(noPawn.positionKey, noPawnWithoutEP.positionKey)
+        let availableEP = try XCTUnwrap(ChessBoard(fen:"7k/8/8/3pP3/8/8/8/7K w - d6 0 1"))
+        let availableWithoutEP = try XCTUnwrap(ChessBoard(fen:"7k/8/8/3pP3/8/8/8/7K w - - 0 1"))
+        XCTAssertNotEqual(availableEP.positionKey, availableWithoutEP.positionKey)
         let promotion = try XCTUnwrap(ChessBoard(fen:"7k/P7/8/8/8/8/8/7K w - - 0 1"))
         XCTAssertEqual(promotion.legalMoves().filter{$0.from==8 && $0.to==0}.count,4)
         for piece in [2,3,4,5] { var next = promotion; XCTAssertTrue(next.play(.init(from:8,to:0,promotion:piece))); XCTAssertEqual(next.cells[0],piece) }
@@ -68,9 +76,50 @@ final class V030StrategyTests: XCTestCase {
     func testChessStalemateRepetitionInsufficientMaterialAndSave() throws {
         let stale = try XCTUnwrap(ChessBoard(fen:"7k/5Q2/6K1/8/8/8/8/8 b - - 0 1")); XCTAssertEqual(stale.result,.draw); XCTAssertFalse(stale.isInCheck(.second))
         let insufficient = try XCTUnwrap(ChessBoard(fen:"7k/8/8/8/8/8/8/KB6 w - - 0 1")); XCTAssertEqual(insufficient.result,.draw)
+        let twoKnights = try XCTUnwrap(ChessBoard(fen:"7k/8/8/8/8/8/8/KNN5 w - - 0 1"))
+        XCTAssertEqual(twoKnights.result, .playing, "Two knights can mate with cooperation.")
         var repeatBoard = ChessBoard()
-        for _ in 0..<2 { for m in [ChessMove(from:62,to:45),.init(from:6,to:21),.init(from:45,to:62),.init(from:21,to:6)] { XCTAssertTrue(repeatBoard.play(m)) } }
-        XCTAssertEqual(repeatBoard.result,.draw); XCTAssertEqual(try JSONDecoder().decode(ChessBoard.self,from:JSONEncoder().encode(repeatBoard)),repeatBoard)
+        let cycle = [ChessMove(from:62,to:45),.init(from:6,to:21),.init(from:45,to:62),.init(from:21,to:6)]
+        for move in cycle + cycle.dropLast() { XCTAssertTrue(repeatBoard.play(move)) }
+        XCTAssertEqual(repeatBoard.drawClaimMoves, [cycle[3]])
+        var plannedClaim = repeatBoard
+        XCTAssertTrue(plannedClaim.claimDraw(after: cycle[3]))
+        XCTAssertEqual(plannedClaim.moves, repeatBoard.moves)
+        XCTAssertEqual(plannedClaim.cells, repeatBoard.cells)
+        XCTAssertEqual(plannedClaim.result, .draw)
+        XCTAssertTrue(repeatBoard.play(cycle[3]))
+        XCTAssertEqual(repeatBoard.result, .playing)
+        XCTAssertTrue(repeatBoard.canClaimDraw)
+
+        var claimed = repeatBoard
+        XCTAssertTrue(claimed.claimDraw())
+        XCTAssertEqual(try JSONDecoder().decode(ChessBoard.self, from: JSONEncoder().encode(claimed)).result, .draw)
+        XCTAssertFalse(claimed.play(cycle[0]))
+        XCTAssertEqual(try v030Fixture(repeatBoard, ["drawClaimed": NSNull()]).result, .draw)
+        for _ in 0..<2 { for move in cycle { XCTAssertTrue(repeatBoard.play(move)) } }
+        XCTAssertEqual(repeatBoard.result, .draw)
+        XCTAssertFalse(repeatBoard.canClaimDraw)
+    }
+
+    func testChessFiftyAndSeventyFiveMoveRulesAndMatePriority() throws {
+        let quiet = ChessMove(from: 56, to: 57)
+        let pawn = ChessMove(from: 48, to: 40)
+        var board = try XCTUnwrap(ChessBoard(fen: "7k/8/8/8/8/8/P7/R3K3 w - - 99 1"))
+        XCTAssertFalse(board.canClaimDraw)
+        XCTAssertTrue(board.drawClaimMoves.contains(quiet))
+        XCTAssertFalse(board.drawClaimMoves.contains(pawn))
+        XCTAssertFalse(board.claimDraw(after: pawn))
+        XCTAssertTrue(board.play(quiet))
+        XCTAssertEqual(board.halfMoves, 100)
+        XCTAssertEqual(board.result, .playing)
+        XCTAssertTrue(board.canClaimDraw)
+        var automatic = try XCTUnwrap(ChessBoard(fen: "7k/8/8/8/8/8/P7/R3K3 w - - 149 1"))
+        XCTAssertTrue(automatic.play(quiet))
+        XCTAssertEqual(automatic.result, .draw)
+        var mate = try XCTUnwrap(ChessBoard(fen: "7k/8/5KQ1/8/8/8/8/8 w - - 149 1"))
+        XCTAssertTrue(mate.play(.init(from: 22, to: 14)))
+        XCTAssertEqual(mate.halfMoves, 150)
+        XCTAssertEqual(mate.result, .won(.first))
     }
     func testXiangqiOpeningHorseLegCannonScreenAndGeneralSafety() throws {
         let board = XiangqiBoard(); XCTAssertTrue(board.isValidSave); XCTAssertEqual(board.legalMoves().count,44)
@@ -80,6 +129,26 @@ final class V030StrategyTests: XCTestCase {
         for i in stride(from:13,through:76,by:9) { exposed[i] = 0 }
         let facing = try v030Fixture(board,["cells":exposed]); XCTAssertTrue(facing.isInCheck(.first)); XCTAssertTrue(facing.isInCheck(.second))
         for move in facing.legalMoves() { var next = facing; XCTAssertTrue(next.play(move)); XCTAssertFalse(next.isInCheck(.first)) }
+    }
+    func testXiangqiThreeOccurrencesAndContinuousCheckSurviveRestore() throws {
+        var ordinary = XiangqiBoard()
+        let horseCycle = [ChessMove(from: 82, to: 65), .init(from: 1, to: 20),
+                          .init(from: 65, to: 82), .init(from: 20, to: 1)]
+        for _ in 0..<2 { for move in horseCycle { XCTAssertTrue(ordinary.play(move)) } }
+        XCTAssertEqual(ordinary.result, .draw)
+        XCTAssertFalse(ordinary.play(horseCycle[0]))
+
+        var cells = Array(repeating: 0, count: 90)
+        cells[4] = -1; cells[84] = 1; cells[23] = 5
+        var continuous = try v030Fixture(XiangqiBoard(), ["cells": cells, "repetition": NSNull()])
+        let checkCycle = [ChessMove(from: 23, to: 22), .init(from: 4, to: 5),
+                          .init(from: 22, to: 23), .init(from: 5, to: 4)]
+        for move in checkCycle { XCTAssertTrue(continuous.play(move)) }
+        continuous = try JSONDecoder().decode(XiangqiBoard.self, from: JSONEncoder().encode(continuous))
+        XCTAssertEqual(continuous.result, .playing)
+        for move in checkCycle { XCTAssertTrue(continuous.play(move)) }
+        XCTAssertEqual(continuous.result, .won(.second))
+        XCTAssertFalse(continuous.play(checkCycle[0]))
     }
     func testShogiOpeningNifuAndPromotion() throws {
         let board = ShogiBoard(); XCTAssertTrue(board.isValidSave); XCTAssertEqual(board.legalMoves().count,30)
@@ -94,6 +163,47 @@ final class V030StrategyTests: XCTestCase {
         cells = board.cells; cells[54] = 0; cells[9] = 1
         let promote = try v030Fixture(board,["cells":cells]); XCTAssertTrue(promote.isValidSave)
         XCTAssertTrue(promote.legalMoves().contains(.init(from:9,to:0,promote:true))); XCTAssertFalse(promote.legalMoves().contains(.init(from:9,to:0)))
+    }
+    func testShogiFourOccurrencesAndContinuousCheckSurviveRestore() throws {
+        var ordinary = ShogiBoard()
+        let goldCycle = [ShogiMove(from: 75, to: 66), .init(from: 3, to: 12),
+                         .init(from: 66, to: 75), .init(from: 12, to: 3)]
+        for _ in 0..<2 { for move in goldCycle { XCTAssertTrue(ordinary.play(move)) } }
+        XCTAssertEqual(ordinary.result, .playing)
+        for move in goldCycle { XCTAssertTrue(ordinary.play(move)) }
+        XCTAssertEqual(ordinary.result, .draw)
+        XCTAssertFalse(ordinary.play(goldCycle[0]))
+        XCTAssertFalse(ordinary.declareEnteringKing())
+
+        var cells = Array(repeating: 0, count: 81)
+        cells[4] = -8; cells[75] = 8; cells[23] = 7
+        let hands = [[0, 18, 4, 4, 4, 4, 2, 1], Array(repeating: 0, count: 8)]
+        var continuous = try v030Fixture(ShogiBoard(), ["cells": cells, "hands": hands, "repetition": NSNull()])
+        let checkCycle = [ShogiMove(from: 23, to: 22), .init(from: 4, to: 5),
+                          .init(from: 22, to: 23), .init(from: 5, to: 4)]
+        for _ in 0..<2 { for move in checkCycle { XCTAssertTrue(continuous.play(move)) } }
+        continuous = try JSONDecoder().decode(ShogiBoard.self, from: JSONEncoder().encode(continuous))
+        XCTAssertEqual(continuous.result, .playing)
+        for move in checkCycle { XCTAssertTrue(continuous.play(move)) }
+        XCTAssertEqual(continuous.result, .won(.second))
+        XCTAssertFalse(continuous.play(checkCycle[0]))
+    }
+
+    func testXiangqiAndShogiRepetitionUsesWholeSpanAndTreatsMutualCheckSymmetrically() {
+        for count in [3, 4] {
+            for mutual in [false, true] {
+                // Both sequences have a long check streak just before the
+                // last occurrence. Neither has one exclusive checker.
+                var trace = StrategyRepetition(key: "same", ply: 0)
+                let last = (count - 1) * 6
+                for ply in 1...last {
+                    let side: DuelPlayer = ply.isMultiple(of: 2) ? .second : .first
+                    let gaveCheck = mutual || (side == .first && ply != 1) || (side == .second && ply == 2)
+                    trace.record(key: ply.isMultiple(of: 6) ? "same" : "step-\(ply)", ply: ply, mover: side, gaveCheck: gaveCheck)
+                }
+                XCTAssertEqual(trace.result(key: "same", occurrences: count), .draw)
+            }
+        }
     }
     func testBanqiRevealsAssignSidesAndAINeverPeeks() throws {
         var board = BanqiBoard(seed:12); XCTAssertEqual(board.legalActions().count,32); XCTAssertTrue(board.isValidSave)

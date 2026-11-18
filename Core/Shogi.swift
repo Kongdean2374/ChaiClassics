@@ -18,6 +18,7 @@ public struct ShogiBoard: Codable, Equatable, Sendable {
     public private(set) var moves = 0
     private var positions: [String:Int] = [:]
     private var consecutiveChecks = [0,0]
+    private var repetition: StrategyRepetition?
     public private(set) var declaredWinner: DuelPlayer?
     public init() {
         let back: [Int] = [2,3,4,5,8,5,4,3,2]
@@ -28,7 +29,8 @@ public struct ShogiBoard: Codable, Equatable, Sendable {
         cells += Array(repeating:1,count:9)
         cells += Array(repeating:0,count:9)
         cells += back
-        cells[10] = -7; cells[16] = -6; cells[64] = 6; cells[70] = 7; positions[key] = 1
+        cells[10] = -7; cells[16] = -6; cells[64] = 6; cells[70] = 7
+        repetition = StrategyRepetition(key: key, ply: moves)
     }
     public var sign: Int { currentPlayer == .first ? 1 : -1 }
     public static func unpromoted(_ kind: Int) -> Int { kind>=9 && kind<=12 ? kind-8 : kind==13 ? 6 : kind==14 ? 7 : kind }
@@ -37,7 +39,8 @@ public struct ShogiBoard: Codable, Equatable, Sendable {
     public var isValidSave: Bool {
         guard cells.count==81, cells.allSatisfy({(-14...14).contains($0)}), cells.filter({$0==8}).count==1, cells.filter({$0 == -8}).count==1,
               hands.count==2, hands.allSatisfy({$0.count==8 && $0[0]==0 && $0.allSatisfy{(0...18).contains($0)}}),
-              (0...1_000_000).contains(moves), positions.count<=10_000, consecutiveChecks.count==2 else { return false }
+              (0...1_000_000).contains(moves), positions.count<=10_000, consecutiveChecks.count==2,
+              repetition?.isValid(through: moves, occurrences: 4) ?? true else { return false }
         let totals = [0,18,4,4,4,4,2,2,2]
         for kind in 1...8 {
             let onBoard = cells.filter { Self.unpromoted(abs($0)) == kind }.count
@@ -120,10 +123,14 @@ public struct ShogiBoard: Codable, Equatable, Sendable {
     public var result: StrategyResult {
         if let declaredWinner { return .won(declaredWinner) }
         if legalMoves().isEmpty { return .won(currentPlayer.opponent) }
+        return repetitionResult ?? .playing
+    }
+    private var repetitionResult: StrategyResult? {
+        if let repetition { return repetition.result(key: key, occurrences: 4) }
         if positions[key,default:0]>=4 {
             if consecutiveChecks[0]>=4 { return .won(.second) }; if consecutiveChecks[1]>=4 { return .won(.first) }; return .draw
         }
-        return .playing
+        return nil
     }
     /// The 27-point entering-king declaration rule. Only pieces in the enemy
     /// camp and in hand count; the king is excluded and may not be in check.
@@ -139,12 +146,16 @@ public struct ShogiBoard: Codable, Equatable, Sendable {
         return boardPoints+handPoints >= (currentPlayer == .first ? 28 : 27)
     }
     @discardableResult public mutating func declareEnteringKing() -> Bool {
-        guard isValidSave, canDeclareEnteringKing else { return false }; declaredWinner = currentPlayer; return true
+        guard isValidSave, result == .playing, canDeclareEnteringKing else { return false }; declaredWinner = currentPlayer; return true
     }
     @discardableResult public mutating func play(_ move: ShogiMove) -> Bool {
-        guard isValidSave, result == .playing, legalMoves().contains(move) else { return false }
-        let player = currentPlayer; apply(move); positions[key,default:0] += 1
-        consecutiveChecks[player.rawValue-1] = isInCheck(currentPlayer) ? consecutiveChecks[player.rawValue-1]+1 : 0; return true
+        guard isValidSave, declaredWinner == nil, repetitionResult == nil, legalMoves().contains(move) else { return false }
+        var trace = repetition ?? StrategyRepetition(key: key, ply: moves)
+        let player = currentPlayer
+        apply(move)
+        trace.record(key: key, ply: moves, mover: player, gaveCheck: isInCheck(currentPlayer))
+        repetition = trace
+        return true
     }
     public func recommendedMove(difficulty: DuelDifficulty, seed: UInt64) -> ShogiMove? {
         let options = legalMoves(); guard result == .playing else { return nil }

@@ -8,19 +8,21 @@ public struct XiangqiBoard: Codable, Equatable, Sendable {
     public private(set) var moves = 0
     private var positions: [String:Int] = [:]
     private var consecutiveChecks = [0,0]
+    private var repetition: StrategyRepetition?
     public init() {
         cells = Array(repeating:0,count:90)
         let back = [5,4,3,2,1,2,3,4,5]
         for i in 0..<9 { cells[i] = -back[i]; cells[81+i] = back[i] }
         cells[19] = -6; cells[25] = -6; cells[64] = 6; cells[70] = 6
         for x in stride(from:0,through:8,by:2) { cells[27+x] = -7; cells[54+x] = 7 }
-        positions[key] = 1
+        repetition = StrategyRepetition(key: key, ply: moves)
     }
     public var sign: Int { currentPlayer == .first ? 1 : -1 }
     private var key: String { cells.map(String.init).joined(separator:",")+"/\(currentPlayer.rawValue)" }
     public var isValidSave: Bool {
         cells.count==90 && cells.allSatisfy { (-7...7).contains($0) } && cells.filter{$0==1}.count==1 && cells.filter{$0 == -1}.count==1 &&
-        (0...1_000_000).contains(moves) && positions.count<=10_000 && consecutiveChecks.count==2 && consecutiveChecks.allSatisfy { (0...1_000_000).contains($0) }
+        (0...1_000_000).contains(moves) && positions.count<=10_000 && consecutiveChecks.count==2 && consecutiveChecks.allSatisfy { (0...1_000_000).contains($0) } &&
+        (repetition?.isValid(through: moves, occurrences: 3) ?? true)
     }
     private func destinations(_ from: Int) -> [Int] {
         let piece = cells[from], side = piece>0 ? 1 : -1, x = from%9, y = from/9
@@ -83,16 +85,25 @@ public struct XiangqiBoard: Codable, Equatable, Sendable {
     private mutating func apply(_ move: ChessMove) { cells[move.to] = cells[move.from]; cells[move.from] = 0; currentPlayer = currentPlayer.opponent; moves += 1 }
     public var result: StrategyResult {
         if legalMoves().isEmpty { return .won(currentPlayer.opponent) }
+        return repetitionResult ?? .playing
+    }
+    private var repetitionResult: StrategyResult? {
+        if let repetition { return repetition.result(key: key, occurrences: 3) }
+        // Legacy snapshots lack ordered history. Keep their existing result.
         if positions[key,default:0]>=3 {
             if consecutiveChecks[0]>=3 { return .won(.second) }; if consecutiveChecks[1]>=3 { return .won(.first) }
             return .draw
         }
-        return .playing
+        return nil
     }
     @discardableResult public mutating func play(_ move: ChessMove) -> Bool {
-        guard isValidSave, result == .playing, legalMoves().contains(move) else { return false }
-        let player = currentPlayer; apply(move); positions[key,default:0] += 1
-        consecutiveChecks[player.rawValue-1] = isInCheck(currentPlayer) ? consecutiveChecks[player.rawValue-1]+1 : 0; return true
+        guard isValidSave, repetitionResult == nil, legalMoves().contains(move) else { return false }
+        var trace = repetition ?? StrategyRepetition(key: key, ply: moves)
+        let player = currentPlayer
+        apply(move)
+        trace.record(key: key, ply: moves, mover: player, gaveCheck: isInCheck(currentPlayer))
+        repetition = trace
+        return true
     }
     public func recommendedMove(difficulty: DuelDifficulty, seed: UInt64) -> ChessMove? {
         let options = legalMoves(); guard result == .playing else { return nil }
