@@ -1,5 +1,5 @@
 name: CI
-run-name: CI · ${{ inputs.ui_scope || 'core-build' }} · ${{ github.ref_name }}
+run-name: CI · ${{ inputs.runner == '' && 'source-checks' || inputs.ui_scope || 'core-build' }} · ${{ github.ref_name }}
 on:
   push:
     branches: [main, develop/0.2.0, develop/0.2.1, develop/0.2.2, develop/0.3.0]
@@ -39,9 +39,12 @@ env:
 permissions:
   contents: read
   actions: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.runner == '' && 'source' || inputs.ui_scope || 'core-build' }}
+  cancel-in-progress: true
 jobs:
   test:
-    runs-on: ${{ inputs.runner == 'macos-15-intel' && 'macos-15-intel' || 'macos-15' }}
+    runs-on: ${{ inputs.runner == '' && 'ubuntu-24.04' || (inputs.runner == 'macos-15-intel' && 'macos-15-intel' || 'macos-15') }}
     timeout-minutes: 180
     env:
       COMPATIBILITY_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
@@ -52,14 +55,23 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Lightweight source and project checks
+        if: inputs.runner == ''
+        run: |
+          python3 -m compileall -q scripts tests
+          python3 scripts/check_compatibility.py
+          python3 scripts/create_project.py
+          git diff --exit-code -- ChaiClassics.xcodeproj
       - name: Reject an empty selected test request
         if: env.CHAI_UI_SCOPE != 'full' && inputs.full_ui != true
         run: |
           echo 'A selected UI scope requires full_ui=true; refusing an empty green result.' >&2
           exit 64
       - name: Select installed Xcode 26 or newer
+        if: inputs.runner != ''
         run: bash scripts/select_xcode.sh
       - name: Record actual validation scope
+        if: inputs.runner != ''
         run: |
           python3 - <<'PY'
           import json, os, sys
@@ -75,10 +87,13 @@ jobs:
           Path('ui-selection.json').write_text(json.dumps(selection) + '\n')
           PY
       - name: Verify puzzles, save compatibility and generated project
+        if: inputs.runner != ''
         run: bash scripts/ci.sh verify
       - name: Run Swift game and save tests
+        if: inputs.runner != ''
         run: bash scripts/ci.sh unit
       - name: Build iOS Simulator app
+        if: inputs.runner != ''
         run: bash scripts/ci.sh build
       - name: Plan affected UI cases from verified source evidence
         if: inputs.full_ui == true && (env.CHAI_UI_SCOPE == 'affected' || (startsWith(env.CHAI_UI_SCOPE, 'part_') && inputs.baseline_run != ''))
@@ -118,13 +133,13 @@ jobs:
             echo "Selected UI scope: $CHAI_UI_SCOPE; these targeted results require complete independently verified CI plus Visual and iPad evidence for formal full release." >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Export full UI screenshots for visual review
-        if: always()
+        if: always() && inputs.runner != ''
         run: |
           if [ -d build/UITests.xcresult ]; then
             xcrun xcresulttool export attachments --path build/UITests.xcresult --output-path build/ui-screenshots
           fi
       - name: Preserve verification report and simulator results
-        if: always()
+        if: always() && inputs.runner != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: test-results
@@ -139,25 +154,34 @@ jobs:
             build/ui-screenshots/*.txt
           if-no-files-found: warn
       - name: Preserve the original full Simulator XCTest bundle separately
-        if: always()
+        if: always() && inputs.runner != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: simulator-xctest-results
           path: build/UITests.xcresult
           if-no-files-found: warn
   codesign-extraction:
-    runs-on: macos-15-intel
+    runs-on: ${{ inputs.runner == '' && 'ubuntu-24.04' || 'macos-15-intel' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
+      - name: Lightweight signing source syntax checks
+        if: inputs.runner == ''
+        run: |
+          ruby -c fastlane/lib/signing_config.rb
+          ruby -c fastlane/lib/signing_asset_verifier.rb
+          ruby -c fastlane/lib/release_pipeline.rb
       - run: bash scripts/select_xcode.sh
+        if: inputs.runner != ''
       - uses: ruby/setup-ruby@4a9ddd6f338a97768b8006bf671dfbad383215f4
+        if: inputs.runner != ''
         with:
           ruby-version: '3.3'
           bundler: '2.5.23'
       - name: Test real codesign certificate extraction without credentials
+        if: inputs.runner != ''
         run: |
           bundle config set path vendor/bundle
           bundle config set frozen true
@@ -172,11 +196,18 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
+      - name: Lightweight workflow and fastlane syntax checks
+        if: inputs.runner == ''
+        run: |
+          ruby -c fastlane/Fastfile
+          ruby tests/workflow_config_test.rb
       - uses: ruby/setup-ruby@4a9ddd6f338a97768b8006bf671dfbad383215f4
+        if: inputs.runner != ''
         with:
           ruby-version: '3.3'
           bundler: '2.5.23'
       - name: Validate fastlane without any Apple credentials
+        if: inputs.runner != ''
         run: |
           bundle config set path vendor/bundle
           bundle config set frozen true
@@ -191,11 +222,13 @@ jobs:
           bundle exec ruby tests/jwt_comparison_test.rb
           bundle exec ruby tests/workflow_config_test.rb
           ruby tests/testflight_status_test.rb
+          ruby tests/uploaded_build_status_test.rb
           ruby -c scripts/testflight_status.rb
           ruby -c fastlane/Fastfile
           bundle exec fastlane lanes
           cat Gemfile.lock
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: inputs.runner != ''
         with:
           name: release-dependency-lock
           path: Gemfile.lock

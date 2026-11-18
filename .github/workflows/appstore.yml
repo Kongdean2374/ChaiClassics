@@ -36,6 +36,8 @@ jobs:
   ci:
     if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.iphone_tested && inputs.metadata_reviewed
     uses: ./.github/workflows/ci.yml
+    with:
+      full_ui: true
   prepare:
     needs: ci
     if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.iphone_tested && inputs.metadata_reviewed

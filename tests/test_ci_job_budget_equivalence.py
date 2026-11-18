@@ -9,7 +9,10 @@ import verify_scoped_ci as scoped
 
 class CIJobBudgetEquivalenceTests(unittest.TestCase):
     def setUp(self):
-        self.path='.github/workflows/ci.yml';self.current=(ROOT/self.path).read_bytes()
+        self.path='.github/workflows/ci.yml'
+        # This exact historical allowance audit remains frozen; the new
+        # lightweight policy must not pretend to be the old execution source.
+        self.current=(ROOT/'tests/Fixtures/pipeline-audits/ci-affected-v1.yml').read_bytes()
         self.current=scoped.dependency_partition_baseline(self.path,'100644',self.current)
         self.before,self.after=scoped.APPROVED_CI_JOB_TIMEOUT
         self.old=self.current.replace(b'    timeout-minutes: 180\n',b'    timeout-minutes: 90\n',1)
@@ -22,7 +25,7 @@ class CIJobBudgetEquivalenceTests(unittest.TestCase):
         self.assertEqual(scoped.shared_content_digest(self.path,'100644',self.old),self.before)
 
     def test_any_other_runtime_selector_mode_path_or_added_command_invalidates(self):
-        for data in [self.current+b'\n# unreviewed\n',self.current.replace(b'180\n',b'360\n',1),
+        for data in [(ROOT/self.path).read_bytes(),self.current+b'\n# unreviewed\n',self.current.replace(b'180\n',b'360\n',1),
                      self.current.replace(b'full_ui:',b'changed_full_ui:',1),
                      self.current.replace(b'bash scripts/ci.sh ui',b'echo bypassed',1)]:
             raw=hashlib.sha256(data).hexdigest()

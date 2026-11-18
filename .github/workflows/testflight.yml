@@ -10,7 +10,7 @@ on:
         description: 'Beta: compile and upload for manual testing; Full: complete release regression'
         type: choice
         options: [beta, full]
-        default: full
+        default: beta
       candidate_tag:
         description: 'Required for 0.2.x/0.3.x: explicit vVERSION-rc.N tag at this main SHA'
         required: false
@@ -51,7 +51,6 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Verify exact-SHA TestFlight candidate
-        if: startsWith(inputs.version, '0.2.') || startsWith(inputs.version, '0.3.')
         env:
           GH_TOKEN: ${{ github.token }}
           CHAI_CANDIDATE_TAG: ${{ inputs.candidate_tag }}
@@ -59,7 +58,7 @@ jobs:
           CHAI_CANDIDATE_VISUAL_RUN: ${{ inputs.visual_run }}
           CHAI_CANDIDATE_IPAD_RUN: ${{ inputs.ipad_run }}
           CHAI_CANDIDATE_VERSION: ${{ inputs.version }}
-          CHAI_VALIDATION_MODE: ${{ inputs.validation_mode || 'full' }}
+          CHAI_VALIDATION_MODE: ${{ inputs.validation_mode || 'beta' }}
         run: |
           case "$CHAI_VALIDATION_MODE" in
             beta)
@@ -76,7 +75,6 @@ jobs:
             *) echo 'Unknown candidate validation mode.' >&2; exit 64 ;;
           esac
       - name: Preserve verified release candidate proof
-        if: startsWith(inputs.version, '0.2.') || startsWith(inputs.version, '0.3.')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: candidate-release-proof
@@ -86,7 +84,15 @@ jobs:
         with:
           ruby-version: '3.3'
           bundler: '2.5.23'
+      - name: Validate Beta source and release configuration
+        if: inputs.validation_mode == 'beta' || inputs.validation_mode == ''
+        run: |
+          python3 -m py_compile scripts/verify_beta_candidate.py scripts/check_release_secrets.py scripts/run_signing_lane.py
+          ruby -c fastlane/Fastfile
+          ruby tests/workflow_config_test.rb
+          ruby tests/uploaded_build_status_test.rb
       - name: Validate fastlane without any Apple credentials
+        if: inputs.validation_mode == 'full'
         run: |
           bundle config set path vendor/bundle
           bundle config set frozen true
@@ -101,11 +107,13 @@ jobs:
           bundle exec ruby tests/jwt_comparison_test.rb
           bundle exec ruby tests/workflow_config_test.rb
           ruby tests/testflight_status_test.rb
+          ruby tests/uploaded_build_status_test.rb
           ruby -c scripts/testflight_status.rb
           ruby -c fastlane/Fastfile
           bundle exec fastlane lanes
           cat Gemfile.lock
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: inputs.validation_mode == 'full'
         with:
           name: release-dependency-lock
           path: Gemfile.lock
@@ -131,6 +139,8 @@ jobs:
       - name: Check signing configuration without printing secrets
         run: python3 scripts/check_release_secrets.py --signing --trusted-dispatch --check-repo
       - run: bash scripts/select_xcode.sh
+      - name: Check core game rules and saved progress
+        run: swift test
       - uses: ruby/setup-ruby@4a9ddd6f338a97768b8006bf671dfbad383215f4
         with:
           ruby-version: '3.3'
@@ -148,3 +158,12 @@ jobs:
           name: testflight-provenance
           path: build/release/provenance.txt
           if-no-files-found: error
+      - name: Read Apple receipt and processing status for the exact uploaded build
+        run: ruby scripts/check_uploaded_build.rb
+      - name: Preserve allowlisted Apple processing status
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: testflight-apple-status
+          path: build/testflight-status.json
+          if-no-files-found: warn

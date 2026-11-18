@@ -61,8 +61,10 @@ def validate_source(tree, version):
                 and isinstance(item[1], bytes) for item in tree.values()), 'Beta source symlinks/submodules are not trusted.')
     tests = sorted(scoped.fingerprints(tree))
     sessions = scopes.required_session_tests_for_paths(tree)
-    expected_tests, expected_sessions = (71, 26) if version.startswith('0.3.') else (50, 9)
-    require(len(tests) == expected_tests and len(sessions) == expected_sessions and sessions.issubset(tests),
+    expanded = set(scopes.EXPANDED_RUNTIME_FILES).intersection(tree)
+    require(not expanded or expanded == set(scopes.EXPANDED_RUNTIME_FILES), 'Expanded-game Beta runtime is incomplete.')
+    minimum_tests, expected_sessions = (71, 26) if expanded else (50, 9)
+    require(len(tests) >= minimum_tests and len(sessions) >= expected_sessions and sessions.issubset(tests),
             'Beta policy preserves the version-specific complete UI and session/history inventory.')
     require(set(BETA_TESTS).issubset(tests), 'A mandatory Beta journey is no longer declared.')
     try:
@@ -155,8 +157,8 @@ def original_results(repo, sha, run_id, source_branch, read):
 def validate_candidate_source(repo, sha, version, tag, *, branch, read, root, tree_reader):
     require(repo == REPOSITORY and branch == 'main', 'TestFlight Beta verification only authorizes this repository main branch.')
     require(isinstance(sha, str) and re.fullmatch(r'[0-9a-f]{40}', sha) is not None
-            and isinstance(version, str) and re.fullmatch(r'0\.(?:2|3)\.\d+', version) is not None,
-            'A full SHA and explicit numeric 0.2.x or 0.3.x Beta version are required.')
+            and isinstance(version, str) and re.fullmatch(r'\d+\.\d+\.\d+', version) is not None,
+            'A full SHA and explicit numeric release version are required.')
     require(isinstance(tag, str) and re.fullmatch(re.escape('v' + version) + r'-rc\.[1-9]\d*', tag) is not None,
             'An explicit version-matched vVERSION-rc.N tag is required.')
     head = read(f'repos/{repo}/git/ref/heads/main')

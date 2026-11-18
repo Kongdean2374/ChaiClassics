@@ -1,6 +1,6 @@
 # 驗證與 iPhone 驗收
 
-CI 真正執行：獨立題庫 Exact Cover／難度／相容性檢查 → `swift test` → Xcode Simulator build → XCUITest。每個命令失敗都使 workflow 失敗；結果包上傳至 Actions artifacts。開發環境已安裝 Linux Swift，可測試 ChaiCore；iOS 編譯、UIKit／SwiftUI 操作與截圖仍必須使用 macOS 的 Xcode Simulator。
+普通 Push／PR 只執行 Linux 語法、存檔相容、產生專案及 workflow 設定檢查，不啟動 Mac。完整手動 CI 才執行題庫／相容檢查 → `swift test` → Xcode Simulator build → 選定的 XCUITest；保留真正失敗與原始結果，不以未執行冒充通過。詳見 [開發與發布策略](DEVELOPMENT_POLICY.md)。
 
 0.3.0 的目錄共有 25 款可玩遊戲。核心測試為 223 項，另有 71 項 UI 案例（iPhone 執行時四項 iPad 專用案例應明確 skip），包含八款既有遊戲與新增 17 款的暫停、保存、續玩、勝負、歷史、覆蓋與刪除確認。獨立 iPad 工作另外要求四張實際截圖及 22 條遊戲路徑；結果與尚待完成項目見 [本版驗證記錄](RELEASE_0.3.0.md)。以下三款細項與真機清單仍適用。
 

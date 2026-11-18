@@ -10,7 +10,8 @@ import verify_scoped_ci as scoped
 
 class IPadBudgetEquivalenceTests(unittest.TestCase):
     def setUp(self):
-        self.path='.github/workflows/ipad-screenshots.yml';self.current=(ROOT/self.path).read_bytes()
+        self.path='.github/workflows/ipad-screenshots.yml'
+        self.current=(ROOT/'tests/Fixtures/pipeline-audits/ipad-budget-v1.yml').read_bytes()
         self.before,self.after=scoped.APPROVED_IPAD_JOB_BUDGET
         self.old=self.current.replace(b'    timeout-minutes: 330\n',b'    timeout-minutes: 240\n',1)
         self.old=self.old.replace(b'        id: boot\n        timeout-minutes: 15\n',b'        id: boot\n        timeout-minutes: 10\n',1)
@@ -25,7 +26,7 @@ class IPadBudgetEquivalenceTests(unittest.TestCase):
         self.assertIn(b'CODE_SIGNING_ALLOWED=NO',(ROOT/'scripts/ipad_screenshots.sh').read_bytes())
 
     def test_selector_commands_permissions_modes_and_other_budget_changes_fail_closed(self):
-        for data in [self.current+b'\n# unreviewed\n',self.current.replace(b'timeout-minutes: 330',b'timeout-minutes: 360'),
+        for data in [(ROOT/self.path).read_bytes(),self.current+b'\n# unreviewed\n',self.current.replace(b'timeout-minutes: 330',b'timeout-minutes: 360'),
                      self.current.replace(b'contents: read',b'contents: write'),
                      self.current.replace(b'run: bash scripts/ipad_screenshots.sh games',b'run: echo skipped')]:
             raw=hashlib.sha256(data).hexdigest()

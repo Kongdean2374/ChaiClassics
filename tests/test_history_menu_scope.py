@@ -22,11 +22,16 @@ class HistoryMenuScopeTests(unittest.TestCase):
     def setUpClass(cls):
         sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
         cls.after = scoped.historical.git_tree(sha)
-        # Read actual audited runtime/UI sources, including while developing a
-        # pure verifier update. Production reads immutable Git trees only.
-        cls.after[cls.path] = ('100644', (ROOT / cls.path).read_bytes())
-        for path in (ROOT / 'UITests').glob('*.swift'):
-            cls.after[str(path.relative_to(ROOT))] = ('100644', path.read_bytes())
+        # Unit fixtures use the current tracked working source, including a
+        # reviewed CI-policy update. Production still reads immutable Git trees.
+        tracked = subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT).decode().split('\0')
+        for path in filter(None, tracked):
+            file = ROOT / path
+            if file.is_file():
+                mode = cls.after.get(path, ('100644', b''))[0]
+                cls.after[path] = (mode, file.read_bytes())
+            else:
+                cls.after.pop(path, None)
         before_hash, after_hash, old_block, new_block, inserted = scoped.APPROVED_HISTORY_MENU
         new = cls.after[cls.path][1].decode()
         old = new.replace(new_block, old_block, 1).replace(inserted, '', 1)

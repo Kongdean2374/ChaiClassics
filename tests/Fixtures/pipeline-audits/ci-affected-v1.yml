@@ -1,0 +1,202 @@
+name: CI
+run-name: CI · ${{ inputs.ui_scope || 'core-build' }} · ${{ github.ref_name }}
+on:
+  push:
+    branches: [main, develop/0.2.0, develop/0.2.1, develop/0.2.2, develop/0.3.0]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      full_ui:
+        description: Run Simulator UI tests using the selected scope
+        type: boolean
+        default: true
+      runner:
+        description: Standard hosted Mac pool for manual validation
+        type: choice
+        options: [macos-15, macos-15-intel]
+        default: macos-15
+      ui_scope:
+        description: Full integration, or only the affected game UI
+        type: choice
+        options: [full, beta, affected, part_a, part_b, part_c, part_d, expanded, nonogram, kakuro, klotski, gomoku, reversi, xiangqi, banqi, chess, shogi, klondike, spider, freecell, pyramid, tripeaks, snake, fallingblocks, brickbreaker, sliding, memory, tictactoe, connectfour, twentyfour, maze, catalog, legacy]
+        default: full
+      baseline_run:
+        description: Optional prior CI run IDs, comma-separated; only matching actual passes carry forward
+        type: string
+        default: ''
+  workflow_call:
+    inputs:
+      full_ui:
+        type: boolean
+        default: false
+      runner:
+        type: string
+        default: macos-15
+env:
+  FASTLANE_OPT_OUT_USAGE: '1'
+  FASTLANE_SKIP_UPDATE_CHECK: '1'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  test:
+    runs-on: ${{ inputs.runner == 'macos-15-intel' && 'macos-15-intel' || 'macos-15' }}
+    timeout-minutes: 180
+    env:
+      COMPATIBILITY_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+      CHAI_UI_SCOPE: ${{ inputs.ui_scope || 'full' }}
+      CHAI_CI_SOURCE_RUNS: ${{ inputs.baseline_run || '' }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Reject an empty selected test request
+        if: env.CHAI_UI_SCOPE != 'full' && inputs.full_ui != true
+        run: |
+          echo 'A selected UI scope requires full_ui=true; refusing an empty green result.' >&2
+          exit 64
+      - name: Select installed Xcode 26 or newer
+        run: bash scripts/select_xcode.sh
+      - name: Record actual validation scope
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          from pathlib import Path
+          sys.path.insert(0, 'scripts')
+          from verify_scoped_ci import parse_runs
+          from ui_test_scope import PART_SCOPES
+          scope = os.environ['CHAI_UI_SCOPE']
+          runs = parse_runs(os.environ['CHAI_CI_SOURCE_RUNS'])
+          selection = {'scope': scope, 'source_commit': os.environ['GITHUB_SHA'], 'source_runs': runs}
+          if scope in PART_SCOPES and runs:
+              selection['partition'] = 'affected-v1'
+          Path('ui-selection.json').write_text(json.dumps(selection) + '\n')
+          PY
+      - name: Verify puzzles, save compatibility and generated project
+        run: bash scripts/ci.sh verify
+      - name: Run Swift game and save tests
+        run: bash scripts/ci.sh unit
+      - name: Build iOS Simulator app
+        run: bash scripts/ci.sh build
+      - name: Plan affected UI cases from verified source evidence
+        if: inputs.full_ui == true && (env.CHAI_UI_SCOPE == 'affected' || (startsWith(env.CHAI_UI_SCOPE, 'part_') && inputs.baseline_run != ''))
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHAI_BASELINE_RUN: ${{ inputs.baseline_run }}
+        run: python3 scripts/verify_scoped_ci.py plan --source-runs "$CHAI_BASELINE_RUN" --output build/ui-scope-plan.json
+      - name: Run all iOS UI tests
+        if: inputs.full_ui == true && env.CHAI_UI_SCOPE == 'full'
+        run: bash scripts/ci.sh ui
+      - name: Run selected iOS UI tests
+        if: inputs.full_ui == true && env.CHAI_UI_SCOPE != 'full'
+        run: bash scripts/ci.sh ui
+      - name: Validate complete candidate XCTest evidence
+        if: inputs.full_ui == true && env.CHAI_UI_SCOPE == 'full'
+        run: python3 scripts/verify_candidate.py capture --kind ci --summary build/UITests-summary.json --log build/UITests.log --output build/candidate-ci-evidence.json
+      - name: Validate incremental candidate XCTest evidence
+        if: inputs.full_ui == true && env.CHAI_UI_SCOPE != 'full'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHAI_BASELINE_RUN: ${{ inputs.baseline_run }}
+        run: python3 scripts/verify_scoped_ci.py capture --source-runs "$CHAI_BASELINE_RUN" --scope "$CHAI_UI_SCOPE" --summary build/UITests-summary.json --log build/UITests.log --output build/candidate-ci-evidence.json
+      - name: Preserve bounded candidate CI evidence
+        if: inputs.full_ui == true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: candidate-ci-evidence
+          path: build/candidate-ci-evidence.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Explain selected verification scope
+        if: always() && inputs.full_ui == true && env.CHAI_UI_SCOPE != 'full'
+        run: |
+          if [ "$CHAI_UI_SCOPE" = beta ]; then
+            echo 'Selected UI scope: beta; three current critical journeys support the TestFlight Beta gate with manual QA for remaining checks, while formal full release requires complete CI, Visual and iPad evidence.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Selected UI scope: $CHAI_UI_SCOPE; these targeted results require complete independently verified CI plus Visual and iPad evidence for formal full release." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Export full UI screenshots for visual review
+        if: always()
+        run: |
+          if [ -d build/UITests.xcresult ]; then
+            xcrun xcresulttool export attachments --path build/UITests.xcresult --output-path build/ui-screenshots
+          fi
+      - name: Preserve verification report and simulator results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: test-results
+          path: |
+            ui-selection.json
+            sudoku-verification.json
+            build/UITests-summary.json
+            build/ui-scope-plan.json
+            build/UITests.log
+            build/ui-screenshots/*.png
+            build/ui-screenshots/*.json
+            build/ui-screenshots/*.txt
+          if-no-files-found: warn
+      - name: Preserve the original full Simulator XCTest bundle separately
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: simulator-xctest-results
+          path: build/UITests.xcresult
+          if-no-files-found: warn
+  codesign-extraction:
+    runs-on: macos-15-intel
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - run: bash scripts/select_xcode.sh
+      - uses: ruby/setup-ruby@4a9ddd6f338a97768b8006bf671dfbad383215f4
+        with:
+          ruby-version: '3.3'
+          bundler: '2.5.23'
+      - name: Test real codesign certificate extraction without credentials
+        run: |
+          bundle config set path vendor/bundle
+          bundle config set frozen true
+          bundle install --jobs 4
+          bundle exec ruby tests/codesign_extraction_macos_test.rb
+          bundle exec ruby tests/archive_session_test.rb
+          bundle exec ruby tests/gym_xcode_macos_test.rb
+  release-tooling:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@4a9ddd6f338a97768b8006bf671dfbad383215f4
+        with:
+          ruby-version: '3.3'
+          bundler: '2.5.23'
+      - name: Validate fastlane without any Apple credentials
+        run: |
+          bundle config set path vendor/bundle
+          bundle config set frozen true
+          bundle install --jobs 4
+          python3 -m unittest discover -s tests -v
+          python3 scripts/verify_sudoku.py
+          bundle exec ruby tests/signing_config_test.rb
+          bundle exec ruby tests/signing_asset_verifier_test.rb
+          bundle exec ruby tests/release_pipeline_test.rb
+          bundle exec ruby tests/archive_session_test.rb
+          bundle exec ruby tests/apple_api_diagnostics_test.rb
+          bundle exec ruby tests/jwt_comparison_test.rb
+          bundle exec ruby tests/workflow_config_test.rb
+          ruby tests/testflight_status_test.rb
+          ruby -c scripts/testflight_status.rb
+          ruby -c fastlane/Fastfile
+          bundle exec fastlane lanes
+          cat Gemfile.lock
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-dependency-lock
+          path: Gemfile.lock
+          if-no-files-found: error

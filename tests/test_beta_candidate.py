@@ -185,6 +185,23 @@ class BetaCandidateTests(unittest.TestCase):
             beta.verify(self.repo, self.sha, '0.3.0', tag, manual_qa=True,
                         read=identity_only, tree_reader=lambda sha: self.tree)
 
+    def test_future_numeric_versions_still_require_source_version_and_matching_tag(self):
+        for version in ('0.4.0', '1.0.0', '12.3.4'):
+            with self.subTest(version=version):
+                project = 'ChaiClassics.xcodeproj/project.pbxproj'
+                mode, original = self.tree[project]
+                self.tree[project] = (mode, original.replace(b'0.2.2', version.encode()))
+                tag = 'v' + version + '-rc.1'
+                self.responses[f'repos/{self.repo}/git/ref/tags/{tag}'] = {
+                    'ref': 'refs/tags/' + tag, 'object': {'type': 'commit', 'sha': self.sha}}
+                proof = beta.verify(self.repo, self.sha, version, tag, manual_qa=True,
+                                    read=self.read, tree_reader=lambda sha: self.tree)
+                self.assertEqual(proof['version'], version)
+                self.assertFalse(proof['full_regression_complete'])
+                self.tree[project] = (mode, original)
+                with self.assertRaises(candidate.CandidateError):
+                    beta.verify(self.repo, self.sha, version, tag, manual_qa=True,
+                                read=self.read, tree_reader=lambda sha: self.tree)
     def test_manual_cli_accepts_no_ci_run_and_reports_pending_instead_of_passed_tests(self):
         proof = {'status': 'manual_beta_ready', 'beta_eligible': True, 'full_regression_complete': False}
         console = io.StringIO(); output = self.cache / 'manual-proof.json'

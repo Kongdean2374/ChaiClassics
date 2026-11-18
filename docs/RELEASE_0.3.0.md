@@ -15,9 +15,9 @@
 
 本次 TestFlight 採明確的 `validation_mode: beta` 與 `--manual-qa`：保留 main／候選 tag／來源 SHA／版本的檢查，保留所有 71 項 UI 案例及 26 條對局／歷史路徑；尚未執行或未通過者明確記為待實機驗證，不生成假的成功紀錄。
 
-Run `44230785877` 的 223 項 Swift 核心測試、150 題數獨與存檔相容檢查、真正 iOS Simulator App build 已通過，工具／YAML／fastlane 檢查亦通過。這些是同一 App／Core 原始碼的基本結果，不代表全部 UI 通過。本次後續改動只調整 TestFlight Beta 入口、來源檢查及對應測試／文件，簽署 upload job 維持原樣。
+Run `44230785877` 的 223 項 Swift 核心測試、150 題數獨與存檔相容檢查、真正 iOS Simulator App build 已通過，工具／YAML／fastlane 檢查亦通過。這些是同一 App／Core 原始碼的基本結果，不代表全部 UI 通過。依最新 [開發策略](DEVELOPMENT_POLICY.md)，取消多餘的完整 UI 分組；後續只修改 CI／Beta 入口與對應測試文件，不修改遊戲。
 
-基本驗證後整合 main，直接觸發 TestFlight 並回報連結，不等待 Apple 處理。完整 `full` 模式與 App Store 的發布門檻維持原樣；不提交 App Store，不修改憑證。實機優先驗證續玩滑動／刪除確認、全部新遊戲操作、歷史搜尋收鍵盤、動畫手感與升級後保存進度；後續依實際 bug 回報做針對性回歸。
+基本驗證後整合 main，Codex 主動觸發 TestFlight，檢查上傳與 Apple 接收／處理狀態並回報。Beta 不等待完整 UI，正式 `full` 模式仍可使用，App Store preparation 明確要求完整 UI；不自動提交 App Store，不修改憑證。實機優先驗證續玩滑動／刪除確認、全部新遊戲操作、歷史搜尋收鍵盤、動畫手感與升級後保存進度；後續依實際 bug 回報做針對性回歸。
 
 以下為先前完整自動化驗證的開發紀錄，並非本次測試版的等待門檻。
 

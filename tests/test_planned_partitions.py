@@ -108,7 +108,8 @@ class PlannedPartitionTests(unittest.TestCase):
 
     def test_only_exact_additive_partition_support_preserves_the_previous_execution_source(self):
         for path, pair in scoped.APPROVED_DEPENDENCY_PARTITIONS.items():
-            data = (ROOT / path).read_bytes()
+            fixture = 'tests/Fixtures/pipeline-audits/ci-affected-v1.yml' if path == '.github/workflows/ci.yml' else path
+            data = (ROOT / fixture).read_bytes()
             self.assertEqual(hashlib.sha256(data).hexdigest(), pair[1])
             normalized = scoped.dependency_partition_baseline(path, '100644', data)
             self.assertEqual(hashlib.sha256(normalized).hexdigest(), pair[0])

@@ -1,0 +1,161 @@
+name: iPad Screenshots
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: Standard macOS runner (no paid larger runners)
+        type: choice
+        options:
+          - macos-15
+          - macos-15-intel
+        default: macos-15
+      device_name:
+        description: Exact installed 13-inch iPad Pro name, or auto
+        type: string
+        default: auto
+permissions:
+  contents: read
+jobs:
+  ipad-screenshots:
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop/0.2.0' || github.ref == 'refs/heads/develop/0.2.1' || github.ref == 'refs/heads/develop/0.2.2' || github.ref == 'refs/heads/develop/0.3.0') && github.event_name == 'workflow_dispatch'
+    # Map inputs to standard hosted pools; arbitrary labels cannot select paid hosts.
+    runs-on: ${{ inputs.runner == 'macos-15' && 'macos-15' || 'macos-15-intel' }}
+    # The first measured 22-game run used 85 minutes while most new journeys
+    # stopped halfway at an offscreen link. Keep their remaining real
+    # confirmation/relaunch checks bounded without a premature job cutoff.
+    timeout-minutes: 330
+    env:
+      CHAI_IPAD_REQUESTED_RUNNER: ${{ inputs.runner }}
+      CHAI_IPAD_DEVICE_NAME: ${{ inputs.device_name }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Validate standard hosted runner selection
+        run: |
+          case "$CHAI_IPAD_REQUESTED_RUNNER" in
+            macos-15-intel|macos-15) ;;
+            *) echo 'Unsupported runner. Choose macos-15-intel or macos-15.' >&2; exit 64 ;;
+          esac
+      - name: Select installed stable Xcode
+        id: xcode
+        run: bash scripts/select_xcode.sh
+      - name: List iPad inventory and select a native 13-inch iPad Pro
+        id: device
+        run: python3 scripts/select_ipad_simulator.py --output build/ipad-screenshots/device.json --device-name "$CHAI_IPAD_DEVICE_NAME"
+      - name: Build unsigned iPad Simulator test bundle
+        id: build
+        timeout-minutes: 15
+        run: bash scripts/ipad_screenshots.sh build
+      - name: Boot the selected 13-inch iPad Simulator
+        id: boot
+        timeout-minutes: 15
+        run: bash scripts/ipad_screenshots.sh boot
+      - name: Run four portrait iPad UI screenshot tests
+        id: ui
+        timeout-minutes: 60
+        run: bash scripts/ipad_screenshots.sh test
+      - name: Export gallery diagnostics before the longer game journeys
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.boot.outcome == 'success' }}
+        run: |
+          xcrun xcresulttool export attachments --path build/ipad-screenshots/IPadScreenshots.xcresult --output-path build/ipad-screenshots/gallery-early-attachments
+          xcrun xcresulttool get test-results summary --path build/ipad-screenshots/IPadScreenshots.xcresult > build/ipad-screenshots/gallery-early-summary.json
+      - name: Make completed gallery failures available immediately
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.boot.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ChaiClassics-iPad-Gallery-Diagnostics
+          path: |
+            build/ipad-screenshots/device.json
+            build/ipad-screenshots/tests.log
+            build/ipad-screenshots/gallery-early-summary.json
+            build/ipad-screenshots/gallery-early-attachments/*.png
+            build/ipad-screenshots/gallery-early-attachments/*.json
+            build/ipad-screenshots/gallery-early-attachments/*.txt
+          if-no-files-found: error
+          retention-days: 14
+      - name: Run all 22 game journeys on the same iPad
+        id: games
+        # Preserve independent game evidence after a gallery assertion fails.
+        # The failed gallery step still fails the job and candidate proof.
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.boot.outcome == 'success' }}
+        timeout-minutes: 210
+        run: bash scripts/ipad_screenshots.sh games
+      - name: Export XCTest screenshots and diagnostics
+        id: export
+        if: always()
+        run: bash scripts/ipad_screenshots.sh export
+      - name: Verify original PNG sizes and write the result report
+        if: always()
+        env:
+          CHAI_IPAD_BUILD_STATUS: ${{ steps.build.outcome }}
+          CHAI_IPAD_TEST_STATUS: ${{ steps.ui.outcome }}
+          CHAI_IPAD_EXPORT_STATUS: ${{ steps.export.outcome }}
+        run: |
+          python3 scripts/collect_ipad_screenshots.py \
+            --attachments build/ipad-screenshots/attachments \
+            --device build/ipad-screenshots/device.json \
+            --output build/ipad-screenshots \
+            --build-status "$CHAI_IPAD_BUILD_STATUS" \
+            --test-status "$CHAI_IPAD_TEST_STATUS" \
+            --export-status "$CHAI_IPAD_EXPORT_STATUS"
+      - name: Validate four original iPad gallery captures
+        run: python3 scripts/verify_candidate.py capture --kind ipad --summary build/ipad-screenshots/test-summary.json --log build/ipad-screenshots/tests.log --games-summary build/ipad-screenshots/games-summary.json --games-log build/ipad-screenshots/games.log --ipad-report build/ipad-screenshots/report.json --output build/candidate-ipad-evidence.json
+      - name: Preserve bounded candidate iPad evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: candidate-ipad-evidence
+          path: build/candidate-ipad-evidence.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish device, PNG dimensions and test summary
+        if: always()
+        run: |
+          if [ -f build/ipad-screenshots/REPORT.md ]; then
+            cat build/ipad-screenshots/REPORT.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'iPad validation report was not produced; inspect the uploaded diagnostics.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Preserve all available iPad screenshots and test results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ChaiClassics-iPad-AppStore-Screenshots
+          path: |
+            build/ipad-screenshots/*.png
+            build/ipad-screenshots/*.json
+            build/ipad-screenshots/*.md
+            build/ipad-screenshots/*.txt
+            build/ipad-screenshots/*.log
+            build/ipad-screenshots/attachments/*.png
+            build/ipad-screenshots/attachments/*.json
+            build/ipad-screenshots/attachments/*.txt
+            build/ipad-screenshots/game-attachments/*.png
+            build/ipad-screenshots/game-attachments/*.json
+            build/ipad-screenshots/game-attachments/*.txt
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve the full XCTest bundle separately
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ChaiClassics-iPad-XCTest-Results
+          path: build/ipad-screenshots/IPadScreenshots.xcresult
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Preserve all iPad game journeys separately
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ChaiClassics-iPad-Games-XCTest-Results
+          path: build/ipad-screenshots/IPadGames.xcresult
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Preserve the original pre-case startup failure when retried
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ChaiClassics-iPad-Startup-Retry-Results
+          path: build/ipad-screenshots/IPadScreenshots-startup-attempt1.xcresult
+          if-no-files-found: warn
+          retention-days: 14

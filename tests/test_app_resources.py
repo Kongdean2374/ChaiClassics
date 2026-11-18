@@ -125,17 +125,32 @@ class AppResourceTests(unittest.TestCase):
         header=actual.split(b'jobs:\n',1)[0]
         self.assertEqual(header.count(b"'Version (e.g. 0.3.0)'"),1)
         self.assertEqual(header.count(b"        default: '0.3.0'\n"),1)
-        # v0.3.0 defaults to complete regression; released 0.2.x manual QA stays explicit.
+        # The user selected manual-QA Beta as the daily default. Full remains selectable.
         # The actual signing/upload job below stays byte-frozen to the released
         # pipeline; normalize only the documented current-version label/default.
         stable_header=header.replace(b"'Version (e.g. 0.3.0)'", b"'Version (e.g. 0.2.1)'")
         stable_header=stable_header.replace(b"        default: '0.3.0'\n", b"        default: '0.2.1'\n")
+        self.assertEqual(stable_header.count(b'        default: beta\n'), 1)
+        stable_header=stable_header.replace(b'        default: beta\n', b'        default: full\n')
         self.assertEqual(hashlib.sha256(stable_header).hexdigest(),'fe9a221224b46e6ca0ff6accb197b604737121ae72162742a875c94bc7316d94')
         upload=b'  upload:\n'+actual.split(b'  upload:\n',1)[1]
         self.assertEqual(upload.count(b'    needs: preflight\n'),1)
         self.assertEqual(upload.count(b'    runs-on: macos-15-intel\n'),1)
         upload=upload.replace(b'    needs: preflight\n',b'    needs: ci\n')
         upload=upload.replace(b'    runs-on: macos-15-intel\n',b'    runs-on: macos-15\n')
+        core_step=b'      - name: Check core game rules and saved progress\n        run: swift test\n'
+        status_steps=(b'      - name: Read Apple receipt and processing status for the exact uploaded build\n'
+                      b'        run: ruby scripts/check_uploaded_build.rb\n'
+                      b'      - name: Preserve allowlisted Apple processing status\n'
+                      b'        if: always()\n'
+                      b'        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02\n'
+                      b'        with:\n'
+                      b'          name: testflight-apple-status\n'
+                      b'          path: build/testflight-status.json\n'
+                      b'          if-no-files-found: warn\n')
+        for addition in (core_step,status_steps):
+            self.assertEqual(upload.count(addition),1)
+            upload=upload.replace(addition,b'',1)
         # Every other signing/upload byte is unchanged from released 1396194.
         self.assertEqual(hashlib.sha256(upload).hexdigest(),'7f1aeb872b190e583642c74ad3bf08b706aac54c941b25df01ccea4e8b92636e')
     def test_test_sandbox_never_resets_production_storage(self):

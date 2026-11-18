@@ -80,13 +80,12 @@ puts 'PASS: existing-asset-only manual verification; no ASC key, certificate cre
 
 extraction_job = workflows.fetch('ci.yml').fetch('jobs').fetch('codesign-extraction')
 test_job = workflows.fetch('ci.yml').fetch('jobs').fetch('test')
-check(test_job['runs-on'] == "${{ inputs.runner == 'macos-15-intel' && 'macos-15-intel' || 'macos-15' }}", 'unsigned Simulator CI maps only the two standard hosted pools, without paid labels')
+check(test_job['runs-on'] == "${{ inputs.runner == '' && 'ubuntu-24.04' || (inputs.runner == 'macos-15-intel' && 'macos-15-intel' || 'macos-15') }}", 'ordinary events use Linux; explicit manual/called CI maps only standard Mac pools')
 check((workflows.fetch('ci.yml')['on'] || workflows.fetch('ci.yml')[true]).dig('workflow_dispatch','inputs','runner','options') == %w[macos-15 macos-15-intel], 'manual CI can choose an available standard Mac pool')
 check((workflows.fetch('ci.yml')['on'] || workflows.fetch('ci.yml')[true]).dig('workflow_dispatch','inputs','runner','default') == 'macos-15', 'ordinary CI retains the standard ARM default')
 intel_jobs = [extraction_job, flight.fetch('jobs').fetch('upload')]
-intel_jobs.each do |entry|
-  check(entry['runs-on'] == 'macos-15-intel', 'real codesign regression and signed TestFlight retain the explicit standard Intel pool')
-end
+check(extraction_job['runs-on'] == "${{ inputs.runner == '' && 'ubuntu-24.04' || 'macos-15-intel' }}", 'automatic signing checks use Linux syntax; explicit real extraction uses Intel')
+check(flight.dig('jobs','upload','runs-on') == 'macos-15-intel', 'signed TestFlight retains the standard Intel pool')
 ([test_job] + intel_jobs).each do |entry|
   check(entry.fetch('steps').any? { |step| step['run'] == 'bash scripts/select_xcode.sh' }, 'every macOS job explicitly selects installed Xcode 26+')
 end
@@ -100,10 +99,18 @@ check(ci_triggers.dig('workflow_call','inputs','full_ui','default') == false, 'r
 ui_steps = test_job.fetch('steps').select { |step| step['run'] == 'bash scripts/ci.sh ui' }
 check(ui_steps.length == 2 && ui_steps.map { |step| step['if'] } == ["inputs.full_ui == true && env.CHAI_UI_SCOPE == 'full'", "inputs.full_ui == true && env.CHAI_UI_SCOPE != 'full'"], 'full and targeted UI are explicit mutually exclusive modes')
 test_job.fetch('steps').select { |step| %w[verify unit build].any? { |phase| step['run'] == 'bash scripts/ci.sh ' + phase } }.each do |step|
-  check(!step.key?('if'), 'every App scope actually reruns current verification, Core tests and Simulator build')
+  check(step['if'] == "inputs.runner != ''", 'verification/Core/Simulator builds require explicit manual or called Mac CI')
 end
 check(test_job.dig('env', 'CHAI_UI_SCOPE') == "${{ inputs.ui_scope || 'full' }}", 'ordinary push, PR and release CI default to full checks')
 check(ci_workflow['permissions'] == {'contents' => 'read', 'actions' => 'read'}, 'baseline reads receive only read permission')
+check(ci_workflow.dig('concurrency','cancel-in-progress') == true, 'superseded unsigned CI may be cancelled')
+check(ci_workflow.dig('concurrency','group').include?('github.workflow'), 'called release validation cannot collide with ordinary Push CI')
+%w[test codesign-extraction release-tooling].each do |name|
+  entry = ci_workflow.fetch('jobs').fetch(name)
+  check(entry.fetch('steps').any? { |step| step['if'] == "inputs.runner == ''" && step['name'].start_with?('Lightweight') }, 'every existing required check performs a real lightweight automatic check')
+end
+check(flight.dig('concurrency','cancel-in-progress') == false && store.dig('concurrency','cancel-in-progress') == false, 'new Push cannot cancel active signing/upload/release')
+check(store.dig('jobs','ci','with','full_ui') == true, 'formal App Store preparation explicitly requests full UI regression')
 scope_inputs = ci_triggers.dig('workflow_dispatch', 'inputs', 'ui_scope')
 check(scope_inputs['type'] == 'choice' && scope_inputs['default'] == 'full' && scope_inputs['options'].include?('memory') && scope_inputs['options'].include?('sliding'), 'manual CI exposes explicit game selections')
 check(%w[part_a part_b part_c part_d].all? { |scope| scope_inputs['options'].include?(scope) }, 'manual CI exposes all four disjoint source partitions')
@@ -118,14 +125,15 @@ puts 'PASS: visible ordered CI phases, bounded UI/total runtimes and rejected un
 check(flight.fetch('jobs').keys.sort == %w[preflight upload], 'TestFlight has only fast preflight and real signed upload')
 preflight = flight.fetch('jobs').fetch('preflight')
 check(preflight['runs-on'] == 'ubuntu-24.04' && !preflight.key?('env') && !preflight.key?('environment') && !preflight.key?('secrets'), 'preflight runs without Apple/signing credentials')
-candidate_steps = preflight['steps'].reject { |step| ['Verify exact-SHA TestFlight candidate', 'Preserve verified release candidate proof'].include?(step['name']) }
-check(candidate_steps.first.dig('with', 'fetch-depth') == 0, 'release proof can independently compare complete git trees')
-normalized_steps = candidate_steps.map do |step|
-  copy = Marshal.load(Marshal.dump(step))
-  copy['with'].delete('fetch-depth') if copy.fetch('uses', '').start_with?('actions/checkout@')
-  copy
-end
-check(normalized_steps == ci_workflow.fetch('jobs').fetch('release-tooling').fetch('steps'), 'TestFlight retains all fast release-tooling security checks')
+check(preflight['steps'].first.dig('with', 'fetch-depth') == 0, 'release proof can independently compare complete git trees')
+full_tools = preflight['steps'].find { |step| step['name'] == 'Validate fastlane without any Apple credentials' }
+ci_tools = ci_workflow.dig('jobs','release-tooling','steps').find { |step| step['name'] == full_tools['name'] }
+check(full_tools['run'] == ci_tools['run'] && full_tools['if'] == "inputs.validation_mode == 'full'", 'formal mode retains every full release-tooling test without repeating them for Beta')
+beta_tools = preflight['steps'].find { |step| step['name'] == 'Validate Beta source and release configuration' }
+check(beta_tools && beta_tools['run'].include?('ruby tests/workflow_config_test.rb') && !beta_tools['run'].include?('bundle install'), 'Beta preflight uses credential-free local configuration checks without duplicate fastlane installs')
+upload_steps = flight.dig('jobs','upload','steps')
+check(upload_steps.count { |step| step['run'] == 'swift test' } == 1, 'Beta performs core rules/save regression once on the upload runner')
+check(upload_steps.any? { |step| step['run'] == 'ruby scripts/check_uploaded_build.rb' }, 'the exact uploaded build receives a real read-only Apple receipt/processing query')
 check(flight.dig('jobs','upload','needs') == 'preflight', 'real signed archive/upload follows successful quick preflight')
 flight.fetch('jobs').each_value do |entry|
   check(entry.fetch('if').include?("github.ref == 'refs/heads/main'") && entry.fetch('if').include?("github.event_name == 'workflow_dispatch'"), 'both release jobs remain trusted main/manual only')
@@ -226,12 +234,12 @@ check(ci_script.include?('Pro Max') && ci_script.include?('Plus'), 'full UI pref
   check(entry.fetch('if').include?("github.ref == 'refs/heads/develop/0.2.2'"), '0.2.2 supports exact-SHA unsigned visual/iPad evidence')
 end
 candidate_gate = preflight.fetch('steps').find { |step| step['name'] == 'Verify exact-SHA TestFlight candidate' }
-check(candidate_gate && candidate_gate['if'] == "startsWith(inputs.version, '0.2.') || startsWith(inputs.version, '0.3.')", '0.2.x TestFlight signing requires an exact-SHA candidate gate')
+check(candidate_gate && !candidate_gate.key?('if'), 'every numeric version, including future versions, requires the exact-SHA candidate gate')
 check(flight.fetch('permissions') == {'contents' => 'read', 'actions' => 'read'}, 'candidate reads receive no repository or Actions write permission')
 check(candidate_gate.dig('env', 'GH_TOKEN') == '${{ github.token }}', 'candidate metadata reads use the short-lived read-only workflow token')
 validation_mode = (flight['on'] || flight[true]).dig('workflow_dispatch', 'inputs', 'validation_mode')
-check(validation_mode['type'] == 'choice' && validation_mode['options'] == %w[beta full] && validation_mode['default'] == 'full', 'explicit user-selected TestFlight policy defaults to complete regression for 0.3.0')
-check(candidate_gate.dig('env', 'CHAI_VALIDATION_MODE') == "${{ inputs.validation_mode || 'full' }}", 'candidate gate receives the explicit Beta/full policy')
+check(validation_mode['type'] == 'choice' && validation_mode['options'] == %w[beta full] && validation_mode['default'] == 'beta', 'TestFlight defaults to manual-QA Beta while formal full regression remains selectable')
+check(candidate_gate.dig('env', 'CHAI_VALIDATION_MODE') == "${{ inputs.validation_mode || 'beta' }}", 'candidate gate receives the explicit Beta/full policy')
 gate_run = candidate_gate.fetch('run')
 beta_case = gate_run.match(/beta\)\n(.*?)\n\s*;;/m)&.captures&.first
 full_case = gate_run.match(/full\)\n(.*?)\n\s*;;/m)&.captures&.first
@@ -266,12 +274,12 @@ check(ipad_steps[early_gallery].dig('with','path').include?('gallery-early-attac
 end
 check(artifact_paths.none? { |path| path.match?(/\.(mp4|mov)\z/) || path.end_with?('game-attachments/') }, 'mobile review artifact does not upload new-game movies')
 ui_export = test_job.fetch('steps').find { |step| step['name'] == 'Export full UI screenshots for visual review' }
-check(ui_export && ui_export['if'] == 'always()' && !ui_export.key?('continue-on-error'), 'full UI export always preserves failures rather than ignoring them')
+check(ui_export && ui_export['if'] == "always() && inputs.runner != ''" && !ui_export.key?('continue-on-error'), 'explicit Mac UI export preserves failures without running on ordinary pushes')
 check(ui_export.fetch('run').include?('--path build/UITests.xcresult --output-path build/ui-screenshots'), 'complete UI screenshots come from the actual full-suite result')
 ci_results = test_job.fetch('steps').find { |step| step.dig('with', 'name') == 'test-results' }
 check(!ci_results.dig('with','path').lines.map(&:strip).include?('build/UITests.xcresult'), 'bounded CI review evidence excludes the duplicate large original bundle')
 ci_original = test_job.fetch('steps').find { |step| step.dig('with','name') == 'simulator-xctest-results' }
-check(ci_original && ci_original['if'] == 'always()' && ci_original.dig('with','path') == 'build/UITests.xcresult', 'the original full XCTest bundle is still preserved separately on failures')
+check(ci_original && ci_original['if'] == "always() && inputs.runner != ''" && ci_original.dig('with','path') == 'build/UITests.xcresult', 'the original full XCTest bundle is still preserved on manual Mac failures')
 %w[png json txt].each do |extension|
   check(ci_results.dig('with', 'path').lines.map(&:strip).include?('build/ui-screenshots/*.' + extension), 'full UI ' + extension + ' files remain reviewable without Xcode')
 end
