@@ -720,6 +720,12 @@
 "expanded.suit.2" = "clubs";
 "expanded.suit.3" = "diamonds";
 "expanded.solitaire.help" = "Touch and hold to drag a card or sequence onto a pile, or tap a card then its destination. Invalid drops leave the cards in place. Pinch to inspect long columns.";
+"expanded.solitaire.foundationHelp" = "Start a foundation with an ace, then build up in the same suit, one card at a time.";
+"expanded.solitaire.cellHelp" = "Each free cell holds one card. Choose an empty cell.";
+"expanded.solitaire.kingHelp" = "An empty column accepts a king, or a descending alternating-color sequence starting with a king.";
+"expanded.solitaire.columnHelp" = "Build columns down in alternating colors, such as a red 7 below a black 8.";
+"expanded.solitaire.spiderHelp" = "Move a descending same-suit sequence onto a card one rank higher, or an empty column.";
+"expanded.solitaire.freecellHelp" = "Build columns down in alternating colors. Moving a sequence requires enough empty free cells and columns.";
 "expanded.pyramid.help" = "Pair two exposed cards that total 13; remove a king on its own. Tap a pair or drag one onto the other.";
 "expanded.tripeaks.help" = "Tap an exposed card one rank above or below the waste (A wraps to K), or drag it onto the waste. Draw when needed.";
 "expanded.score" = "Score %d";

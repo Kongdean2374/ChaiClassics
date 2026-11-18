@@ -18,6 +18,8 @@ struct ExpandedSolitaireView: View {
     @State private var dragContext: SolitaireDragContext?
     @State private var hovered: SolitaireDropTarget?
     @State private var dropLoading = false
+    @State private var moveHelpKey: String?
+    @State private var viewportWidth: CGFloat = 320
     private var board: SolitaireBoard? { if case .solitaire(let board) = model.expandedGames[game]?.state { return board }; return nil }
     private var active: Bool { model.sessionIsPlaying(game) }
     var body: some View {
@@ -29,32 +31,58 @@ struct ExpandedSolitaireView: View {
                         Text(model.gameTitle(game)).font(.headline); Spacer()
                         Text(model.t("expanded.moves",board.moves)).font(.caption).monospacedDigit()
                     }
-                    controls(board)
                     if board.variant == .spider,!board.stock.isEmpty,board.columns.contains(where:\.isEmpty) {
                         Text(model.t("expanded.spider.emptyColumn")).font(.caption).foregroundStyle(.secondary)
                     }
                     Button { if mutate({$0.undo()}) { selected = nil; pyramidSelection = nil } } label: {
                         Label(model.t("expanded.undo"),systemImage:"arrow.uturn.backward").frame(minHeight:44)
                     }.buttonStyle(.bordered).disabled(!board.canUndo).accessibilityIdentifier(game.rawValue+".undo")
-                    if board.variant == .pyramid || board.variant == .tripeaks { peaks(board) }
-                    else { columns(board) }
-                    Text(model.t(board.variant == .pyramid ? "expanded.pyramid.help" : board.variant == .tripeaks ? "expanded.tripeaks.help" : "expanded.solitaire.help"))
-                        .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    unifiedBoard(board)
                 }.padding(16).frame(maxWidth:760).frame(maxWidth:.infinity)
+            }
+        }.safeAreaInset(edge:.bottom,spacing:0) {
+            if let board {
+                Label(model.t(moveHelpKey ?? defaultHelpKey(board)),systemImage:"info.circle")
+                    .font(.caption).foregroundStyle(.secondary).frame(maxWidth:728,alignment:.leading)
+                    .padding(12).frame(maxWidth:.infinity).background(.regularMaterial)
+                    .accessibilityIdentifier(game.rawValue+".moveHelp")
             }
         }.onChange(of:active) { _,value in if !value { clearInteraction() } }
             .onDisappear { clearInteraction() }
     }
+    private func unifiedBoard(_ board: SolitaireBoard) -> some View {
+        let peaks = board.variant == .pyramid || board.variant == .tripeaks
+        let width = peaks ? (board.variant == .pyramid ? 420 : 600) : board.columns.count*64
+        let fieldHeight = peaks ? (board.variant == .pyramid ? 410 : 270) : max(140,(board.columns.map(\.count).max() ?? 0)*44+40)
+        let height = fieldHeight+136
+        // One UIKit hosting root and one zoom transform for the entire table.
+        // A drag from the stock/waste row never crosses a separate scroll view.
+        return ZoomBoard(size:CGSize(width:width,height:height),inputEnabled:active,accessibilityHidden:!active,
+                         identifier:game.rawValue+".zoomBoard") {
+            VStack(alignment:.leading,spacing:16) {
+                controls(board).frame(width:CGFloat(width-8),height:112,alignment:.topLeading)
+                if peaks { peakContent(board).frame(width:CGFloat(width-8),height:CGFloat(fieldHeight),alignment:.topLeading) }
+                else { columnContent(board,height:fieldHeight) }
+            }.padding(4).frame(width:CGFloat(width),height:CGFloat(height),alignment:.topLeading)
+                .background(GameBoardSurface(game:game,cornerRadius:16)).environmentObject(model)
+        }.frame(height:min(680,CGFloat(height)*max(1,viewportWidth)/CGFloat(width)))
+            .background {
+                GeometryReader { proxy in
+                    Color.clear.onAppear { viewportWidth = proxy.size.width }
+                        .onChange(of:proxy.size.width) { _,width in viewportWidth = width }
+                }.allowsHitTesting(false)
+            }.background(GameBoardSurface(game:game,cornerRadius:16))
+            .clipShape(RoundedRectangle(cornerRadius:16))
+    }
     private func controls(_ board: SolitaireBoard) -> some View {
-        ScrollView(.horizontal) {
-            HStack(alignment:.top,spacing:10) {
+            HStack(alignment:.top,spacing:8) {
                 if board.variant != .freecell {
                     Button {
                         mutate { board in if board.stock.isEmpty { return board.recycle() }; return board.draw() }
                     } label: {
                         VStack(spacing:4) {
                             RoundedRectangle(cornerRadius:8).fill(GameMaterial.teal).overlay { Image(systemName:board.stock.isEmpty ? "arrow.clockwise" : "rectangle.on.rectangle.angled").foregroundStyle(GameMaterial.gold) }.frame(width:56,height:76)
-                            Text(model.t("expanded.stock",board.stock.count)).font(.caption2)
+                            pileCaption(model.t("expanded.stock",board.stock.count))
                         }
                     }.buttonStyle(.plain).disabled(!active || (board.stock.isEmpty && (board.variant != .klondike || board.waste.isEmpty)) ||
                                                   (board.variant == .spider && board.columns.contains(where:\.isEmpty)))
@@ -66,21 +94,28 @@ struct ExpandedSolitaireView: View {
                 if board.variant == .freecell {
                     ForEach(0..<4,id:\.self) { i in pile(.freeCell(i),board:board,label:model.t("expanded.freeCell",i+1)) }
                 }
+                if board.variant == .klondike { Color.clear.frame(width:56,height:76).accessibilityHidden(true) }
                 if board.variant == .klondike || board.variant == .freecell {
                     ForEach(0..<4,id:\.self) { i in pile(.foundation(i),board:board,label:model.t("expanded.foundation",i+1)) }
                 }
                 if board.variant == .spider {
-                    Text(model.t("expanded.spider.completed",board.foundations.filter{!$0.isEmpty}.count)).font(.subheadline).padding(14)
+                    Text(model.t("expanded.spider.completed",board.foundations.filter{!$0.isEmpty}.count))
+                        .font(.subheadline).foregroundStyle(GameMaterial.ivory).padding(14)
                 }
-            }.padding(.vertical,4)
-        }.accessibilityIdentifier(game.rawValue+".piles")
+            }.accessibilityIdentifier(game.rawValue+".piles")
+    }
+    private func pileCaption(_ text: String) -> some View {
+        Text(text).font(.caption2).foregroundStyle(GameMaterial.ivory)
+            .lineLimit(2).multilineTextAlignment(.center).frame(width:56,height:28,alignment:.top)
     }
     private func pile(_ place: CardPlace,board: SolitaireBoard,label: String) -> some View {
         let cards = board.cards(at:place), top = cards.last
         return Button {
             if board.variant == .pyramid, case .waste = place { choosePyramid(-1,board:board); return }
             if let selected {
-                if mutate({$0.move(from:selected.place,index:selected.index,to:place)}) { self.selected = nil; return }
+                if selected.place == place { self.selected = nil; return }
+                if !mutate({$0.move(from:selected.place,index:selected.index,to:place)}) { showMoveHelp(.pile(place)) }
+                return
             }
             if let top { selected = CardSelection(place:place,index:cards.count-1); model.feedback(for:game); _ = top }
             else { selected = nil }
@@ -88,7 +123,7 @@ struct ExpandedSolitaireView: View {
             VStack(spacing:4) {
                 SolitaireCardFace(card:top,faceUp:true,selected:selected?.place==place || (pyramidSelection == -1 && place == .waste),suit:top.map(board.effectiveSuit))
                     .frame(width:56,height:76)
-                Text(label).font(.caption2).foregroundStyle(.secondary)
+                pileCaption(label)
             }
         }.buttonStyle(.plain).accessibilityLabel(label+", "+(top.map { cardName($0,board:board) } ?? model.t("expanded.empty")))
             .accessibilityIdentifier(game.rawValue+".pile."+placeID(place))
@@ -97,16 +132,15 @@ struct ExpandedSolitaireView: View {
             .overlay { dropBorder(.pile(place)) }
             .onDrop(of:[solitaireDragType],delegate:dropDelegate(.pile(place)))
     }
-    private func columns(_ board: SolitaireBoard) -> some View {
-        let height = max(140,(board.columns.map(\.count).max() ?? 0)*44+40)
-        return ZoomBoard(size:CGSize(width:board.columns.count*64,height:height),inputEnabled:active,accessibilityHidden:!active,
-                         identifier:game.rawValue+".zoomBoard") {
+    private func columnContent(_ board: SolitaireBoard,height: Int) -> some View {
             HStack(alignment:.top,spacing:8) {
                 ForEach(board.columns.indices,id:\.self) { column in
                     VStack(spacing:0) {
                         if board.columns[column].isEmpty {
                             Button {
-                                if let selected, mutate({$0.move(from:selected.place,index:selected.index,to:.column(column))}) { self.selected = nil }
+                                if let selected, !mutate({$0.move(from:selected.place,index:selected.index,to:.column(column))}) {
+                                    showMoveHelp(.pile(.column(column)))
+                                }
                             } label: {
                                 SolitaireCardFace(card:nil,faceUp:true,selected:false).frame(width:56,height:76)
                             }.buttonStyle(.plain).accessibilityLabel(model.t("expanded.column",column+1))
@@ -120,14 +154,14 @@ struct ExpandedSolitaireView: View {
                         .overlay { dropBorder(.pile(.column(column))) }
                         .onDrop(of:[solitaireDragType],delegate:dropDelegate(.pile(.column(column))))
                 }
-            }.padding(4).frame(maxWidth:.infinity,alignment:.leading).environmentObject(model)
-        }.frame(height:CGFloat(min(570,height+8))).background(GameBoardSurface(game:game,cornerRadius:16))
+            }
     }
     private func tableauCard(_ card: PlayingCard,column: Int,index: Int,board: SolitaireBoard) -> some View {
         let faceUp = board.faceUp.contains(card.id), selection = CardSelection(place:.column(column),index:index)
         return Button {
-            if let selected, selected.place != .column(column), mutate({$0.move(from:selected.place,index:selected.index,to:.column(column))}) {
-                self.selected = nil; return
+            if let selected, selected.place != .column(column) {
+                if !mutate({$0.move(from:selected.place,index:selected.index,to:.column(column))}) { showMoveHelp(.pile(.column(column))) }
+                return
             }
             selected = self.selected==selection ? nil : selection; model.feedback(for:game)
         } label: {
@@ -140,16 +174,17 @@ struct ExpandedSolitaireView: View {
             .modifier(SolitaireCardDrag(intent:active ? SolitaireDragIntent(board:board,source:.pile(.column(column),index:index)) : nil,
                                        begin:beginDrag))
     }
-    private func peaks(_ board: SolitaireBoard) -> some View {
+    private func peakContent(_ board: SolitaireBoard) -> some View {
         let pyramid = board.variant == .pyramid
-        return ZoomBoard(size:CGSize(width:pyramid ? 420 : 600,height:pyramid ? 410 : 270),inputEnabled:active,accessibilityHidden:!active,
-                         identifier:game.rawValue+".zoomBoard") {
-            ZStack(alignment:.topLeading) {
-                GameBoardSurface(game:game)
+        return ZStack(alignment:.topLeading) {
+                Color.clear
                 ForEach(board.tableau.indices,id:\.self) { index in
                     if let card = board.tableau[index] {
                         let point = peakPosition(index,pyramid:pyramid), exposed = board.isExposed(index)
-                        Button { if pyramid { choosePyramid(index,board:board) } else { mutate{$0.removeTriPeak(index)} } } label: {
+                        Button {
+                            if pyramid { choosePyramid(index,board:board) }
+                            else if !mutate({$0.removeTriPeak(index)}) { showMoveHelp(.pile(.waste)) }
+                        } label: {
                             SolitaireCardFace(card:card,faceUp:exposed || pyramid,selected:pyramidSelection==index)
                                 .frame(width:52,height:72).contentShape(Rectangle())
                         }.buttonStyle(.plain).disabled(!exposed || !active)
@@ -162,8 +197,7 @@ struct ExpandedSolitaireView: View {
                             .offset(x:point.x,y:point.y)
                     }
                 }
-            }.environmentObject(model)
-        }.frame(height:pyramid ? 430 : 290)
+            }
     }
     private func peakPosition(_ index: Int,pyramid: Bool) -> CGPoint {
         if pyramid {
@@ -178,14 +212,38 @@ struct ExpandedSolitaireView: View {
     }
     private func choosePyramid(_ index: Int,board: SolitaireBoard) {
         if mutate({$0.removePyramid(index)}) { pyramidSelection = nil; return }
-        if let previous = pyramidSelection, previous != index, mutate({$0.removePyramid(previous,index)}) { pyramidSelection = nil; return }
+        if let previous = pyramidSelection, previous != index {
+            if mutate({$0.removePyramid(previous,index)}) { pyramidSelection = nil; return }
+            moveHelpKey = "expanded.pyramid.help"
+        }
         pyramidSelection = pyramidSelection==index ? nil : index
+    }
+    private func defaultHelpKey(_ board: SolitaireBoard) -> String {
+        switch board.variant {
+        case .pyramid:return "expanded.pyramid.help"
+        case .tripeaks:return "expanded.tripeaks.help"
+        default:return "expanded.solitaire.help"
+        }
+    }
+    private func showMoveHelp(_ target: SolitaireDropTarget) {
+        guard let board else { return }
+        if board.variant == .pyramid || board.variant == .tripeaks { moveHelpKey = defaultHelpKey(board); return }
+        switch target {
+        case .pile(.foundation):moveHelpKey = "expanded.solitaire.foundationHelp"
+        case .pile(.freeCell):moveHelpKey = "expanded.solitaire.cellHelp"
+        case .pile(.column(let index)):
+            if board.variant == .spider { moveHelpKey = "expanded.solitaire.spiderHelp" }
+            else if board.variant == .freecell { moveHelpKey = "expanded.solitaire.freecellHelp" }
+            else if board.columns.indices.contains(index),board.columns[index].isEmpty { moveHelpKey = "expanded.solitaire.kingHelp" }
+            else { moveHelpKey = "expanded.solitaire.columnHelp" }
+        default:moveHelpKey = defaultHelpKey(board)
+        }
     }
     @discardableResult private func mutate(_ change: (inout SolitaireBoard) -> Bool) -> Bool {
         let changed = model.editExpanded(game) { state in
             guard case .solitaire(var board) = state, change(&board) else { return false }; state = .solitaire(board); return true
         }
-        if changed { clearInteraction() }
+        if changed { clearInteraction(); moveHelpKey = nil }
         return changed
     }
     private func clearInteraction() {
@@ -213,9 +271,11 @@ struct ExpandedSolitaireView: View {
         return context.intent.canDrop(on:target,in:board)
     }
     private func dropDelegate(_ target: SolitaireDropTarget) -> SolitaireCardDrop {
-        SolitaireCardDrop(canDrop:{canDrop(target)},hover:{ value in
+        SolitaireCardDrop(localDrag:{
+            active && !dropLoading && dragContext != nil && dragContext?.sessionID == model.sessionData.sessions[game]?.id
+        },canDrop:{canDrop(target)},hover:{ value in
             if value { hovered = target } else if hovered == target { hovered = nil }
-        },perform:{ info in
+        },reject:{showMoveHelp(target)},perform:{ info in
             guard canDrop(target), let context = dragContext,
                   let provider = info.itemProviders(for:[solitaireDragType.identifier]).first else { return false }
             dropLoading = true; hovered = nil
@@ -225,7 +285,7 @@ struct ExpandedSolitaireView: View {
                     defer { clearInteraction() }
                     guard data == Data(context.id.uuidString.utf8), active,
                           context.sessionID == model.sessionData.sessions[game]?.id else { return }
-                    _ = mutate { context.intent.apply(on:target,to:&$0) }
+                    if !mutate({ context.intent.apply(on:target,to:&$0) }) { showMoveHelp(target) }
                 }
             }
             return true
@@ -266,14 +326,24 @@ private struct SolitaireCardDrag: ViewModifier {
 }
 
 private struct SolitaireCardDrop: DropDelegate {
+    let localDrag: () -> Bool
     let canDrop: () -> Bool
     let hover: (Bool) -> Void
+    let reject: () -> Void
     let perform: (DropInfo) -> Bool
-    func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to:[solitaireDragType.identifier]) && canDrop() }
-    func dropEntered(info: DropInfo) { hover(validateDrop(info:info)) }
+    func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to:[solitaireDragType.identifier]) && localDrag() }
+    func dropEntered(info: DropInfo) {
+        guard validateDrop(info:info) else { return }
+        let accepted = canDrop(); hover(accepted)
+        if !accepted { reject() }
+    }
     func dropExited(info: DropInfo) { hover(false) }
-    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation:validateDrop(info:info) ? .move : .cancel) }
-    func performDrop(info: DropInfo) -> Bool { perform(info) }
+    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation:validateDrop(info:info) && canDrop() ? .move : .cancel) }
+    func performDrop(info: DropInfo) -> Bool {
+        guard validateDrop(info:info) else { return false }
+        guard canDrop() else { reject(); hover(false); return false }
+        return perform(info)
+    }
 }
 
 struct SolitaireCardFace: View {

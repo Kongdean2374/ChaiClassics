@@ -720,6 +720,12 @@
 "expanded.suit.2" = "梅花";
 "expanded.suit.3" = "方塊";
 "expanded.solitaire.help" = "長按拖曳一張牌或連續牌組到目標牌堆，也可先點選再點目標。放開在無效位置不會搬牌；長牌堆可縮放。";
+"expanded.solitaire.foundationHelp" = "收牌區從 A 開始，依相同花色由小到大收牌，每次移動一張。";
+"expanded.solitaire.cellHelp" = "每個暫存格只能放一張牌，請選擇空格。";
+"expanded.solitaire.kingHelp" = "空牌列只能放 K，或以 K 開頭的紅黑交錯遞減牌組。";
+"expanded.solitaire.columnHelp" = "牌列依紅黑交錯、點數遞減排列，例如紅 7 放到黑 8 下方。";
+"expanded.solitaire.spiderHelp" = "移動同花色遞減的牌組，放到大 1 點的牌下方或空牌列。";
+"expanded.solitaire.freecellHelp" = "牌列依紅黑交錯、點數遞減排列。一次搬多張牌需要足夠的空暫存格與空牌列。";
 "expanded.pyramid.help" = "移除點數合計 13 的兩張未被遮住的牌；K 可單獨移除。可點選配對，或拖到另一張牌上。";
 "expanded.tripeaks.help" = "移除比翻開牌大 1 或小 1 的未遮蓋牌（A 與 K 相鄰）。可點選，或拖到翻開牌區；無牌可移時抽牌。";
 "expanded.score" = "分數 %d";

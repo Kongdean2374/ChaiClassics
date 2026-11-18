@@ -1,5 +1,17 @@
 import Foundation
 
+/// A sidecar clock update is not a replacement of the game. Preserve every
+/// other save field and the round identity when checking coalesced ownership.
+public enum ArcadeSaveOwnership {
+    public static func matches(expectedSessionID: UUID?, currentSessionID: UUID?,
+                               expected: ExpandedGameSave?, current: ExpandedGameSave?) -> Bool {
+        guard let expectedSessionID, expectedSessionID == currentSessionID,
+              let expected, var current else { return false }
+        current.elapsedSeconds = expected.elapsedSeconds
+        return expected == current
+    }
+}
+
 /// Presentation input only: no changes to Snake/FallingBlocks save formats.
 public enum CardinalStick {
     public static func direction(x: Double, y: Double) -> ArcadeDirection? {

@@ -18,6 +18,10 @@ struct ExpandedArcadeView: View {
     @GestureState private var boardDragging = false
     private var active: Bool { model.sessionIsPlaying(game) }
     private var canControl: Bool { active && countdown == nil && local?.outcome == nil }
+    private var ownsSavedProgress: Bool {
+        ArcadeSaveOwnership.matches(expectedSessionID:sessionID,currentSessionID:model.sessionData.sessions[game]?.id,
+                                    expected:savedRevision,current:model.expandedGames[game])
+    }
     var body: some View {
         VStack(spacing:12) {
             header
@@ -47,7 +51,7 @@ struct ExpandedArcadeView: View {
         .onChange(of:active) { _,value in
             accumulated = 0; saveInterval = 0
             if value {
-                if local == nil || sessionID != model.sessionData.sessions[game]?.id || savedRevision != model.expandedGames[game] {
+                if local == nil || !ownsSavedProgress {
                     loadCurrentRound()
                 }
             }
@@ -246,8 +250,7 @@ struct ExpandedArcadeView: View {
         guard var value = local else { return }
         // A dismissed view must not resurrect a cleared round or overwrite an
         // imported/restarted save after its local display state became stale.
-        guard let sessionID,sessionID == model.sessionData.sessions[game]?.id,
-              savedRevision != nil,savedRevision == model.expandedGames[game] else {
+        guard ownsSavedProgress else {
             heldInput.cancel(); blockDrag = nil; clock.stop(); return
         }
         value.elapsedSeconds = max(value.elapsedSeconds,model.sessionData.sessions[game]?.elapsedSeconds ?? 0)
