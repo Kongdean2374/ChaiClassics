@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location('chai_shell_test_scopes', ROOT / 'scripts/ui_test_scope.py')
@@ -73,7 +74,10 @@ class CIShellTests(unittest.TestCase):
 
     def run_ui(self, scope, **settings):
         self.calls.write_text('')
-        env = dict(os.environ, PATH=str(self.bin) + os.pathsep + os.environ.get('PATH', '/usr/bin:/bin'),
+        # A dispatch's source-run IDs belong to its real later planning step,
+        # not this independent temporary shell fixture (which has no plan).
+        env = {key: value for key, value in os.environ.items() if not key.startswith('CHAI_')}
+        env.update(PATH=str(self.bin) + os.pathsep + os.environ.get('PATH', '/usr/bin:/bin'),
                    CHAI_UI_SCOPE=scope, CHAI_SHELL_CALLS=str(self.calls), **settings)
         result = subprocess.run(['/bin/bash', 'scripts/ci.sh', 'ui'], cwd=self.root, env=env,
                                 capture_output=True, text=True, timeout=30)
@@ -140,6 +144,23 @@ class CIShellTests(unittest.TestCase):
         self.assertEqual([arg for arg in args if arg.startswith('-only-testing:')],
                          ['-only-testing:ChaiClassicsUITests/' + name for name in self.declared])
         self.assertTrue(any(call['tool'] == 'git' and call['args'] == ['rev-parse', 'HEAD'] for call in calls))
+
+    def test_parent_workflow_source_runs_cannot_contaminate_static_shell_fixtures(self):
+        with mock.patch.dict(os.environ, {'CHAI_CI_SOURCE_RUNS': '44192915016,44210424683',
+                                         'CHAI_UI_SCOPE': 'part_d'}):
+            result, calls = self.run_ui('part_a')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([arg for arg in self.invocation(calls) if arg.startswith('-only-testing:')],
+                         ['-only-testing:ChaiClassicsUITests/' + test for test in SCOPES.resolve('part_a', self.declared)])
+
+    def test_explicit_dependency_part_executes_exactly_its_bound_plan(self):
+        for scope in SCOPES.PART_SCOPES:
+            with self.subTest(scope=scope):
+                self.plan({'scope': scope, 'source_commit': SHA, 'tests': self.declared[:2]})
+                result, calls = self.run_ui(scope, CHAI_CI_SOURCE_RUNS='10')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual([arg for arg in self.invocation(calls) if arg.startswith('-only-testing:')],
+                                 ['-only-testing:ChaiClassicsUITests/' + test for test in self.declared[:2]])
 
     def test_invalid_affected_plan_stops_before_any_simulator_or_build_command(self):
         for value in [None, {'source_commit': 'b' * 40, 'tests': self.declared},
