@@ -185,11 +185,24 @@ final class ChaiClassicsV030UITests: XCTestCase {
         XCTAssertFalse(app.buttons[game+".continue"].exists,"Deleted progress must not return from a seed or backup.")
         records(game,app,expected:2) // The real result plus one abandoned new round.
     }
-    func testNonogramCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("nonogram") }
-    func testKakuroCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("kakuro") }
-    func testKlotskiCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("klotski") }
-    func testGomokuCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("gomoku") }
+    func testNonogramCompleteSessionRestoresAndConfirmsDeletion() throws {
+        executionTimeAllowance = 1800
+        try exercise("nonogram")
+    }
+    func testKakuroCompleteSessionRestoresAndConfirmsDeletion() throws {
+        executionTimeAllowance = 1800
+        try exercise("kakuro")
+    }
+    func testKlotskiCompleteSessionRestoresAndConfirmsDeletion() throws {
+        executionTimeAllowance = 1800
+        try exercise("klotski")
+    }
+    func testGomokuCompleteSessionRestoresAndConfirmsDeletion() throws {
+        executionTimeAllowance = 1800
+        try exercise("gomoku")
+    }
     func testReversiCompleteSessionRestoresAndConfirmsDeletion() throws {
+        executionTimeAllowance = 1800
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing","--ui-profile","v030-reversi","--ui-reset","--ui-language","en","--ui-appearance","dark"]
         app.launch(); open("reversi",app); tap("reversi.start",app); tap("reversi.new.confirm",app)
@@ -208,8 +221,13 @@ final class ChaiClassicsV030UITests: XCTestCase {
         attach(app,"reversi-occupied-disc-regression"); app.terminate()
         try exercise("reversi")
     }
-    func testXiangqiCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("xiangqi") }
+    func testXiangqiCompleteSessionRestoresAndConfirmsDeletion() throws {
+        executionTimeAllowance = 1800
+        try exercise("xiangqi")
+    }
     func testBanqiCompleteSessionRestoresAndConfirmsDeletion() throws {
+        executionTimeAllowance = 1800
+
         // Mirror a valid position so player one owns Black. This checks the
         // assignment after restoration without depending on a random reveal.
         let resource = try XCTUnwrap(Bundle(for:Self.self).url(forResource:"v030-banqi",withExtension:"json"))
@@ -234,19 +252,46 @@ final class ChaiClassicsV030UITests: XCTestCase {
         XCTAssertTrue(app.buttons["banqi.session.done"].waitForExistence(timeout:15)); app.terminate()
         try exercise("banqi")
     }
-    func testChessCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("chess") }
+    func testChessCompleteSessionRestoresAndConfirmsDeletion() throws {
+        executionTimeAllowance = 1800
+        try exercise("chess")
+    }
     func testShogiCompleteSessionRestoresAndConfirmsDeletion() throws {
         // The Intel runner reached the real promoted win/review at 753s.
         // Preserve the subsequent history/new-game/deletion/relaunch checks.
         executionTimeAllowance = 1800
         try exercise("shogi")
     }
-    func testKlondikeCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("klondike") }
-    func testSpiderCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("spider") }
-    func testFreecellCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("freecell") }
-    func testPyramidCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("pyramid") }
-    func testTripeaksCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("tripeaks") }
-    func testSnakeCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("snake") }
-    func testFallingBlocksCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("fallingblocks") }
-    func testBrickBreakerCompleteSessionRestoresAndConfirmsDeletion() throws { try exercise("brickbreaker") }
+    func testKlondikeCompleteSessionRestoresAndConfirmsDeletion() throws {
+        executionTimeAllowance = 1800
+        try exercise("klondike")
+    }
+    func testSpiderCompleteSessionRestoresAndConfirmsDeletion() throws {
+        executionTimeAllowance = 1800
+        try exercise("spider")
+    }
+    func testFreecellCompleteSessionRestoresAndConfirmsDeletion() throws {
+        executionTimeAllowance = 1800
+        try exercise("freecell")
+    }
+    func testPyramidCompleteSessionRestoresAndConfirmsDeletion() throws {
+        executionTimeAllowance = 1800
+        try exercise("pyramid")
+    }
+    func testTripeaksCompleteSessionRestoresAndConfirmsDeletion() throws {
+        executionTimeAllowance = 1800
+        try exercise("tripeaks")
+    }
+    func testSnakeCompleteSessionRestoresAndConfirmsDeletion() throws {
+        executionTimeAllowance = 1800
+        try exercise("snake")
+    }
+    func testFallingBlocksCompleteSessionRestoresAndConfirmsDeletion() throws {
+        executionTimeAllowance = 1800
+        try exercise("fallingblocks")
+    }
+    func testBrickBreakerCompleteSessionRestoresAndConfirmsDeletion() throws {
+        executionTimeAllowance = 1800
+        try exercise("brickbreaker")
+    }
 }

@@ -138,20 +138,16 @@ struct PlayHistoryView: View {
          model.t("history.window." + dateWindow.rawValue)].joined(separator: " · ")
     }
     private var filterMenu: some View {
-        Menu {
-            ForEach(HistoryFilterKind.allCases) { kind in
-                Button(model.t(kind.titleKey)) {
-                    searching = false
-                    guard presentation == nil else { return }
-                    presentation = .filter(kind)
-                }.accessibilityIdentifier("history.filter." + kind.rawValue)
-            }
-            Divider()
-            Button(model.t("history.resetFilters"), action: resetFilters)
-        } label: {
-            Label(model.t("history.filters"), systemImage: "line.3.horizontal.decrease.circle")
-        }.accessibilityIdentifier("history.filters")
-            .simultaneousGesture(TapGesture().onEnded { searching = false })
+        HistoryFilterMenu(title: model.t("history.filters"),
+            choices: HistoryFilterKind.allCases.map { ($0.rawValue, model.t($0.titleKey)) },
+            resetTitle: model.t("history.resetFilters"),
+            onOpen: { searching = false },
+            onSelect: { value in
+                searching = false
+                guard presentation == nil, let kind = HistoryFilterKind(rawValue: value) else { return }
+                presentation = .filter(kind)
+            }, onReset: resetFilters)
+            .frame(width: 44, height: 44)
     }
     private func emptyState(hasRecords: Bool) -> some View {
         Section {
@@ -170,6 +166,55 @@ struct PlayHistoryView: View {
     private func resetFilters() {
         selectedGame = nil; selectedDifficulty = nil; selectedOutcome = nil; dateWindow = .all; sort = .newest
         searching = false
+    }
+}
+
+/// Observe the native menu-opening event. SwiftUI tap gestures can be cancelled
+/// when UIKit presents the menu, leaving the search field as first responder.
+private struct HistoryFilterMenu: UIViewRepresentable {
+    let title: String
+    let choices: [(String, String)]
+    let resetTitle: String
+    let onOpen: () -> Void
+    let onSelect: (String) -> Void
+    let onReset: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeUIView(context: Context) -> UIButton {
+        let button = UIButton(type: .system)
+        var configuration = UIButton.Configuration.plain()
+        configuration.image = UIImage(systemName: "line.3.horizontal.decrease.circle")
+        button.configuration = configuration
+        button.showsMenuAsPrimaryAction = true
+        button.accessibilityIdentifier = "history.filters"
+        button.addTarget(context.coordinator, action: #selector(Coordinator.openingMenu(_:)), for: .menuActionTriggered)
+        return button
+    }
+    func updateUIView(_ button: UIButton, context: Context) {
+        let coordinator = context.coordinator
+        coordinator.onOpen = onOpen; coordinator.onSelect = onSelect; coordinator.onReset = onReset
+        button.accessibilityLabel = title
+        let signature = [title, resetTitle] + choices.flatMap { [$0.0, $0.1] }
+        // A focus update must not replace a menu that UIKit is opening.
+        guard signature != coordinator.signature else { return }
+        coordinator.signature = signature
+        let filters: [UIMenuElement] = choices.map { value, label in
+            UIAction(title: label, identifier: UIAction.Identifier("history.filter." + value)) { _ in
+                coordinator.onSelect?(value)
+            }
+        }
+        let reset = UIAction(title: resetTitle) { _ in coordinator.onReset?() }
+        button.menu = UIMenu(children: filters + [UIMenu(options: .displayInline, children: [reset])])
+    }
+    @MainActor final class Coordinator: NSObject {
+        var signature: [String] = []
+        var onOpen: (() -> Void)?
+        var onSelect: ((String) -> Void)?
+        var onReset: (() -> Void)?
+        @objc func openingMenu(_ button: UIButton) {
+            button.window?.endEditing(true)
+            onOpen?()
+        }
     }
 }
 
