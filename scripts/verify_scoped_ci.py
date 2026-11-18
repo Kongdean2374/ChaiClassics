@@ -64,6 +64,14 @@ APPROVED_IPAD_JOB_BUDGET = ('edc902f4bfb8fd2079c4c87f8ff440e708ff05044506820e80a
 APPROVED_V020_CASE_ALLOWANCE = ('eb479e2277033521ebb2dd6ebe58f9ef79ef34f07d58de98f7926f7b3f74ee25', 'b6326fba442492b2927237e4fe5c5a08eb1d1d1416a5b699cd979b35e1a86fe3')
 APPROVED_CI_DEFAULT_ALLOWANCE = ('99d12fc7647d1d9d9cba8b2fb486f5e709dfbf7649625498cc9d8476eb49daef', 'da404efc21b0114c9827542f46ee4a3d44583b00c9fee8e3a2f31b3d58792414')
 APPROVED_IPAD_SUDOKU_ALLOWANCE = ('4d9a5ef4e6cb0700fedb363d282e73def865c5840ca194bc3370bb0ccbe403e9', '2a85dcd2a715c03fad1f19c270084bb890071650e5dada8154196b60b465e234', '        // Native Intel snapshots of 81 cells plus all controls exceed 600s.\n        // Retain every interaction and geometry assertion with a bounded case.\n        executionTimeAllowance = 1800\n')
+# Only these exact twelve bodies never open PlayHistoryView. The enclosing
+# helpers remain separately protected, including shared GameRecordText callers.
+HISTORY_AUDITED_SCAFFOLDS = {'UITests/ChaiClassicsUITests.swift': '11c21725b0a740ed488735f4e83d431313282c00253e446c14703551278166e0', 'UITests/ChaiClassicsV020UITests.swift': 'eb479e2277033521ebb2dd6ebe58f9ef79ef34f07d58de98f7926f7b3f74ee25', 'UITests/ChaiClassicsV030UITests.swift': 'f4c2ac8d31ad66ad5cb947667c3d84cdf109c8b955a0a5c70e0e18514812293c', 'UITests/ChaiClassicsVisualSmokeTests.swift': 'a586522c98c7ddca791c5bb9b18b9b755d2899c9e607c4f1f1e8bb22afa9a74a'}
+HISTORY_AUDITED_RUNTIME_DIGEST = 'e03fb342ddd051f113ddd323b57b5fbd68e99275422c167a5424cc140ac9f758'
+HISTORY_UNVISITED_BODIES = {'ChaiClassicsV020UITests/testAccessibilityTypeAdaptsCatalogAndSupportsReducedMotion': '3f4bc97949c1db678c664a3e3b8590abc865fc0561ed0aa7162299b54d82593b', 'ChaiClassicsV020UITests/testAllEightPlayableCardsOpenRealMenus': 'd7e0669876ff6a8d3e17361efdedc2e57611f32f5aba090614026ebcdcc3cfd8', 'ChaiClassicsV020UITests/testCatalogLayoutAt320PointViewport': '2abbc9a2e4cb5015df14e5a6c8fb145f41178430e451d97f63ab8abac7844f40', 'ChaiClassicsV020UITests/testCatalogLayoutAt375PointViewport': 'f32d2b9e8880d30177c959425c09bb7fdf83f2a759af7ab6cd63202c8dda443e', 'ChaiClassicsV020UITests/testCatalogLayoutAt390PointViewport': '7f67ebf94089c5e2f7338e1a2c527b736343f3fbe03dc67c59b5ddc9fb43352b', 'ChaiClassicsV020UITests/testCatalogLayoutAt430PointViewport': '8d5c69b188ea4db8ea9f44b528a4d3c580bcb101ff3dad88c68728cddbdaa00c', 'ChaiClassicsV020UITests/testCompleteCatalogAndThirteenComingSoonPagesInEnglish': '3fa34303a6fd20e54ca1f4a395bc8d2ed0f5538fc2714ab7ff7637712c8e92ed', 'ChaiClassicsV020UITests/testCompleteCatalogAndThirteenComingSoonPagesInTraditionalChinese': 'cb130d2facc1279e5b075e4d4aea3ed6bba381406a515685df7ac08f4792e378', 'ChaiClassicsVisualSmokeTests/testFreshWinCelebratesOnceAndRestoredWinDoesNotReplay': 'ab8fb0bcfdd3660120c3ec452c77a9e2e6d0962a33238eef079ae068258baf4e', 'ChaiClassicsVisualSmokeTests/testLowPowerSuppressesCelebrationButStillCompletesGame': 'd61c0385dafb936cc689eb2a99a09bfa0054600f25f224fa476b2d9e75893cba', 'ChaiClassicsVisualSmokeTests/testReducedMotionSuppressesCelebrationButStillCompletesGame': '70c41d41386e486704ba65b90e4d642b01d43d6cd44c0dd9a7606b29296139eb', 'ChaiClassicsVisualSmokeTests/testScreenshotGallery': 'f8a38dbe244404a8be9bfc98697845333bb4994c013953c3a02b56b3b8782a01'}
+APPROVED_HISTORY_MENU = ('1a45577c164e464391d018c62286a56d55701c81489ddc79df931409fef00b0e', '64f62fd1126b26a0da82c87e705e13ab8d58bc4a62852ff2ee54d6ece7e3759b', '    private var filterMenu: some View {\n        Menu {\n            ForEach(HistoryFilterKind.allCases) { kind in\n                Button(model.t(kind.titleKey)) {\n                    searching = false\n                    guard presentation == nil else { return }\n                    presentation = .filter(kind)\n                }.accessibilityIdentifier("history.filter." + kind.rawValue)\n            }\n            Divider()\n            Button(model.t("history.resetFilters"), action: resetFilters)\n        } label: {\n            Label(model.t("history.filters"), systemImage: "line.3.horizontal.decrease.circle")\n        }.accessibilityIdentifier("history.filters")\n            .simultaneousGesture(TapGesture().onEnded { searching = false })\n    }\n', '    private var filterMenu: some View {\n        HistoryFilterMenu(title: model.t("history.filters"),\n            choices: HistoryFilterKind.allCases.map { ($0.rawValue, model.t($0.titleKey)) },\n            resetTitle: model.t("history.resetFilters"),\n            onOpen: { searching = false },\n            onSelect: { value in\n                searching = false\n                guard presentation == nil, let kind = HistoryFilterKind(rawValue: value) else { return }\n                presentation = .filter(kind)\n            }, onReset: resetFilters)\n            .frame(width: 44, height: 44)\n    }\n', '/// Observe the native menu-opening event. SwiftUI tap gestures can be cancelled\n/// when UIKit presents the menu, leaving the search field as first responder.\nprivate struct HistoryFilterMenu: UIViewRepresentable {\n    let title: String\n    let choices: [(String, String)]\n    let resetTitle: String\n    let onOpen: () -> Void\n    let onSelect: (String) -> Void\n    let onReset: () -> Void\n\n    func makeCoordinator() -> Coordinator { Coordinator() }\n    func makeUIView(context: Context) -> UIButton {\n        let button = UIButton(type: .system)\n        var configuration = UIButton.Configuration.plain()\n        configuration.image = UIImage(systemName: "line.3.horizontal.decrease.circle")\n        button.configuration = configuration\n        button.showsMenuAsPrimaryAction = true\n        button.accessibilityIdentifier = "history.filters"\n        button.addTarget(context.coordinator, action: #selector(Coordinator.openingMenu(_:)), for: .menuActionTriggered)\n        return button\n    }\n    func updateUIView(_ button: UIButton, context: Context) {\n        let coordinator = context.coordinator\n        coordinator.onOpen = onOpen; coordinator.onSelect = onSelect; coordinator.onReset = onReset\n        button.accessibilityLabel = title\n        let signature = [title, resetTitle] + choices.flatMap { [$0.0, $0.1] }\n        // A focus update must not replace a menu that UIKit is opening.\n        guard signature != coordinator.signature else { return }\n        coordinator.signature = signature\n        let filters: [UIMenuElement] = choices.map { value, label in\n            UIAction(title: label, identifier: UIAction.Identifier("history.filter." + value)) { _ in\n                coordinator.onSelect?(value)\n            }\n        }\n        let reset = UIAction(title: resetTitle) { _ in coordinator.onReset?() }\n        button.menu = UIMenu(children: filters + [UIMenu(options: .displayInline, children: [reset])])\n    }\n    @MainActor final class Coordinator: NSObject {\n        var signature: [String] = []\n        var onOpen: (() -> Void)?\n        var onSelect: ((String) -> Void)?\n        var onReset: (() -> Void)?\n        @objc func openingMenu(_ button: UIButton) {\n            button.window?.endEditing(true)\n            onOpen?()\n        }\n    }\n}\n\n')
+# Exact additive dependency-partition support; existing selectors/actions stay protected.
+APPROVED_DEPENDENCY_PARTITIONS = {'.github/workflows/ci.yml': ('eb2e8c4b0fd12b3b3298d0767706b0fceffeaf203f8a73008de4fbc933ebf815', '0d66bf3889abdfe3ec51570d925786060721b387614613ba082d9f5d8d60d1bc', ((b"          Path('ui-selection.json').write_text(json.dumps({'scope': os.environ['CHAI_UI_SCOPE'], 'source_commit': os.environ['GITHUB_SHA'], 'source_runs': parse_runs(os.environ['CHAI_CI_SOURCE_RUNS'])}) + '\\n')\n", b"          from ui_test_scope import PART_SCOPES\n          scope = os.environ['CHAI_UI_SCOPE']\n          runs = parse_runs(os.environ['CHAI_CI_SOURCE_RUNS'])\n          selection = {'scope': scope, 'source_commit': os.environ['GITHUB_SHA'], 'source_runs': runs}\n          if scope in PART_SCOPES and runs:\n              selection['partition'] = 'affected-v1'\n          Path('ui-selection.json').write_text(json.dumps(selection) + '\\n')\n"), (b"        if: inputs.full_ui == true && env.CHAI_UI_SCOPE == 'affected'\n", b"        if: inputs.full_ui == true && (env.CHAI_UI_SCOPE == 'affected' || (startsWith(env.CHAI_UI_SCOPE, 'part_') && inputs.baseline_run != ''))\n"))), 'scripts/ui_test_scope.py': ('2ae25b203d1ea6046eb03d10bc2216a6dd8f2f1dda360898a330522aee119918', '8ffc23ee1a159501140de8a29cc4e832af1547cf6cbb21bf2d8709f15c78b4d0', ((b'', b'import os\n'), (b'def affected_selectors():\n', b"def affected_selectors(scope='affected'):\n"), (b"    if plan.get('source_commit') != sha or not isinstance(tests, list) or not tests or not all(isinstance(test, str) for test in tests) or len(set(tests)) != len(tests):\n", b"    if plan.get('scope', 'affected') != scope or plan.get('source_commit') != sha or not isinstance(tests, list) or not tests or not all(isinstance(test, str) for test in tests) or len(set(tests)) != len(tests):\n"), (b'    if len(argv) == 1 and argv[0] in PART_SCOPES:\n', b"    if len(argv) == 1 and argv[0] in PART_SCOPES and not os.environ.get('CHAI_CI_SOURCE_RUNS', '').strip():\n"), (b"    if argv == ['affected']:\n", b"    if argv == ['affected'] or (len(argv) == 1 and argv[0] in PART_SCOPES):\n"), (b'            methods = affected_selectors()\n', b'            methods = affected_selectors(argv[0])\n')))}
 GAME_FILES = {
     'sudoku': {'Core/Sudoku.swift', 'App/SudokuView.swift'},
     'mines': {'Core/Minesweeper.swift', 'App/MinesView.swift', ZOOM_BOARD_FILE},
@@ -220,6 +228,18 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
+def dependency_partition_baseline(path, mode, data):
+    pair = APPROVED_DEPENDENCY_PARTITIONS.get(path)
+    if mode != '100644' or pair is None or hashlib.sha256(data).hexdigest() != pair[1]:
+        return data
+    normalized = data
+    for old_block, new_block in pair[2]:
+        if not new_block or normalized.count(new_block) != 1:
+            return data
+        normalized = normalized.replace(new_block, old_block, 1)
+    return normalized if hashlib.sha256(normalized).hexdigest() == pair[0] else data
+
+
 def shared_content_digest(path, mode, data):
     """Project only exact audited declarations and ceiling-only execution pairs.
 
@@ -227,6 +247,7 @@ def shared_content_digest(path, mode, data):
     retain their raw hash, as do all other execution changes. Defaults, selectors,
     enabled timeouts and failed-case treatment are never relaxed.
     """
+    data = dependency_partition_baseline(path, mode, data)
     raw = hashlib.sha256(data).hexdigest()
     if mode == '100644' and path == '.github/workflows/ipad-screenshots.yml':
         before, after = APPROVED_IPAD_JOB_BUDGET
@@ -345,6 +366,41 @@ def canonical_xctest_allowance_body(path, identity, mode, body):
     return body
 
 
+def history_menu_digest(identity, body, helper_fingerprint, mode, data, *, audited_context=False):
+    """Retain only exact unvisited-menu changes; shared formatter bytes stay bound."""
+    raw = hashlib.sha256(data).hexdigest()
+    expected = HISTORY_UNVISITED_BODIES.get(identity)
+    required_helper = (APPROVED_V020_CASE_ALLOWANCE[0] if identity.startswith('ChaiClassicsV020UITests/')
+                       else VISUAL_SCAFFOLD_DIGEST)
+    if (not audited_context or mode != '100644' or expected is None or helper_fingerprint != required_helper
+            or hashlib.sha256(body.encode()).hexdigest() != expected):
+        return raw
+    before, after, old_block, new_block, inserted = APPROVED_HISTORY_MENU
+    if raw == before:
+        try:
+            source = data.decode('utf-8')
+        except UnicodeDecodeError:
+            return raw
+        anchor = '/// List rows can move independently'
+        if source.count(old_block) == 1 and source.count(anchor) == 1:
+            normalized = source.replace(old_block, new_block, 1).replace(anchor, inserted + anchor, 1)
+            if hashlib.sha256(normalized.encode()).hexdigest() == after:
+                return after
+    return raw
+
+
+def history_menu_audited_context(tree, external_scaffolds):
+    if external_scaffolds != HISTORY_AUDITED_SCAFFOLDS:
+        return False
+    records = [(path, mode, shared_content_digest(path, mode, data))
+               for path, (mode, data) in sorted(tree.items())
+               if path != 'App/PlayHistoryView.swift'
+               and not (path.startswith('UITests/') and path.endswith('.swift'))
+               and path not in PURE_EVIDENCE_SCRIPTS and not path.startswith(('docs/', 'tests/'))
+               and path != 'README.md']
+    return digest(records) == HISTORY_AUDITED_RUNTIME_DIGEST
+
+
 def scaffold_budget_digest(path, mode, scaffold):
     raw = hashlib.sha256(scaffold.encode()).hexdigest()
     if path == 'UITests/ChaiClassicsV020UITests.swift' and mode == '100644':
@@ -404,12 +460,20 @@ def fingerprints(tree):
     require(scopes.required_session_tests_for_paths(tree).issubset(methods),
             'Session runtime requires all eight lifecycle journeys and the history interaction journey.')
     result = {}
+    audited_history = history_menu_audited_context(tree, external_scaffolds)
     for test, body in sorted(methods.items()):
         local = [(path, tree[path][0], hashlib.sha256(tree[path][1]).hexdigest())
                  for path in sorted(dependencies(test, body, helper_fingerprint=helper_fingerprints.get(test.split('/')[0]))) if path in tree]
         case_scaffolds = [(path, mode, raw if Path(path).stem == test.split('/')[0] else external_scaffolds[path])
                           for path, mode, raw in scaffolds]
-        result[test] = digest({'version': 1, 'shared': shared, 'helpers': case_scaffolds, 'local': local, 'test_body': body})
+        case_shared = list(shared)
+        history_path = 'App/PlayHistoryView.swift'
+        if history_path in tree:
+            mode, data = tree[history_path]
+            history_digest = history_menu_digest(test, body, helper_fingerprints.get(test.split('/')[0]), mode, data, audited_context=audited_history)
+            case_shared = [(path, shared_mode, history_digest if path == history_path else value)
+                           for path, shared_mode, value in case_shared]
+        result[test] = digest({'version': 1, 'shared': case_shared, 'helpers': case_scaffolds, 'local': local, 'test_body': body})
     return result
 
 
@@ -450,7 +514,7 @@ def gather_sources(repo, ids, sha, current_run, *, read=candidate.github, result
     tree_reader = tree_reader or (lambda commit: historical.git_tree(commit, root))
     ancestor = ancestor or (lambda commit: subprocess.run(['git', 'merge-base', '--is-ancestor', commit, sha], cwd=root,
                                                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0)
-    pending, records = list(ids), {}
+    pending, records, selections, source_edges, source_success = list(ids), {}, {}, {}, {}
     while pending:
         run_id = pending.pop(0)
         require(type(run_id) is int and 0 < run_id < current_run, 'Only earlier workflow run IDs may supply coverage.')
@@ -470,6 +534,8 @@ def gather_sources(repo, ids, sha, current_run, *, read=candidate.github, result
         require(set(actual).issubset(source_fingerprints), 'Source log contains an undeclared case.')
         require(all(status in ('passed', 'failed', 'skipped') for status in actual.values()), 'Invalid actual source status.')
         records[run_id] = {'run_id': run_id, 'sha': commit, 'summary': summary, 'actual': actual, 'fingerprints': source_fingerprints}
+        source_edges[run_id] = set()
+        source_success[run_id] = run.get('conclusion') == 'success'
         if selection is not None:
             require(isinstance(selection, dict) and selection.get('source_commit') == commit,
                     'Original selected-scope report differs from the source commit.')
@@ -477,11 +543,11 @@ def gather_sources(repo, ids, sha, current_run, *, read=candidate.github, result
             require(isinstance(prior, list) and len(prior) < MAX_RUNS and
                     all(type(value) is int and 0 < value < run_id for value in prior), 'Invalid pre-execution source index.')
             pending.extend(value for value in prior if value not in records)
-            if selection.get('scope') in scopes.PART_SCOPES:
-                partition = set(scopes.resolve(selection['scope'], source_fingerprints))
-                require(set(actual).issubset(partition), 'Raw source cases do not belong to their source-declared partition.')
-                if run.get('conclusion') == 'success':
-                    require(set(actual) == partition, 'Successful source partition omitted required actual cases.')
+            selections[run_id] = selection
+            source_edges[run_id].update(prior)
+            require(selection.get('partition') in (None, 'affected-v1'), 'Unknown source partition plan version.')
+            require(selection.get('partition') != 'affected-v1' or
+                    (selection.get('scope') in scopes.PART_SCOPES and prior), 'Dependency partition requires explicit prior sources.')
         # A prior partial ledger is an index only. Every referenced run is independently
         # reloaded from GitHub raw results and source trees; its claimed pass is never trusted.
         artifacts = read(prefix + '/artifacts?per_page=100')
@@ -494,6 +560,28 @@ def gather_sources(repo, ids, sha, current_run, *, read=candidate.github, result
                 require(isinstance(inherited, list) and len(inherited) <= MAX_RUNS and
                         all(type(value) is int and 0 < value <= run_id for value in inherited), 'Invalid source ledger index.')
                 pending.extend(value for value in inherited if value != run_id and value not in records)
+                source_edges[run_id].update(value for value in inherited if value != run_id)
+    for run_id, selection in selections.items():
+        scope = selection.get('scope')
+        if scope not in scopes.PART_SCOPES:
+            continue
+        record = records[run_id]
+        if selection.get('partition') == 'affected-v1':
+            # Rebuild precisely the pre-execution source closure. The current
+            # run's later ledger cannot retroactively shrink its requested part.
+            prior, queue = set(), list(selection['source_runs'])
+            while queue:
+                source_id = queue.pop()
+                if source_id in prior:
+                    continue
+                require(source_id in records and source_id < run_id, 'Missing or future partition source.')
+                prior.add(source_id); queue.extend(source_edges[source_id] - prior)
+            partition = set(planned_partition(scope, record['fingerprints'], [records[key] for key in sorted(prior)]))
+        else:
+            partition = set(scopes.resolve(scope, record['fingerprints']))
+        require(set(record['actual']).issubset(partition), 'Raw source cases do not belong to their source-declared partition.')
+        if source_success[run_id]:
+            require(set(record['actual']) == partition, 'Successful source partition omitted required actual cases.')
     return [records[key] for key in sorted(records)]
 
 
@@ -528,11 +616,25 @@ def planned_tests(target_fingerprints, records):
                        next(test for test in sorted(target_fingerprints) if test.split('/')[-1] not in candidate.IPAD_TESTS)]
 
 
+def planned_partition(scope, target_fingerprints, records):
+    missing = planned_tests(target_fingerprints, records)
+    selected = missing[scopes.PART_SCOPES[scope]::len(scopes.PART_SCOPES)]
+    if not selected or all(name.split('/')[-1] in candidate.IPAD_TESTS for name in selected):
+        sentinel = FAST_SENTINEL if FAST_SENTINEL in target_fingerprints else next(
+            name for name in sorted(target_fingerprints) if name.split('/')[-1] not in candidate.IPAD_TESTS)
+        selected = sorted(set(selected + [sentinel]))
+    return selected
+
+
 def make_evidence(sha, current_run, scope, summary, actual, tree, records):
     require(scope != 'beta' or not records, 'Beta critical UI evidence must execute directly without inherited coverage.')
     target = fingerprints(tree)
-    selected = planned_tests(target, records) if scope == 'affected' else scopes.resolve(
-        scope, sorted(target), include_sessions=bool(scopes.required_session_tests_for_paths(tree)))
+    if scope in scopes.PART_SCOPES and records:
+        selected = planned_partition(scope, target, records)
+    elif scope == 'affected':
+        selected = planned_tests(target, records)
+    else:
+        selected = scopes.resolve(scope, sorted(target), include_sessions=bool(scopes.required_session_tests_for_paths(tree)))
     require(set(actual) == set(selected), 'Actual cases differ from the requested scoped selection.')
     normalized = historical.summary_matches(summary, actual)
     require(all(covered(test, {'status': status}) for test, status in actual.items()), 'Current scoped execution failed or unexpectedly skipped.')
@@ -589,7 +691,12 @@ def main(argv=None):
         records = gather_sources(repo, parse_runs(args.source_runs), sha, current_run)
         tree = historical.git_tree(sha)
         if args.mode == 'plan':
-            result = {'source_commit': sha, 'tests': planned_tests(fingerprints(tree), records)}
+            scope = args.scope or os.environ.get('CHAI_UI_SCOPE', 'affected')
+            require(scope == 'affected' or scope in scopes.PART_SCOPES, 'Only affected cases or source partitions can be planned.')
+            target = fingerprints(tree)
+            selected = planned_partition(scope, target, records) if scope in scopes.PART_SCOPES and records else (
+                scopes.resolve(scope, target) if scope in scopes.PART_SCOPES else planned_tests(target, records))
+            result = {'source_commit': sha, 'scope': scope, 'tests': selected}
         else:
             require(args.scope is not None and args.summary is not None and args.log is not None, 'Capture requires scope and actual summary/log.')
             result = make_evidence(sha, current_run, args.scope, json.loads(args.summary.read_text()), candidate.parse_test_log(args.log.read_text()), tree, records)

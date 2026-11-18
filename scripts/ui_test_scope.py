@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Source-bound XCTest selections; 'full' emits no filter and retains every test."""
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -114,12 +115,12 @@ def declared_tests(root):
     return sorted(tests)
 
 
-def affected_selectors():
+def affected_selectors(scope='affected'):
     root = Path(__file__).resolve().parents[1]
     plan = json.loads((root / 'build/ui-scope-plan.json').read_text())
     sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
     tests = plan.get('tests')
-    if plan.get('source_commit') != sha or not isinstance(tests, list) or not tests or not all(isinstance(test, str) for test in tests) or len(set(tests)) != len(tests):
+    if plan.get('scope', 'affected') != scope or plan.get('source_commit') != sha or not isinstance(tests, list) or not tests or not all(isinstance(test, str) for test in tests) or len(set(tests)) != len(tests):
         raise ValueError('Missing, empty or stale affected-case plan.')
     declared = {path.stem + '/' + name for path in (root / 'UITests').glob('*.swift')
                 for name in re.findall(r'\bfunc\s+(test\w+)\s*\(', path.read_text())}
@@ -129,7 +130,7 @@ def affected_selectors():
 
 
 def main(argv):
-    if len(argv) == 1 and argv[0] in PART_SCOPES:
+    if len(argv) == 1 and argv[0] in PART_SCOPES and not os.environ.get('CHAI_CI_SOURCE_RUNS', '').strip():
         try:
             selected = resolve(argv[0], declared_tests(Path(__file__).resolve().parents[1]))
         except (OSError, ValueError) as error:
@@ -138,9 +139,9 @@ def main(argv):
         for method in selected:
             print('-only-testing:ChaiClassicsUITests/' + method)
         return 0
-    if argv == ['affected']:
+    if argv == ['affected'] or (len(argv) == 1 and argv[0] in PART_SCOPES):
         try:
-            methods = affected_selectors()
+            methods = affected_selectors(argv[0])
         except (OSError, ValueError, subprocess.SubprocessError) as error:
             print('Cannot select affected UI cases: ' + str(error), file=sys.stderr)
             return 64

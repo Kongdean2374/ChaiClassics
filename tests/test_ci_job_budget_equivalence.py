@@ -10,6 +10,7 @@ import verify_scoped_ci as scoped
 class CIJobBudgetEquivalenceTests(unittest.TestCase):
     def setUp(self):
         self.path='.github/workflows/ci.yml';self.current=(ROOT/self.path).read_bytes()
+        self.current=scoped.dependency_partition_baseline(self.path,'100644',self.current)
         self.before,self.after=scoped.APPROVED_CI_JOB_TIMEOUT
         self.old=self.current.replace(b'    timeout-minutes: 180\n',b'    timeout-minutes: 90\n',1)
 

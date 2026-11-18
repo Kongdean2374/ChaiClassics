@@ -66,7 +66,13 @@ jobs:
           from pathlib import Path
           sys.path.insert(0, 'scripts')
           from verify_scoped_ci import parse_runs
-          Path('ui-selection.json').write_text(json.dumps({'scope': os.environ['CHAI_UI_SCOPE'], 'source_commit': os.environ['GITHUB_SHA'], 'source_runs': parse_runs(os.environ['CHAI_CI_SOURCE_RUNS'])}) + '\n')
+          from ui_test_scope import PART_SCOPES
+          scope = os.environ['CHAI_UI_SCOPE']
+          runs = parse_runs(os.environ['CHAI_CI_SOURCE_RUNS'])
+          selection = {'scope': scope, 'source_commit': os.environ['GITHUB_SHA'], 'source_runs': runs}
+          if scope in PART_SCOPES and runs:
+              selection['partition'] = 'affected-v1'
+          Path('ui-selection.json').write_text(json.dumps(selection) + '\n')
           PY
       - name: Verify puzzles, save compatibility and generated project
         run: bash scripts/ci.sh verify
@@ -75,7 +81,7 @@ jobs:
       - name: Build iOS Simulator app
         run: bash scripts/ci.sh build
       - name: Plan affected UI cases from verified source evidence
-        if: inputs.full_ui == true && env.CHAI_UI_SCOPE == 'affected'
+        if: inputs.full_ui == true && (env.CHAI_UI_SCOPE == 'affected' || (startsWith(env.CHAI_UI_SCOPE, 'part_') && inputs.baseline_run != ''))
         env:
           GH_TOKEN: ${{ github.token }}
           CHAI_BASELINE_RUN: ${{ inputs.baseline_run }}

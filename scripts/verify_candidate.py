@@ -238,11 +238,14 @@ def verify_tooling_only_equivalence(source_sha, target_sha, root=ROOT, *, tree_r
     # Only exact audited boot/ceiling pairs may retain an already successful
     # whole screenshot run. App/runtime edits, helpers and protected test bodies
     # still fail below; this never supplies missing/failed XCTest results.
-    from verify_scoped_ci import APPROVED_TIMEOUT_CEILINGS, APPROVED_CI_JOB_TIMEOUT, APPROVED_IPAD_JOB_BUDGET, shared_content_digest, scaffold_budget_digest, canonical_xctest_allowance_body
+    from verify_scoped_ci import (APPROVED_TIMEOUT_CEILINGS, APPROVED_CI_JOB_TIMEOUT,
+        APPROVED_IPAD_JOB_BUDGET, APPROVED_DEPENDENCY_PARTITIONS, shared_content_digest,
+        scaffold_budget_digest, canonical_xctest_allowance_body)
     execution_equivalence = {}
     canonical_execution = {path: pair[0] for path, pair in APPROVED_TIMEOUT_CEILINGS.items()}
     canonical_execution['.github/workflows/ci.yml'] = APPROVED_CI_JOB_TIMEOUT[0]
     canonical_execution['.github/workflows/ipad-screenshots.yml'] = APPROVED_IPAD_JOB_BUDGET[0]
+    canonical_execution['scripts/ui_test_scope.py'] = APPROVED_DEPENDENCY_PARTITIONS['scripts/ui_test_scope.py'][0]
     if tested_cases is not None:
         for path in changed:
             if path not in canonical_execution or path not in before or path not in after:
@@ -327,7 +330,7 @@ def verify_visual_case_equivalence(source_sha, target_sha, root=ROOT, *, tree_re
     assets, execution files, test helpers and each executed assertion.
     """
     from verify_incremental_ci import git_tree
-    from verify_scoped_ci import fingerprints
+    from verify_scoped_ci import fingerprints, APPROVED_HISTORY_MENU, HISTORY_AUDITED_RUNTIME_DIGEST
     require(all(isinstance(value, str) and re.fullmatch(r'[0-9a-f]{40}', value)
                 for value in (source_sha, target_sha)), 'Invalid visual source SHA.')
     ancestor = ancestor or (lambda: subprocess.run(['git', 'merge-base', '--is-ancestor', source_sha, target_sha], cwd=root,
@@ -343,9 +346,17 @@ def verify_visual_case_equivalence(source_sha, target_sha, root=ROOT, *, tree_re
     old, new = fingerprints(before), fingerprints(after)
     require(all(name in old and name in new and old[name] == new[name] for name in cases),
             'A visual case, helper, shared runtime or game dependency changed; fresh phone captures are required.')
-    return {'verification': 'dependency-scoped-visual', 'source_commit': source_sha, 'target_commit': target_sha,
-            'case_fingerprints': {name: new[name] for name in cases},
-            'changed_paths': sorted(path for path in set(before) | set(after) if before.get(path) != after.get(path))}
+    proof = {'verification': 'dependency-scoped-visual', 'source_commit': source_sha, 'target_commit': target_sha,
+             'case_fingerprints': {name: new[name] for name in cases},
+             'changed_paths': sorted(path for path in set(before) | set(after) if before.get(path) != after.get(path))}
+    path = 'App/PlayHistoryView.swift'
+    if path in before and path in after and before[path] != after[path]:
+        source_hash, target_hash = (hashlib.sha256(tree[path][1]).hexdigest() for tree in (before, after))
+        if (source_hash, target_hash) == APPROVED_HISTORY_MENU[:2]:
+            proof['audited_unvisited_history_menu'] = {'path': path, 'source_sha256': source_hash,
+                'target_sha256': target_hash, 'audited_runtime_sha256': HISTORY_AUDITED_RUNTIME_DIGEST,
+                'protected_cases': cases}
+    return proof
 
 
 def artifact_evidence(artifacts, kind, read=github):
