@@ -16,8 +16,10 @@ public enum ArcadeSaveOwnership {
 /// must not consume a second queued turn.
 public struct SnakeSwipe {
     public static let minimumDistance = 12.0
-    private var consumed = false
+    public private(set) var consumed = false
     public init() {}
+
+    public mutating func finish() { consumed = false }
 
     public mutating func direction(x: Double, y: Double) -> ArcadeDirection? {
         guard !consumed, x.isFinite, y.isFinite, hypot(x, y) >= Self.minimumDistance else { return nil }

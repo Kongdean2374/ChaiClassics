@@ -25,6 +25,42 @@ import ChaiCore
                                     expected:savedRevision,current:model.expandedGames[game])
     }
     var body: some View {
+        playSurface
+            .onAppear { loadCurrentRound() }
+            .onChange(of:active) { _,value in
+                accumulated = 0; saveInterval = 0
+                if value {
+                    if local == nil || !ownsSavedProgress {
+                        loadCurrentRound()
+                    }
+                }
+                else { heldInput.cancel(); blockDrag = nil; persist(); clock.stop() }
+            }
+            .task(id:active) {
+                guard active else { return }
+                if game != .brickBreaker {
+                    for value in (1...3).reversed() {
+                        countdown = value
+                        do { try await Task.sleep(for:.seconds(1)) } catch { return }
+                        guard !Task.isCancelled, active else { return }
+                    }
+                }
+                countdown = nil; clock.start()
+            }
+            .onReceive(clock.$frame) { frame in advance(frame.delta) }
+            .onChange(of:boardDragging) { _,value in if !value { blockDrag = nil } }
+            .onDisappear { heldInput.cancel(); blockDrag = nil; persist(); clock.stop() }
+    }
+
+    @ViewBuilder private var playSurface: some View {
+        if game == .snake {
+            layout.modifier(SnakeSwipeControls(enabled: canControl, turn: turnSnake))
+        } else {
+            layout
+        }
+    }
+
+    private var layout: some View {
         VStack(spacing:12) {
             header
             // Reserve the controls' actual intrinsic height before sizing the
@@ -49,30 +85,6 @@ import ChaiCore
             }
             controls.fixedSize(horizontal:false,vertical:true)
         }.padding(12).frame(maxWidth:.infinity,maxHeight:.infinity,alignment:.top)
-        .onAppear { loadCurrentRound() }
-        .onChange(of:active) { _,value in
-            accumulated = 0; saveInterval = 0
-            if value {
-                if local == nil || !ownsSavedProgress {
-                    loadCurrentRound()
-                }
-            }
-            else { heldInput.cancel(); blockDrag = nil; persist(); clock.stop() }
-        }
-        .task(id:active) {
-            guard active else { return }
-            if game != .brickBreaker {
-                for value in (1...3).reversed() {
-                    countdown = value
-                    do { try await Task.sleep(for:.seconds(1)) } catch { return }
-                    guard !Task.isCancelled, active else { return }
-                }
-            }
-            countdown = nil; clock.start()
-        }
-        .onReceive(clock.$frame) { frame in advance(frame.delta) }
-        .onChange(of:boardDragging) { _,value in if !value { blockDrag = nil } }
-        .onDisappear { heldInput.cancel(); blockDrag = nil; persist(); clock.stop() }
     }
     private var header: some View {
         HStack(spacing:10) {
@@ -106,10 +118,16 @@ import ChaiCore
     }
     @ViewBuilder private var field: some View {
         if game == .snake {
-            paintedField.modifier(SnakeSwipeControls(
-                enabled: canControl, hint: model.t("expanded.snake.help"),
-                label: { model.t("expanded.direction.\($0.rawValue)") }, turn: turnSnake
-            ))
+            paintedField
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("snake.board")
+                .accessibilityHint(model.t("expanded.snake.help"))
+                .accessibilityActions {
+                    ForEach(ArcadeDirection.allCases, id: \.self) { direction in
+                        Button(model.t("expanded.direction.\(direction.rawValue)")) { turnSnake(direction) }
+                            .disabled(!canControl)
+                    }
+                }
         } else if game == .fallingBlocks {
             paintedField.overlay {
                 GeometryReader { proxy in

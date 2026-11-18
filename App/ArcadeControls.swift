@@ -9,32 +9,31 @@ enum ArcadePalette {
 /// one turn, including when the finger curves before it lifts.
 struct SnakeSwipeControls: ViewModifier {
     let enabled: Bool
-    let hint: String
-    let label: (ArcadeDirection) -> String
     let turn: (ArcadeDirection) -> Void
     @GestureState private var tracking = false
     @State private var swipe = SnakeSwipe()
 
     func body(content: Content) -> some View {
         content
-            .gesture(DragGesture(minimumDistance: CGFloat(SnakeSwipe.minimumDistance))
-                .updating($tracking) { _, tracking, _ in tracking = true }
-                .onChanged { value in
-                    guard enabled, let direction = swipe.direction(
-                        x: Double(value.translation.width), y: Double(value.translation.height)
-                    ) else { return }
+            .contentShape(Rectangle())
+            .gesture(swipeGesture, including: enabled ? .all : .none)
+            .onChange(of: tracking) { _, tracking in if !tracking { endSwipe() } }
+    }
+
+    private var swipeGesture: some Gesture {
+        DragGesture(minimumDistance: CGFloat(SnakeSwipe.minimumDistance), coordinateSpace: .global)
+            .updating($tracking) { _, tracking, _ in tracking = true }
+            .onChanged { value in
+                guard enabled, !swipe.consumed else { return }
+                if let direction = swipe.direction(x: Double(value.translation.width), y: Double(value.translation.height)) {
                     turn(direction)
-                })
-            .allowsHitTesting(enabled)
-            .onChange(of: tracking) { _, tracking in if !tracking { swipe = SnakeSwipe() } }
-            .onChange(of: enabled) { _, enabled in if !enabled { swipe = SnakeSwipe() } }
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("snake.board")
-            .accessibilityHint(hint)
-            .accessibilityAction(named: label(.up)) { if enabled { turn(.up) } }
-            .accessibilityAction(named: label(.right)) { if enabled { turn(.right) } }
-            .accessibilityAction(named: label(.down)) { if enabled { turn(.down) } }
-            .accessibilityAction(named: label(.left)) { if enabled { turn(.left) } }
+                }
+            }
+            .onEnded { _ in endSwipe() }
+    }
+
+    private func endSwipe() {
+        if swipe.consumed { swipe.finish() }
     }
 }
 

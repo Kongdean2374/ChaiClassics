@@ -801,7 +801,7 @@
 
 "expanded.settings.detail" = "Mode and difficulty apply to new games. Legal destinations and the landing outline apply when you return to play.";
 
-"expanded.snake.help" = "Swipe up, down, left or right on the board to turn. The snake cannot reverse directly.";
+"expanded.snake.help" = "Swipe up, down, left or right anywhere in the play area. Lift your finger before swiping to turn again.";
 
 "expanded.blocks.help" = "Tap the board to rotate, drag sideways to move, or flick down to hard drop. Hold an arrow to move or soft drop continuously.";
 

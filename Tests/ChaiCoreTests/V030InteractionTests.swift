@@ -131,14 +131,33 @@ final class V030InteractionTests: XCTestCase {
         XCTAssertNil(swipe.direction(x: 4, y: -40), "A curved swipe cannot queue a second turn.")
 
         var board = SnakeBoard(size: 16, seed: 3)
-        swipe = SnakeSwipe()
+        swipe.finish()
         XCTAssertFalse(board.turn(try XCTUnwrap(swipe.direction(x: -25, y: 9))))
-        swipe = SnakeSwipe()
+        XCTAssertNil(swipe.direction(x: -25, y: 60), "A rejected reversal still consumes that swipe.")
+        XCTAssertTrue(board.queued.isEmpty)
+
+        swipe.finish()
         XCTAssertTrue(board.turn(try XCTUnwrap(swipe.direction(x: 8, y: -30))))
         XCTAssertTrue(board.step())
         XCTAssertEqual(board.direction, .up)
-        swipe = SnakeSwipe()
-        XCTAssertEqual(swipe.direction(x: 8, y: 30), .down)
+
+        swipe.finish()
+        XCTAssertTrue(board.turn(try XCTUnwrap(swipe.direction(x: -35, y: 0))))
+        // A continuous left-then-down path, including a direction change
+        // across many touch samples, still queues only the original left turn.
+        for y in 1...120 {
+            XCTAssertNil(swipe.direction(x: -35, y: Double(y)))
+        }
+        XCTAssertEqual(board.queued, [.left])
+
+        swipe.finish()
+        XCTAssertTrue(board.turn(try XCTUnwrap(swipe.direction(x: 8, y: 30))))
+        XCTAssertEqual(board.queued, [.left, .down])
+        XCTAssertTrue(board.step())
+        XCTAssertEqual(board.direction, .left)
+        XCTAssertTrue(board.step())
+        XCTAssertEqual(board.direction, .down)
+        XCTAssertFalse(board.hasLost)
     }
     func testHeldInputIsDisplayRateIndependentAndOldFingerCannotReleaseNewDirection() {
         func count(_ frames:Int) -> Int {
