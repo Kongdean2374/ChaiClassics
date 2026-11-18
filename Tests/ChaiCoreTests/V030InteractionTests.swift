@@ -122,17 +122,23 @@ final class V030InteractionTests: XCTestCase {
         XCTAssertTrue(intent.apply(on:.pile(.waste),to:&board));XCTAssertEqual(board.waste.last?.id,0)
         XCTAssertTrue(board.isValidSave)
     }
-    func testFourDirectionStickDeadZoneDominantAxisAndInvalidNumbers() throws {
-        XCTAssertNil(CardinalStick.direction(x:0.1,y:0.1))
-        XCTAssertNil(CardinalStick.direction(x:.nan,y:1));XCTAssertNil(CardinalStick.direction(x:1,y:.infinity))
-        XCTAssertEqual(CardinalStick.direction(x:0.9,y:0.5),.right)
-        XCTAssertEqual(CardinalStick.direction(x:-0.9,y:0.5),.left)
-        XCTAssertEqual(CardinalStick.direction(x:0.2,y:-0.9),.up)
-        XCTAssertEqual(CardinalStick.direction(x:0.2,y:0.9),.down)
-        var board = SnakeBoard(size:16,seed:3)
-        XCTAssertFalse(board.turn(try XCTUnwrap(CardinalStick.direction(x:-1,y:0))))
-        XCTAssertTrue(board.turn(try XCTUnwrap(CardinalStick.direction(x:0,y:-1))))
-        XCTAssertTrue(board.step());XCTAssertEqual(board.direction,.up)
+    func testSnakeSwipeCommitsOneDominantDirectionPerGestureAndRejectsReversal() throws {
+        var swipe = SnakeSwipe()
+        XCTAssertNil(swipe.direction(x: 4, y: 5))
+        XCTAssertNil(swipe.direction(x: .nan, y: 50))
+        XCTAssertNil(swipe.direction(x: 50, y: .infinity))
+        XCTAssertEqual(swipe.direction(x: 25, y: 10), .right)
+        XCTAssertNil(swipe.direction(x: 4, y: -40), "A curved swipe cannot queue a second turn.")
+
+        var board = SnakeBoard(size: 16, seed: 3)
+        swipe = SnakeSwipe()
+        XCTAssertFalse(board.turn(try XCTUnwrap(swipe.direction(x: -25, y: 9))))
+        swipe = SnakeSwipe()
+        XCTAssertTrue(board.turn(try XCTUnwrap(swipe.direction(x: 8, y: -30))))
+        XCTAssertTrue(board.step())
+        XCTAssertEqual(board.direction, .up)
+        swipe = SnakeSwipe()
+        XCTAssertEqual(swipe.direction(x: 8, y: 30), .down)
     }
     func testHeldInputIsDisplayRateIndependentAndOldFingerCannotReleaseNewDirection() {
         func count(_ frames:Int) -> Int {

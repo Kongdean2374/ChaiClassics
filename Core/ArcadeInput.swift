@@ -12,10 +12,16 @@ public enum ArcadeSaveOwnership {
     }
 }
 
-/// Presentation input only: no changes to Snake/FallingBlocks save formats.
-public enum CardinalStick {
-    public static func direction(x: Double, y: Double) -> ArcadeDirection? {
-        guard x.isFinite, y.isFinite, hypot(x, y) >= 0.22 else { return nil }
+/// Read one direction per swipe. Changing the angle of a finger already down
+/// must not consume a second queued turn.
+public struct SnakeSwipe {
+    public static let minimumDistance = 12.0
+    private var consumed = false
+    public init() {}
+
+    public mutating func direction(x: Double, y: Double) -> ArcadeDirection? {
+        guard !consumed, x.isFinite, y.isFinite, hypot(x, y) >= Self.minimumDistance else { return nil }
+        consumed = true
         if abs(x) >= abs(y) { return x >= 0 ? .right : .left }
         return y >= 0 ? .down : .up
     }

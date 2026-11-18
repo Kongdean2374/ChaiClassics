@@ -28,7 +28,8 @@ final class ArcadeProgressTests: XCTestCase {
                 XCTAssertTrue(ArcadeSaveOwnership.matches(expectedSessionID:id,currentSessionID:id,expected:expected,current:current))
                 accumulated += 1/Double(fps)
                 guard case .snake(var board) = local.state else { return XCTFail("Expected Snake.") }
-                while accumulated >= 0.13 {
+                let interval = board.stepInterval(difficulty: local.difficulty)
+                while accumulated >= interval {
                     let x = board.body[0]%board.size, y = board.body[0]/board.size
                     switch board.direction {
                     case .right: if x == board.size-2 { _ = board.turn(.down) }
@@ -36,7 +37,7 @@ final class ArcadeProgressTests: XCTestCase {
                     case .left: if x == 1 { _ = board.turn(.up) }
                     case .up: if y == 1 { _ = board.turn(.right) }
                     }
-                    XCTAssertTrue(board.step()); accumulated -= 0.13
+                    XCTAssertTrue(board.step()); accumulated -= interval
                 }
                 XCTAssertFalse(board.hasLost); local.state = .snake(board)
                 if frame % (fps/4) == 0 {
@@ -47,7 +48,7 @@ final class ArcadeProgressTests: XCTestCase {
             }
             XCTAssertEqual(timerOnlyDifferences,10);XCTAssertEqual(current.elapsedSeconds,10)
             guard case .snake(let board) = current.state else { return XCTFail("Expected persisted Snake.") }
-            XCTAssertGreaterThan(board.ticks,70);XCTAssertTrue(board.isValidSave)
+            XCTAssertGreaterThan(board.ticks,35);XCTAssertTrue(board.isValidSave)
         }
     }
 

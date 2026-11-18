@@ -34,6 +34,8 @@ private struct InitialGameDefaults: ViewModifier {
 
 private struct SessionDialog<Content: View>: View {
     let content: Content
+    @Environment(\.gameReducedMotion) private var reduceMotion
+    @State private var panelVisible = false
     init(@ViewBuilder content: () -> Content) { self.content = content() }
     var body: some View {
         ZStack {
@@ -44,9 +46,12 @@ private struct SessionDialog<Content: View>: View {
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 28))
                     .overlay { RoundedRectangle(cornerRadius: 28).strokeBorder(.primary.opacity(0.09)) }
                     .shadow(color: .black.opacity(0.18), radius: 28, y: 12)
+                    .opacity(reduceMotion || panelVisible ? 1 : 0)
+                    .scaleEffect(reduceMotion || panelVisible ? 1 : 0.97)
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: panelVisible)
                     .frame(maxWidth: .infinity).padding(24)
             }.scrollBounceBehavior(.basedOnSize).defaultScrollAnchor(.center)
-        }.accessibilityAddTraits(.isModal)
+        }.accessibilityAddTraits(.isModal).onAppear { panelVisible = true }
     }
 }
 
@@ -250,7 +255,7 @@ private struct GameSessionScreen: ViewModifier {
     func body(content: Content) -> some View {
         content
             .safeAreaInset(edge: .top, spacing: 0) { timerBar }
-            .blur(radius: modal ? 8 : 0)
+            .blur(radius: modal ? 4 : 0)
             .disabled(phase != .playing || exiting || !interactionReady)
             .allowsHitTesting(phase == .playing && !exiting && interactionReady)
             .accessibilityHidden(modal || phase == .reviewing)

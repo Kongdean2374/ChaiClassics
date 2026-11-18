@@ -13,6 +13,11 @@ private final class SolitaireFingerPosition: ObservableObject {
     @Published var translation: CGSize = .zero
 }
 
+private struct SolitaireFlipBatch {
+    let id = UUID()
+    let cards: Set<Int>
+}
+
 struct ExpandedSolitaireView: View {
     let game: GameID
     @EnvironmentObject private var model: AppModel
@@ -21,7 +26,9 @@ struct ExpandedSolitaireView: View {
     @State private var lifted: SolitaireLiftedCards?
     @StateObject private var finger = SolitaireFingerPosition()
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.gameReducedMotion) private var reduceMotion
     @State private var hovered: SolitaireDropTarget?
+    @State private var flips: SolitaireFlipBatch?
     @State private var moveHelpKey: String?
     @State private var viewportWidth: CGFloat = 320
     private var board: SolitaireBoard? { if case .solitaire(let board) = model.expandedGames[game]?.state { return board }; return nil }
@@ -51,8 +58,8 @@ struct ExpandedSolitaireView: View {
                     .padding(12).frame(maxWidth:.infinity).background(.thinMaterial)
                     .accessibilityIdentifier(game.rawValue+".moveHelp")
             }
-        }.onChange(of:active) { _,value in if !value { clearInteraction() } }
-            .onDisappear { clearInteraction() }
+        }.onChange(of:active) { _,value in if !value { clearInteraction(); flips = nil } }
+            .onDisappear { clearInteraction(); flips = nil }
     }
     private func unifiedBoard(_ board: SolitaireBoard) -> some View {
         let layout = SolitaireTableLayout(board: board)
@@ -138,9 +145,8 @@ struct ExpandedSolitaireView: View {
         let action = { selectPile(place, board: board) }
         return Button(action: action) {
             VStack(spacing: 4) {
-                SolitaireCardFace(card: top, faceUp: true,
-                                  selected: selected?.place == place || (pyramidSelection == -1 && place == .waste),
-                                  suit: top.map(board.effectiveSuit))
+                cardFace(top, faceUp: true, selected: selected?.place == place || (pyramidSelection == -1 && place == .waste),
+                         suit: top.map(board.effectiveSuit))
                     .frame(width: slot.frame.width, height: slot.frame.height)
                     .opacity(top.map(isLifted) == true ? 0 : 1)
                     .overlay { dropBorder(.pile(place)) }
@@ -201,7 +207,7 @@ struct ExpandedSolitaireView: View {
         let source = SolitaireDragSource.pile(choice.place, index: index)
         let action = { selectColumnCard(choice) }
         return Button(action: action) {
-            SolitaireCardFace(card: card, faceUp: faceUp, selected: selected == choice, suit: board.effectiveSuit(card))
+            cardFace(card, faceUp: faceUp, selected: selected == choice, suit: board.effectiveSuit(card))
                 .frame(width: frame.width, height: frame.height).contentShape(Rectangle())
                 .opacity(isLifted(card) ? 0 : 1)
         }
@@ -232,7 +238,7 @@ struct ExpandedSolitaireView: View {
             if pyramid { choosePyramid(index) }
             else if !mutate({ $0.removeTriPeak(index) }) { showMoveHelp(.pile(.waste)) }
         } label: {
-            SolitaireCardFace(card: card, faceUp: exposed || pyramid, selected: pyramidSelection == index)
+            cardFace(card, faceUp: exposed || pyramid, selected: pyramidSelection == index)
                 .frame(width: frame.width, height: frame.height).contentShape(Rectangle())
                 .opacity(isLifted(card) ? 0 : 1)
         }
@@ -275,12 +281,33 @@ struct ExpandedSolitaireView: View {
         }
     }
     @discardableResult private func mutate(_ change: (inout SolitaireBoard) -> Bool) -> Bool {
-        guard active, lifted == nil else { return false }
+        guard active, lifted == nil, let before = board else { return false }
         let changed = model.editExpanded(game) { state in
             guard case .solitaire(var board) = state, change(&board) else { return false }; state = .solitaire(board); return true
         }
-        if changed { clearInteraction(); moveHelpKey = nil }
+        if changed {
+            clearInteraction()
+            moveHelpKey = nil
+            if let after = board {
+                var cards = before.faceUp.symmetricDifference(after.faceUp)
+                // Pyramid displays covered tableau cards face up. Only the
+                // visible waste changes sides in that variant.
+                if after.variant == .pyramid {
+                    cards = cards.intersection(after.waste.last.map { [$0.id] } ?? [])
+                }
+                flips = cards.isEmpty ? nil : SolitaireFlipBatch(cards: cards)
+            }
+        }
         return changed
+    }
+
+    @ViewBuilder private func cardFace(_ card: PlayingCard?, faceUp: Bool, selected: Bool, suit: Int? = nil) -> some View {
+        if !reduceMotion, let card, let flips, flips.cards.contains(card.id) {
+            SolitaireCardFlip(card: card, faceUp: faceUp, selected: selected, suit: suit)
+                .id(flips.id)
+        } else {
+            SolitaireCardFace(card: card, faceUp: faceUp, selected: selected, suit: suit)
+        }
     }
     private func clearInteraction() {
         selected = nil
@@ -393,6 +420,38 @@ private struct SolitaireMovingCards: View {
                 .position(x: lifted.frame.midX + finger.translation.width,
                           y: lifted.frame.midY + finger.translation.height + CGFloat(index) * SolitaireTableLayout.faceUpStep)
         }
+    }
+}
+
+private struct SolitaireCardFlip: View {
+    let card: PlayingCard
+    let faceUp: Bool
+    let selected: Bool
+    let suit: Int?
+    @State private var settled = false
+
+    var body: some View {
+        let rotation = (settled == faceUp) ? 180.0 : 0.0
+        SolitaireRotatingFace(card: card, selected: selected, suit: suit, rotation: rotation)
+            .animation(.easeInOut(duration: 0.22), value: settled)
+            .onAppear { settled = true }
+    }
+}
+
+private struct SolitaireRotatingFace: View, Animatable {
+    let card: PlayingCard
+    let selected: Bool
+    let suit: Int?
+    var rotation: Double
+    var animatableData: Double {
+        get { rotation }
+        set { rotation = newValue }
+    }
+
+    var body: some View {
+        let front = rotation >= 90
+        SolitaireCardFace(card: card, faceUp: front, selected: selected, suit: suit)
+            .rotation3DEffect(.degrees(front ? rotation - 180 : rotation), axis: (x: 0, y: 1, z: 0), perspective: 0.45)
     }
 }
 

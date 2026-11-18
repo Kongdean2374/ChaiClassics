@@ -5,86 +5,36 @@ enum ArcadePalette {
     static let blocks: [Color] = [.cyan,.yellow,.purple,.green,.red,.blue,.orange]
 }
 
-/// A cardinal stick, not an eight-way controller. The knob tracks the finger
-/// directly, while four native accessible buttons remain available for taps.
-struct CardinalJoystick: View {
+/// Turn as soon as the swipe crosses the threshold. A gesture can queue only
+/// one turn, including when the finger curves before it lifts.
+struct SnakeSwipeControls: ViewModifier {
     let enabled: Bool
-    let direction: ArcadeDirection
-    let title: String
     let hint: String
     let label: (ArcadeDirection) -> String
     let turn: (ArcadeDirection) -> Void
-    @GestureState private var offset = CGSize.zero
-    @State private var lastInput: ArcadeDirection?
+    @GestureState private var tracking = false
+    @State private var swipe = SnakeSwipe()
 
-    var body: some View {
-        ZStack {
-            accessibleStick
-            ForEach(ArcadeDirection.allCases,id:\.self) { input in arrow(input) }
-        }
-        .frame(width:162,height:162)
-        .disabled(!enabled).opacity(enabled ? 1 : 0.5)
-        .transaction { $0.animation = nil }
-        .onChange(of:offset) { _,value in if value == .zero { lastInput = nil } }
-        .onChange(of:enabled) { _,value in if !value { lastInput = nil } }
-    }
-
-    private var plate: some View {
-        Circle().fill(GameMaterial.teal.gradient)
-            .overlay { Circle().strokeBorder(GameMaterial.gold.opacity(0.8),lineWidth:1.5) }
-            .overlay {
-                Image(systemName:"plus").font(.system(size:72,weight:.ultraLight))
-                    .foregroundStyle(GameMaterial.ivory.opacity(0.15))
-            }
-    }
-    private var knob: some View {
-        Circle().fill(GameMaterial.gold.gradient).frame(width:38,height:38)
-            .overlay { Circle().strokeBorder(GameMaterial.ivory.opacity(0.7),lineWidth:1) }
-            .shadow(color:.black.opacity(0.25),radius:3,y:2)
-            .offset(offset).allowsHitTesting(false)
-    }
-    private var accessibleStick: some View {
-        plate.frame(width:112,height:112).overlay { knob }
-            .contentShape(Circle()).gesture(stickGesture)
-            .accessibilityElement(children:.ignore).accessibilityLabel(title)
-            .accessibilityHint(hint).accessibilityValue(label(direction))
-            .accessibilityIdentifier("snake.joystick")
-            .accessibilityAction(named:label(.up)) { send(.up) }
-            .accessibilityAction(named:label(.right)) { send(.right) }
-            .accessibilityAction(named:label(.down)) { send(.down) }
-            .accessibilityAction(named:label(.left)) { send(.left) }
-    }
-    private var stickGesture: some Gesture {
-        DragGesture(minimumDistance:0)
-            .updating($offset) { value,state,_ in state = thumb(at:value.location) }
-            .onChanged { value in track(value.location) }
-            .onEnded { _ in lastInput = nil }
-    }
-    private func thumb(at point:CGPoint) -> CGSize {
-        let x: CGFloat = point.x-56
-        let y: CGFloat = point.y-56
-        let distance: CGFloat = hypot(x,y)
-        let scale: CGFloat = distance > 32 ? 32/distance : 1
-        return CGSize(width:x*scale,height:y*scale)
-    }
-    private func track(_ point:CGPoint) {
-        guard enabled else { return }
-        let x: Double = Double((point.x-56)/32)
-        let y: Double = Double((point.y-56)/32)
-        let input = CardinalStick.direction(x:x,y:y)
-        if input != lastInput { lastInput = input; if let input { turn(input) } }
-    }
-    private func send(_ input:ArcadeDirection) { if enabled { turn(input) } }
-    private func arrow(_ input:ArcadeDirection) -> some View {
-        let symbols: [String] = ["chevron.up","chevron.right","chevron.down","chevron.left"]
-        let color: Color = input == direction ? GameMaterial.gold : GameMaterial.ivory
-        let position = CGSize(width:CGFloat(input.dx)*59,height:CGFloat(input.dy)*59)
-        return Button { send(input) } label: {
-            Image(systemName:symbols[input.rawValue]).font(.system(size:18,weight:.bold))
-                .foregroundStyle(color).frame(width:44,height:44)
-                .background(GameMaterial.navy.opacity(0.65),in:Circle())
-        }.buttonStyle(.plain).offset(position)
-            .accessibilityLabel(label(input)).accessibilityIdentifier("snake.direction.\(input.rawValue)")
+    func body(content: Content) -> some View {
+        content
+            .gesture(DragGesture(minimumDistance: CGFloat(SnakeSwipe.minimumDistance))
+                .updating($tracking) { _, tracking, _ in tracking = true }
+                .onChanged { value in
+                    guard enabled, let direction = swipe.direction(
+                        x: Double(value.translation.width), y: Double(value.translation.height)
+                    ) else { return }
+                    turn(direction)
+                })
+            .allowsHitTesting(enabled)
+            .onChange(of: tracking) { _, tracking in if !tracking { swipe = SnakeSwipe() } }
+            .onChange(of: enabled) { _, enabled in if !enabled { swipe = SnakeSwipe() } }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("snake.board")
+            .accessibilityHint(hint)
+            .accessibilityAction(named: label(.up)) { if enabled { turn(.up) } }
+            .accessibilityAction(named: label(.right)) { if enabled { turn(.right) } }
+            .accessibilityAction(named: label(.down)) { if enabled { turn(.down) } }
+            .accessibilityAction(named: label(.left)) { if enabled { turn(.left) } }
     }
 }
 

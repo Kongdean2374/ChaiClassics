@@ -801,9 +801,7 @@
 
 "expanded.settings.detail" = "模式與難度只套用新局；合法落點與落點輪廓的顯示偏好，會在返回遊戲後生效。";
 
-"expanded.snake.joystick" = "四方向搖桿";
-
-"expanded.snake.help" = "拖動搖桿向上下左右轉彎，也可點方向鍵；不可直接倒退。";
+"expanded.snake.help" = "在棋盤上往上、下、左、右滑動來轉向。蛇不能直接掉頭。";
 
 "expanded.blocks.help" = "點棋盤旋轉、左右拖移；向下快滑直接落下。長按方向鍵可連續移動或下落。";
 

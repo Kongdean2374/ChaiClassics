@@ -801,9 +801,7 @@
 
 "expanded.settings.detail" = "Mode and difficulty apply to new games. Legal destinations and the landing outline apply when you return to play.";
 
-"expanded.snake.joystick" = "Four-direction joystick";
-
-"expanded.snake.help" = "Drag the stick or tap an arrow to turn up, down, left or right. Direct reversal is not allowed.";
+"expanded.snake.help" = "Swipe up, down, left or right on the board to turn. The snake cannot reverse directly.";
 
 "expanded.blocks.help" = "Tap the board to rotate, drag sideways to move, or flick down to hard drop. Hold an arrow to move or soft drop continuously.";
 

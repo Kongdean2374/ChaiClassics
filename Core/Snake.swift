@@ -17,6 +17,15 @@ public struct SnakeBoard: Codable, Equatable, Sendable {
     public private(set) var hasLost = false
     public var score: Int { body.count-3 }
     public var isComplete: Bool { body.count==size*size }
+    public func stepInterval(difficulty: DuelDifficulty) -> TimeInterval {
+        let opening: Double
+        switch difficulty {
+        case .easy: opening = 0.32
+        case .normal: opening = 0.26
+        case .hard: opening = 0.20
+        }
+        return max(opening / 2, opening - 0.01 * Double(max(0, score)))
+    }
     public init(size: Int = 20, seed: UInt64) {
         self.size = [16,20,24].contains(size) ? size : 20; self.seed = seed
         let head = self.size/2*self.size+self.size/2; body = [head,head-1,head-2]; placeFood()

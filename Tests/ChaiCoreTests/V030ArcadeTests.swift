@@ -2,6 +2,20 @@ import XCTest
 @testable import ChaiCore
 
 final class V030ArcadeTests: XCTestCase {
+    func testSnakeOpensSlowerAndSpeedsUpWhenItEats() throws {
+        let initial = SnakeBoard(size: 20, seed: 3)
+        XCTAssertGreaterThan(initial.stepInterval(difficulty: .hard), 0.18)
+        XCTAssertGreaterThan(initial.stepInterval(difficulty: .normal), initial.stepInterval(difficulty: .hard))
+        XCTAssertGreaterThan(initial.stepInterval(difficulty: .easy), initial.stepInterval(difficulty: .normal))
+        var fed = try v030Fixture(initial, ["food": initial.body[0] + 1])
+        XCTAssertTrue(fed.step())
+        XCTAssertEqual(fed.score, 1)
+        for difficulty in DuelDifficulty.allCases {
+            let change = initial.stepInterval(difficulty: difficulty) - fed.stepInterval(difficulty: difficulty)
+            XCTAssertGreaterThan(change, 0)
+            XCTAssertLessThan(change, 0.025, "One food should not cause a large speed jump.")
+        }
+    }
     func testSnakeFoodBodyReversalQueueWallsAndRoundTrip() throws {
         var board = SnakeBoard(size:16,seed:7); XCTAssertTrue(board.isValidSave)
         XCTAssertFalse(board.turn(.left)); XCTAssertTrue(board.turn(.up)); XCTAssertTrue(board.turn(.left)); XCTAssertFalse(board.turn(.down))

@@ -3,10 +3,12 @@ import ChaiCore
 
 /// Display-rate simulation stays local to the playing screen. Disk writes are
 /// coalesced, flushed on pause/navigation, and immediate for input and game over.
-struct ExpandedArcadeView: View {
+@MainActor struct ExpandedArcadeView: View {
     let game: GameID
     @EnvironmentObject private var model: AppModel
-    @StateObject private var clock = AnimationFrameClock()
+    // Only the frame subscriber needs the clock's ticks. The view observes
+    // the game state, so idle display frames don't invalidate the whole view.
+    @State private var clock = AnimationFrameClock()
     @State private var local: ExpandedGameSave?
     @State private var savedRevision: ExpandedGameSave?
     @State private var sessionID: UUID?
@@ -103,7 +105,12 @@ struct ExpandedArcadeView: View {
             .accessibilityIdentifier(game.rawValue+".board")
     }
     @ViewBuilder private var field: some View {
-        if game == .fallingBlocks {
+        if game == .snake {
+            paintedField.modifier(SnakeSwipeControls(
+                enabled: canControl, hint: model.t("expanded.snake.help"),
+                label: { model.t("expanded.direction.\($0.rawValue)") }, turn: turnSnake
+            ))
+        } else if game == .fallingBlocks {
             paintedField.overlay {
                 GeometryReader { proxy in
                     Color.clear.contentShape(Rectangle()).gesture(
@@ -140,15 +147,8 @@ struct ExpandedArcadeView: View {
     }
     @ViewBuilder private var controls: some View {
         switch local?.state {
-        case .snake(let board):
-            VStack(spacing:4) {
-                CardinalJoystick(enabled:canControl,direction:board.queued.last ?? board.direction,
-                                 title:model.t("expanded.snake.joystick"),hint:model.t("expanded.snake.help"),
-                                 label:{model.t("expanded.direction.\($0.rawValue)")}) { direction in
-                    update { state in guard case .snake(var b) = state,b.turn(direction) else { return false }; state = .snake(b); return true }
-                }
-                Text(model.t("expanded.snake.help")).font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
-            }
+        case .snake:
+            Text(model.t("expanded.snake.help")).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
         case .fallingBlocks(let board):
             VStack(spacing:8) {
                 HStack(spacing:8) {
@@ -183,6 +183,13 @@ struct ExpandedArcadeView: View {
     }
     private func block(_ change: (inout FallingBlocksBoard)->Bool) {
         update { state in guard case .fallingBlocks(var b) = state, change(&b) else { return false }; state = .fallingBlocks(b); return true }
+    }
+    private func turnSnake(_ direction: ArcadeDirection) {
+        update { state in
+            guard case .snake(var board) = state, board.turn(direction) else { return false }
+            state = .snake(board)
+            return true
+        }
     }
     private func repeatControl(_ action: ArcadeHeldAction,key:String,symbol:String,id:String) -> some View {
         ArcadeRepeatButton(title:model.t(key),symbol:symbol,identifier:game.rawValue+"."+id,enabled:canControl,
@@ -233,7 +240,7 @@ struct ExpandedArcadeView: View {
         accumulated += delta; saveInterval += delta
         switch value.state {
         case .snake(var board):
-            let interval = value.difficulty == .easy ? 0.18 : value.difficulty == .normal ? 0.13 : 0.09
+            let interval = board.stepInterval(difficulty: value.difficulty)
             while accumulated>=interval, !board.hasLost, !board.isComplete { _ = board.step(); accumulated -= interval }
             value.state = .snake(board)
         case .fallingBlocks(var board):
@@ -243,7 +250,7 @@ struct ExpandedArcadeView: View {
         case .brickBreaker(var board): _ = board.advance(delta); value.state = .brickBreaker(board); accumulated = 0
         default:return
         }
-        local = value
+        if value != local { local = value }
         if saveInterval>=0.25 || value.outcome != nil { persist(); saveInterval = 0 }
     }
     private func persist() {
