@@ -684,7 +684,7 @@ extension AppModel {
         }
     }
 
-    @discardableResult func saveExpanded(_ candidate: ExpandedGameSave) -> Bool {
+    @discardableResult func saveExpanded(_ candidate: ExpandedGameSave, resultReady: Bool = true) -> Bool {
         let game = candidate.gameID
         guard game.isExpanded, candidate.isValidSave else { return false }
         if pendingNewGame == game {
@@ -696,13 +696,13 @@ extension AppModel {
         next.elapsedSeconds = max(next.elapsedSeconds, sessionData.sessions[game]?.elapsedSeconds ?? 0)
         guard persist(next, game:game, validate:{$0.gameID == game && $0.isValidSave}) else { return false }
         expandedGames[game] = next; syncSessionMoves(game,next.state.moves)
-        finishSessionIfNeeded(game,resultReady:true); return true
+        finishSessionIfNeeded(game, resultReady: resultReady); return true
     }
 
-    @discardableResult func editExpanded(_ game: GameID, _ change: (inout ExpandedGameState) -> Bool) -> Bool {
+    @discardableResult func editExpanded(_ game: GameID, resultReady: Bool = true, _ change: (inout ExpandedGameState) -> Bool) -> Bool {
         guard sessionIsPlaying(game), var board = expandedGames[game], board.outcome == nil else { return false }
         let before = board.state
-        guard change(&board.state), board.state != before, saveExpanded(board) else { return false }
+        guard change(&board.state), board.state != before, saveExpanded(board, resultReady: resultReady) else { return false }
         feedback(for:game); return true
     }
 }
