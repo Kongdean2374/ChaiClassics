@@ -40,7 +40,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('log', type=Path)
     args = parser.parse_args()
-    for source, line, code in diagnose(args.log.read_text(errors='replace')):
+    try:
+        log = args.log.read_text(errors='replace')
+    except OSError:
+        print('Swift diagnostic: source=UNKNOWN_SOURCE line=0 code=LOG_UNAVAILABLE')
+        return
+    for source, line, code in diagnose(log):
         print(f'Swift diagnostic: source={source} line={line} code={code}')
 
 if __name__ == '__main__':
