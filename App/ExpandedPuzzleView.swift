@@ -27,32 +27,34 @@ struct ExpandedPuzzleView: View {
         }.onChange(of:active) { _,playing in if !playing { selected = nil } }
     }
     private func nonogram(_ board: NonogramBoard) -> some View {
-        VStack(spacing:16) {
+        let rowWidth = CGFloat(max(70,(board.rowClues.map { $0.map(String.init).joined(separator:" ").count }.max() ?? 0)*7+12))
+        let columnHeight = CGFloat(max(60,(board.columnClues.map(\.count).max() ?? 0)*16+8))
+        return VStack(spacing:16) {
             Picker(model.t("expanded.nonogram.tool"),selection:$cross) {
                 Text(model.t("expanded.nonogram.fill")).tag(false)
                 Text(model.t("expanded.nonogram.cross")).tag(true)
             }.pickerStyle(.segmented).accessibilityIdentifier("nonogram.tools")
-            ZoomBoard(size:CGSize(width:70+board.size*32,height:90+board.size*32),inputEnabled:active,
+            ZoomBoard(size:CGSize(width:rowWidth+CGFloat(board.size*32),height:columnHeight+CGFloat(board.size*32)),inputEnabled:active,
                       accessibilityHidden:!active,identifier:"nonogram.zoomBoard") {
                 VStack(spacing:0) {
                     HStack(alignment:.bottom,spacing:0) {
-                        Color.clear.frame(width:70,height:90)
+                        Color.clear.frame(width:rowWidth,height:columnHeight)
                         ForEach(0..<board.size,id:\.self) { column in
                             Text(board.columnClues[column].map(String.init).joined(separator:"\n"))
                                 .font(.system(size:11,weight:.bold,design:.rounded)).monospacedDigit()
                                 .foregroundStyle(GameMaterial.ivory).multilineTextAlignment(.center)
-                                .frame(width:32,height:90,alignment:.bottom).padding(.bottom,3)
+                                .lineSpacing(2).frame(width:32,height:columnHeight-4,alignment:.bottom).padding(.bottom,4)
                         }
-                    }.frame(height:90)
+                    }.frame(height:columnHeight)
                     ForEach(0..<board.size,id:\.self) { row in
                         HStack(spacing:0) {
                             Text(board.rowClues[row].map(String.init).joined(separator:" ")).font(.system(size:11,weight:.bold,design:.rounded))
-                                .foregroundStyle(GameMaterial.ivory).frame(width:66,alignment:.trailing).padding(.trailing,4)
+                                .monospacedDigit().foregroundStyle(GameMaterial.ivory).frame(width:rowWidth-4,alignment:.trailing).padding(.trailing,4)
                             ForEach(0..<board.size,id:\.self) { column in nonogramCell(board,index:row*board.size+column) }
                         }.frame(height:32)
                     }
                 }.background(GameMaterial.navy)
-            }.frame(height:CGFloat(min(580,90+board.size*32)))
+            }.frame(height:min(620,columnHeight+CGFloat(board.size*32)))
                 .background(GameBoardSurface(game:game,cornerRadius:16))
             Text(model.t("expanded.nonogram.help")).font(.caption).foregroundStyle(.secondary)
         }

@@ -32,6 +32,16 @@ class HistoryMenuScopeTests(unittest.TestCase):
                 cls.after[path] = (mode, file.read_bytes())
             else:
                 cls.after.pop(path, None)
+        # Authorize this synthetic unit fixture only. Real source verification
+        # continues to require the production audit constant, so changed games
+        # cannot silently borrow older native screenshots.
+        records = [(path, mode, scoped.shared_content_digest(path, mode, data))
+                   for path, (mode, data) in sorted(cls.after.items())
+                   if path != cls.path and not (path.startswith('UITests/') and path.endswith('.swift'))
+                   and path not in scoped.PURE_EVIDENCE_SCRIPTS and not path.startswith(('docs/', 'tests/'))
+                   and path != 'README.md']
+        patch = mock.patch.object(scoped, 'HISTORY_AUDITED_RUNTIME_DIGEST', scoped.digest(records))
+        patch.start(); cls.addClassCleanup(patch.stop)
         before_hash, after_hash, old_block, new_block, inserted = scoped.APPROVED_HISTORY_MENU
         new = cls.after[cls.path][1].decode()
         old = new.replace(new_block, old_block, 1).replace(inserted, '', 1)

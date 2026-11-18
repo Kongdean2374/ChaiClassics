@@ -719,9 +719,9 @@
 "expanded.suit.1" = "hearts";
 "expanded.suit.2" = "clubs";
 "expanded.suit.3" = "diamonds";
-"expanded.solitaire.help" = "Select a card or sequence, then tap the destination pile. Scroll and pinch to inspect long columns.";
-"expanded.pyramid.help" = "Remove exposed pairs totaling 13. A king removes alone. You may pair with the waste top.";
-"expanded.tripeaks.help" = "Remove an exposed card one rank above or below the waste. Ace and king may connect.";
+"expanded.solitaire.help" = "Touch and hold to drag a card or sequence onto a pile, or tap a card then its destination. Invalid drops leave the cards in place. Pinch to inspect long columns.";
+"expanded.pyramid.help" = "Pair two exposed cards that total 13; remove a king on its own. Tap a pair or drag one onto the other.";
+"expanded.tripeaks.help" = "Tap an exposed card one rank above or below the waste (A wraps to K), or drag it onto the waste. Draw when needed.";
 "expanded.score" = "Score %d";
 "expanded.blocks.score" = "%d points · %d lines";
 "expanded.bricks.score" = "%d points · %d lives";
@@ -793,3 +793,31 @@
 "catalog.status.folderAllPlayable" = "%d playable";
 
 "expanded.settings.detail" = "Mode and difficulty apply to new games. Legal destinations and the landing outline apply when you return to play.";
+
+"expanded.snake.joystick" = "Four-direction joystick";
+
+"expanded.snake.help" = "Drag the stick or tap an arrow to turn up, down, left or right. Direct reversal is not allowed.";
+
+"expanded.blocks.help" = "Tap the board to rotate, drag sideways to move, or flick down to hard drop. Hold an arrow to move or soft drop continuously.";
+
+"expanded.blocks.heldTitle" = "Hold";
+
+"expanded.blocks.nextTitle" = "Next %d";
+
+"expanded.blocks.level" = "Level %d";
+
+"expanded.blocks.piece.0" = "I piece";
+
+"expanded.blocks.piece.1" = "O piece";
+
+"expanded.blocks.piece.2" = "T piece";
+
+"expanded.blocks.piece.3" = "S piece";
+
+"expanded.blocks.piece.4" = "Z piece";
+
+"expanded.blocks.piece.5" = "J piece";
+
+"expanded.blocks.piece.6" = "L piece";
+
+"expanded.spider.emptyColumn" = "Fill every empty column before dealing another row.";

@@ -719,9 +719,9 @@
 "expanded.suit.1" = "紅心";
 "expanded.suit.2" = "梅花";
 "expanded.suit.3" = "方塊";
-"expanded.solitaire.help" = "先點選一張牌或連續牌組，再點目標牌堆。長牌堆可捲動及縮放。";
-"expanded.pyramid.help" = "點選未被覆蓋的牌，兩張合計 13 即可移除；K 可單獨移除，也能與翻開牌配對。";
-"expanded.tripeaks.help" = "選取未被覆蓋、比翻開牌大一或小一的牌；A 與 K 可以相接。";
+"expanded.solitaire.help" = "長按拖曳一張牌或連續牌組到目標牌堆，也可先點選再點目標。放開在無效位置不會搬牌；長牌堆可縮放。";
+"expanded.pyramid.help" = "移除點數合計 13 的兩張未被遮住的牌；K 可單獨移除。可點選配對，或拖到另一張牌上。";
+"expanded.tripeaks.help" = "移除比翻開牌大 1 或小 1 的未遮蓋牌（A 與 K 相鄰）。可點選，或拖到翻開牌區；無牌可移時抽牌。";
 "expanded.score" = "分數 %d";
 "expanded.blocks.score" = "%d 分 ・%d 行";
 "expanded.bricks.score" = "%d 分 ・%d 命";
@@ -793,3 +793,31 @@
 "catalog.status.folderAllPlayable" = "%d 款可遊玩";
 
 "expanded.settings.detail" = "模式與難度只套用新局；合法落點與落點輪廓的顯示偏好，會在返回遊戲後生效。";
+
+"expanded.snake.joystick" = "四方向搖桿";
+
+"expanded.snake.help" = "拖動搖桿向上下左右轉彎，也可點方向鍵；不可直接倒退。";
+
+"expanded.blocks.help" = "點棋盤旋轉、左右拖移；向下快滑直接落下。長按方向鍵可連續移動或下落。";
+
+"expanded.blocks.heldTitle" = "保留";
+
+"expanded.blocks.nextTitle" = "接下來 %d";
+
+"expanded.blocks.level" = "等級 %d";
+
+"expanded.blocks.piece.0" = "I 形方塊";
+
+"expanded.blocks.piece.1" = "O 形方塊";
+
+"expanded.blocks.piece.2" = "T 形方塊";
+
+"expanded.blocks.piece.3" = "S 形方塊";
+
+"expanded.blocks.piece.4" = "Z 形方塊";
+
+"expanded.blocks.piece.5" = "J 形方塊";
+
+"expanded.blocks.piece.6" = "L 形方塊";
+
+"expanded.spider.emptyColumn" = "先把空牌列補上牌，才能再發一列新牌。";

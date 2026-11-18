@@ -39,7 +39,8 @@ public struct FallingBlocksBoard: Codable, Equatable, Sendable {
         cells.count==200 && cells.allSatisfy{(0...7).contains($0)} && (0...6).contains(active) && (0...3).contains(rotation) &&
         (-3...9).contains(x) && (-4...19).contains(y) && (1...14).contains(next.count) && next.allSatisfy{(0...6).contains($0)} &&
         (held == nil || (0...6).contains(held!)) && (0...10_000_000).contains(score) && (0...1_000_000).contains(lines) &&
-        (0...1_000_000).contains(piecesPlaced) && (0...1_000_000).contains(bagNumber) && (hasLost || fits(x:x,y:y,rotation:rotation))
+        (0...1_000_000).contains(piecesPlaced) && (0...1_000_000).contains(bagNumber) &&
+        (0...2).contains(lockTicks) && (0...15).contains(lockResets) && (hasLost || fits(x:x,y:y,rotation:rotation))
     }
     private func fits(x: Int,y: Int,rotation: Int) -> Bool {
         guard cells.count==200 else { return false }
@@ -49,7 +50,7 @@ public struct FallingBlocksBoard: Codable, Equatable, Sendable {
         }
     }
     @discardableResult public mutating func move(_ dx: Int) -> Bool {
-        guard !hasLost, abs(dx)==1, fits(x:x+dx,y:y,rotation:rotation) else { return false }
+        guard !hasLost, dx == -1 || dx == 1, fits(x:x+dx,y:y,rotation:rotation) else { return false }
         x += dx; resetLock(); return true
     }
     @discardableResult public mutating func rotate(clockwise: Bool = true) -> Bool {

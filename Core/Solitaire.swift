@@ -105,14 +105,20 @@ public struct SolitaireBoard: Codable, Equatable, Sendable {
         case .waste: return waste
         }
     }
+    public func movableCards(from: CardPlace, index: Int) -> [PlayingCard]? {
+        guard !isComplete, variant != .pyramid, variant != .tripeaks else { return nil }
+        let pile = cards(at:from)
+        guard pile.indices.contains(index), faceUp.contains(pile[index].id) else { return nil }
+        if variant == .spider, case .foundation = from { return nil }
+        let moving = Array(pile[index...])
+        guard moving.allSatisfy({faceUp.contains($0.id)}) else { return nil }
+        if case .column = from {} else if moving.count != 1 || index != pile.count-1 { return nil }
+        if variant == .spider { guard isSpiderSequence(moving) else { return nil } }
+        else { guard zip(moving,moving.dropFirst()).allSatisfy({$0.rank==$1.rank+1 && $0.isRed != $1.isRed}) else { return nil } }
+        return moving
+    }
     public func canMove(from: CardPlace, index: Int, to: CardPlace) -> Bool {
-        guard !isComplete, variant != .pyramid, variant != .tripeaks, from != to else { return false }
-        let pile = cards(at:from); guard pile.indices.contains(index), faceUp.contains(pile[index].id) else { return false }
-        if variant == .spider, case .foundation = from { return false }
-        let moving = Array(pile[index...]); guard moving.allSatisfy({faceUp.contains($0.id)}) else { return false }
-        if case .column = from {} else if moving.count != 1 || index != pile.count-1 { return false }
-        if variant == .spider { guard isSpiderSequence(moving) else { return false } }
-        else { guard zip(moving,moving.dropFirst()).allSatisfy({$0.rank==$1.rank+1 && $0.isRed != $1.isRed}) else { return false } }
+        guard from != to, let moving = movableCards(from:from,index:index) else { return false }
         switch to {
         case .column(let column):
             guard columns.indices.contains(column) else { return false }
@@ -175,20 +181,27 @@ public struct SolitaireBoard: Codable, Equatable, Sendable {
         return below[index,default:[]].allSatisfy{tableau[$0]==nil}
     }
     /// Pyramid uses -1 for the waste top. A king is removed by itself.
-    @discardableResult public mutating func removePyramid(_ first: Int, _ second: Int? = nil) -> Bool {
+    public func canRemovePyramid(_ first: Int, _ second: Int? = nil) -> Bool {
         guard variant == .pyramid, isValidSave, !isComplete, moves<1_000_000 else { return false }
         func card(_ i: Int) -> PlayingCard? { i == -1 ? waste.last : isExposed(i) ? tableau[i] : nil }
         guard let a = card(first) else { return false }
-        var indices = [first]
-        if let second { guard second != first, let b = card(second), a.rank+b.rank==13 else { return false }; indices.append(second) }
-        else if a.rank != 13 { return false }
+        if let second { return second != first && card(second).map { a.rank + $0.rank == 13 } == true }
+        return a.rank == 13
+    }
+    @discardableResult public mutating func removePyramid(_ first: Int, _ second: Int? = nil) -> Bool {
+        guard canRemovePyramid(first,second) else { return false }
+        let indices = [first] + (second.map { [$0] } ?? [])
         remember()
         for index in indices { if index == -1 { removed.append(waste.removeLast()) } else if let value = tableau[index] { removed.append(value); tableau[index] = nil } }
         exposeTableau(); moves += 1; return true
     }
-    @discardableResult public mutating func removeTriPeak(_ index: Int) -> Bool {
+    public func canRemoveTriPeak(_ index: Int) -> Bool {
         guard variant == .tripeaks, isValidSave, !isComplete, moves<1_000_000, isExposed(index), let card = tableau[index], let top = waste.last,
               abs(card.rank-top.rank)==1 || abs(card.rank-top.rank)==12 else { return false }
+        return true
+    }
+    @discardableResult public mutating func removeTriPeak(_ index: Int) -> Bool {
+        guard canRemoveTriPeak(index), let card = tableau[index] else { return false }
         remember()
         waste.append(card); faceUp.insert(card.id); tableau[index] = nil; exposeTableau(); moves += 1; return true
     }

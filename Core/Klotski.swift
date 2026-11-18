@@ -20,7 +20,7 @@ public struct KlotskiBoard: Codable, Equatable, Sendable {
         var used: Set<Int> = []
         for p in pieces {
             let expected = p.id == 0 ? (2,2) : p.id == 1 ? (2,1) : p.id < 6 ? (1,2) : (1,1)
-            guard p.width == expected.0, p.height == expected.1, p.x >= 0, p.y >= 0, p.x + p.width <= 4, p.y + p.height <= 5 else { return false }
+            guard p.width == expected.0, p.height == expected.1, p.x >= 0, p.y >= 0, p.x <= 4-p.width, p.y <= 5-p.height else { return false }
             for y in p.y..<(p.y+p.height) { for x in p.x..<(p.x+p.width) { guard used.insert(y*4+x).inserted else { return false } } }
         }
         return used.count == 18
@@ -49,7 +49,7 @@ public struct KlotskiBoard: Codable, Equatable, Sendable {
         moves = 0
     }
     public func canMove(_ id: Int, dx: Int, dy: Int) -> Bool {
-        guard abs(dx)+abs(dy) == 1, let p = pieces.first(where: {$0.id == id}),
+        guard (dx == 0 && (dy == -1 || dy == 1)) || (dy == 0 && (dx == -1 || dx == 1)), let p = pieces.first(where: {$0.id == id}),
               p.x+dx >= 0, p.y+dy >= 0, p.x+dx+p.width <= 4, p.y+dy+p.height <= 5 else { return false }
         let x = p.x+dx, y = p.y+dy
         return pieces.filter { $0.id != id }.allSatisfy { other in x+p.width <= other.x || other.x+other.width <= x || y+p.height <= other.y || other.y+other.height <= y }

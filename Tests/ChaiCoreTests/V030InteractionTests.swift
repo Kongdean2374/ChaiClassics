@@ -1,0 +1,125 @@
+import XCTest
+@testable import ChaiCore
+
+final class V030InteractionTests: XCTestCase {
+    private func arranged(_ variant: SolitaireVariant, columns: [[Int]]) throws -> SolitaireBoard {
+        let count = variant == .spider ? 104 : 52
+        var columns = columns
+        columns += Array(repeating:[],count:(variant == .spider ? 10 : variant == .freecell ? 8 : 7)-columns.count)
+        let used = Set(columns.flatMap{$0}), remaining = (0..<count).filter{!used.contains($0)}
+        var stock = remaining
+        if variant == .freecell { columns[7] += remaining;stock = [] }
+        func cards(_ ids:[Int]) -> [[String:Int]] { ids.map{["id":$0]} }
+        return try v030Fixture(SolitaireBoard(variant:variant,seed:1),[
+            "columns":columns.map(cards),"stock":cards(stock),"faceUp":columns.flatMap{$0}])
+    }
+    func testCardDragMovesWholeSequenceOnceAndInvalidDropIsAtomic() throws {
+        var board = try arranged(.klondike,columns:[[2,14,0],[16]])
+        let before = board
+        let intent = try XCTUnwrap(SolitaireDragIntent(board:board,source:.pile(.column(0),index:0)))
+        XCTAssertEqual(intent.cards.map(\.id),[2,14,0])
+        XCTAssertFalse(intent.canDrop(on:.pile(.foundation(0)),in:board))
+        XCTAssertFalse(intent.apply(on:.pile(.column(0)),to:&board))
+        XCTAssertEqual(board,before)
+        XCTAssertTrue(intent.apply(on:.pile(.column(1)),to:&board))
+        XCTAssertEqual(board.columns[1].map(\.id),[16,2,14,0]);XCTAssertEqual(board.moves,1)
+        let moved = board;XCTAssertFalse(intent.apply(on:.pile(.column(2)),to:&board));XCTAssertEqual(board,moved)
+        XCTAssertTrue(board.isValidSave)
+    }
+    func testHiddenAndBrokenSequencesCannotStartDragging() throws {
+        let broken = try arranged(.klondike,columns:[[15,14],[3]])
+        XCTAssertNil(SolitaireDragIntent(board:broken,source:.pile(.column(0),index:0)))
+        let hidden = try v030Fixture(try arranged(.klondike,columns:[[2,14,0],[16]]),["faceUp":[14,0,16]])
+        XCTAssertNil(SolitaireDragIntent(board:hidden,source:.pile(.column(0),index:0)))
+        XCTAssertNil(SolitaireDragIntent(board:hidden,source:.pile(.column(Int.max),index:Int.min)))
+    }
+    func testDrawAndUndoInvalidateAnOldDragWithoutChangingItsSourceCards() throws {
+        var board = try arranged(.klondike,columns:[[0]])
+        let intent = try XCTUnwrap(SolitaireDragIntent(board:board,source:.pile(.column(0),index:0)))
+        XCTAssertTrue(board.draw());XCTAssertFalse(intent.canDrop(on:.pile(.foundation(0)),in:board))
+        XCTAssertTrue(board.undo());XCTAssertFalse(intent.canDrop(on:.pile(.foundation(0)),in:board))
+        XCTAssertEqual(board.columns[0].map(\.id),[0])
+    }
+    func testFreecellDragToCellAndSpiderSequenceUseTheirRealRules() throws {
+        var free = try arranged(.freecell,columns:[[0]])
+        let freeDrag = try XCTUnwrap(SolitaireDragIntent(board:free,source:.pile(.column(0),index:0)))
+        XCTAssertTrue(freeDrag.apply(on:.pile(.freeCell(0)),to:&free));XCTAssertEqual(free.freeCells[0]?.id,0)
+        var spider = try arranged(.spider,columns:[[1,0],[2]])
+        let spiderDrag = try XCTUnwrap(SolitaireDragIntent(board:spider,source:.pile(.column(0),index:0)))
+        XCTAssertTrue(spiderDrag.apply(on:.pile(.column(1)),to:&spider));XCTAssertEqual(spider.columns[1].map(\.id),[2,1,0])
+        XCTAssertTrue(free.isValidSave);XCTAssertTrue(spider.isValidSave)
+    }
+    private func peaks(_ variant:SolitaireVariant) throws -> SolitaireBoard {
+        let waste = variant == .pyramid ? 11 : 12
+        let remaining = (0..<52).filter{$0 != 0 && $0 != waste}
+        func cards(_ ids:[Int]) -> [[String:Int]] { ids.map{["id":$0]} }
+        let table = Array(remaining.prefix(27))+[0]
+        return try v030Fixture(SolitaireBoard(variant:variant,seed:1),[
+            "tableau":cards(table),"stock":cards(Array(remaining.dropFirst(27))),
+            "waste":cards([waste]),"faceUp":table+[waste]])
+    }
+    func testPyramidDragPairsWithWasteWithoutRemovingCoveredCards() throws {
+        var board = try peaks(.pyramid)
+        XCTAssertNil(SolitaireDragIntent(board:board,source:.tableau(0)))
+        let intent = try XCTUnwrap(SolitaireDragIntent(board:board,source:.tableau(27)))
+        XCTAssertTrue(intent.apply(on:.pile(.waste),to:&board))
+        XCTAssertNil(board.tableau[27]);XCTAssertEqual(Set(board.removed.map(\.id)),Set([0,11]))
+        XCTAssertTrue(board.isValidSave);XCTAssertFalse(intent.apply(on:.pile(.waste),to:&board))
+    }
+    func testTripeaksDragAceOntoKingUsesWrapRule() throws {
+        var board = try peaks(.tripeaks)
+        let intent = try XCTUnwrap(SolitaireDragIntent(board:board,source:.tableau(27)))
+        XCTAssertFalse(intent.canDrop(on:.tableau(26),in:board))
+        XCTAssertTrue(intent.apply(on:.pile(.waste),to:&board));XCTAssertEqual(board.waste.last?.id,0)
+        XCTAssertTrue(board.isValidSave)
+    }
+    func testFourDirectionStickDeadZoneDominantAxisAndInvalidNumbers() throws {
+        XCTAssertNil(CardinalStick.direction(x:0.1,y:0.1))
+        XCTAssertNil(CardinalStick.direction(x:.nan,y:1));XCTAssertNil(CardinalStick.direction(x:1,y:.infinity))
+        XCTAssertEqual(CardinalStick.direction(x:0.9,y:0.5),.right)
+        XCTAssertEqual(CardinalStick.direction(x:-0.9,y:0.5),.left)
+        XCTAssertEqual(CardinalStick.direction(x:0.2,y:-0.9),.up)
+        XCTAssertEqual(CardinalStick.direction(x:0.2,y:0.9),.down)
+        var board = SnakeBoard(size:16,seed:3)
+        XCTAssertFalse(board.turn(try XCTUnwrap(CardinalStick.direction(x:-1,y:0))))
+        XCTAssertTrue(board.turn(try XCTUnwrap(CardinalStick.direction(x:0,y:-1))))
+        XCTAssertTrue(board.step());XCTAssertEqual(board.direction,.up)
+    }
+    func testHeldInputIsDisplayRateIndependentAndOldFingerCannotReleaseNewDirection() {
+        func count(_ frames:Int) -> Int {
+            var input = ArcadeInputRepeat();XCTAssertTrue(input.press(.left));var count = 1
+            for _ in 0..<frames { if input.advance(1/Double(frames)) != nil { count += 1 } }
+            return count
+        }
+        XCTAssertEqual(count(60),count(120))
+        var input = ArcadeInputRepeat();XCTAssertTrue(input.press(.left));XCTAssertFalse(input.press(.left))
+        XCTAssertTrue(input.press(.right));input.release(.left);XCTAssertEqual(input.held,.right)
+        XCTAssertNil(input.advance(30));XCTAssertNil(input.advance(.nan))
+        input.cancel();XCTAssertNil(input.advance(0.1));XCTAssertNil(input.held)
+    }
+    func testBlockDragMapsColumnsAndCannotOperateTheNextPiece() {
+        var drag = FallingBlockDrag(piece:4)
+        XCTAssertEqual(drag.change(x:65,y:5,unit:20,currentPiece:4).dx,3)
+        XCTAssertEqual(drag.change(x:42,y:8,unit:20,currentPiece:4).dx,-1)
+        XCTAssertEqual(drag.change(x:80,y:10,unit:20,currentPiece:5).dx,0)
+        var drop = FallingBlockDrag(piece:4)
+        XCTAssertEqual(drop.change(x:0,y:65,unit:20,currentPiece:4).down,3)
+        XCTAssertTrue(drop.hardDrop(y:90,predictedY:180,unit:20,currentPiece:4))
+        XCTAssertFalse(drop.hardDrop(y:90,predictedY:180,unit:20,currentPiece:5))
+        XCTAssertFalse(drop.hardDrop(y:90,predictedY:100,unit:20,currentPiece:4))
+        XCTAssertEqual(drop.change(x:.infinity,y:10,unit:20,currentPiece:4).down,0)
+    }
+    func testMalformedLockCountersAndExtremeMoveInputsAreRejectedWithoutTrapping() throws {
+        var blocks = FallingBlocksBoard(seed:7);let original = blocks
+        XCTAssertFalse(blocks.move(Int.min));XCTAssertEqual(blocks,original)
+        for patch in [["lockTicks":Int.max],["lockResets":Int.max],["lockTicks":-1]] {
+            XCTAssertFalse(try v030Fixture(blocks,patch).isValidSave)
+        }
+        var klotski = KlotskiBoard(seed:1);let originalKlotski = klotski
+        XCTAssertFalse(klotski.move(0,dx:Int.min,dy:0));XCTAssertEqual(klotski,originalKlotski)
+        let raw = try XCTUnwrap(JSONSerialization.jsonObject(with:JSONEncoder().encode(klotski)) as? [String:Any])
+        var pieces = try XCTUnwrap(raw["pieces"] as? [[String:Any]])
+        pieces[0]["x"] = Int.max
+        XCTAssertFalse(try v030Fixture(klotski,["pieces":pieces]).isValidSave)
+    }
+}
