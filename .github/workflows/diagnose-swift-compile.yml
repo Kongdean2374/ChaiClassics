@@ -1,0 +1,34 @@
+name: Diagnose Swift Compile (unsigned)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: unsigned-swift-compile-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  compile:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    runs-on: macos-15
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - run: bash scripts/select_xcode.sh
+      - name: Compile iOS Device Release without signing or upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          diagnostic_dir=$(mktemp -d "$RUNNER_TEMP/chai-swift-compile.XXXXXX")
+          chmod 700 "$diagnostic_dir"
+          trap 'rm -rf "$diagnostic_dir"' EXIT
+          status=0
+          xcodebuild -project ChaiClassics.xcodeproj -scheme ChaiClassics -configuration Release \
+            -destination 'generic/platform=iOS' -derivedDataPath "$diagnostic_dir/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO build > "$diagnostic_dir/compiler.log" 2>&1 || status=$?
+          if [ "$status" -ne 0 ]; then
+            python3 scripts/swift_compile_report.py "$diagnostic_dir/compiler.log"
+            exit "$status"
+          fi
+          echo 'Unsigned iOS Device Release compile passed; no archive, signing or upload performed.'
