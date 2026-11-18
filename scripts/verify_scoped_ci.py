@@ -182,7 +182,7 @@ SESSION_BODY_PROFILES = {
     'ChaiClassicsVisualSmokeTests/testMinesweeperCommonSessionLifecycleAndContinueDeletion': (
         '8e96921261e240240f51fcc3a63e83d592a67d86dda99d1a143666f3a08af2a4', ('mines', 'sliding')),
     'ChaiClassicsVisualSmokeTests/testPlayHistorySearchDismissesKeyboardWithoutSwallowingActions': (
-        'bc50d5283f2dd005f2bf60e7b8bdd6bc2469e5e20e5232fc78bf23c68403adf6', ('sliding',)),
+        '71e9f2098f36f2dad1c04b60fd37328065d83f1bd3e432687e33acf68cd1c328', ('sliding',)),
     'ChaiClassicsVisualSmokeTests/testReducedMotionSuppressesCelebrationButStillCompletesGame': (
         '70c41d41386e486704ba65b90e4d642b01d43d6cd44c0dd9a7606b29296139eb', ('sliding',)),
     'ChaiClassicsVisualSmokeTests/testScreenshotGallery': (

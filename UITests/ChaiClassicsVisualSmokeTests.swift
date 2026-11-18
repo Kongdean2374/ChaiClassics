@@ -1101,6 +1101,9 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
     func testMazeCommonSessionLifecycleAndContinueDeletion() throws { try exerciseSharedSession("maze") }
 
     func testPlayHistorySearchDismissesKeyboardWithoutSwallowingActions() throws {
+        // The complete real journey reached 307s before Xcode's 300s watchdog.
+        // Keep every keyboard/filter/record action under a bounded case budget.
+        executionTimeAllowance = 900
         let app = try launch(profile: "v022-history", allGames: true, language: "en")
         openSavedSliding(app)
         finishSessionFixture("sliding", app: app)

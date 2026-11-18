@@ -93,12 +93,15 @@ def validate_summary(summary, total, skipped):
 
 def parse_test_log(text):
     require(isinstance(text, str), 'The real XCTest output log is required.')
-    pattern = re.compile(r"^\s*Test Case '-\[(?:[A-Za-z_][A-Za-z0-9_]*\.)?([A-Za-z_][A-Za-z0-9_]*) (test[A-Za-z0-9_]+)\]' (passed|skipped|failed)(?:[ .(]|$)", re.MULTILINE)
+    pattern = re.compile(r"^\s*Test Case '-\[(?:[A-Za-z_][A-Za-z0-9_]*\.)?([A-Za-z_][A-Za-z0-9_]*) (test[A-Za-z0-9_]+)\]' (?:(passed|skipped|failed)(?:[ .(]|$)|(exceeded execution time allowance of [0-9]+ (?:seconds?|minutes?)\.))", re.MULTILINE)
     executed = {}
     for match in pattern.finditer(text):
         name = match[1] + '/' + match[2]
         require(name not in executed, 'Duplicate XCTest completion; retries cannot replace an original result.')
-        executed[name] = match[3]
+        # Xcode reports a timed-out case using this explicit failure record,
+        # without a normal completion. It can never supply passed coverage.
+        # A subsequent retry/completion of that identity still rejects the log.
+        executed[name] = match[3] or 'failed'
     require(executed, 'No actual XCTest case completion was found in the test log.')
     return executed
 
