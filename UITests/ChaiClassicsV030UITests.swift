@@ -284,8 +284,85 @@ final class ChaiClassicsV030UITests: XCTestCase {
     }
     func testSnakeCompleteSessionRestoresAndConfirmsDeletion() throws {
         executionTimeAllowance = 1800
-        try exercise("snake")
-    }
+        let game = "snake"
+
+        let resource = try XCTUnwrap(Bundle(for:Self.self).url(forResource:"v030-"+game,withExtension:"json"))
+        let data = try Data(contentsOf:resource)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with:data) as? [String:Any])
+        let plan = try XCTUnwrap(json["testPlan"] as? [String:Any]), actions = try XCTUnwrap(plan["actions"] as? [String])
+        let app = XCUIApplication()
+        let arguments = ["--ui-testing","--ui-profile","v030-"+game,"--ui-language","en","--ui-appearance","dark"]
+        app.launchArguments = arguments+["--ui-reset"]; app.launchEnvironment["CHAI_UI_SEED_"+game.uppercased()] = data.base64EncodedString()
+        app.launch(); app.launchArguments = arguments; app.launchEnvironment["CHAI_UI_SEED_"+game.uppercased()] = nil
+        open(game,app)
+        try XCTContext.runActivity(named:"Swipe and cancelled deletion preserve progress after process restart") { _ in
+            cancelDeletion(game,app)
+        }
+        tap(game+".continue",app)
+        XCTAssertTrue(app.buttons[game+".session.resume"].waitForExistence(timeout:15))
+        XCTAssertEqual(node(game+".session.paused.elapsed",app).value as? String,"0:00:12")
+        tap(game+".session.exit",app,double:true)
+        XCTAssertTrue(app.buttons[game+".continue"].waitForExistence(timeout:15))
+        app.terminate(); app.launch(); open(game,app); tap(game+".continue",app)
+        XCTAssertTrue(app.buttons[game+".session.resume"].waitForExistence(timeout:15))
+        XCTAssertEqual(node(game+".session.paused.elapsed",app).value as? String,"0:00:12")
+        tap(game+".session.resume",app,double:true)
+        wait("Resume must dismiss the pause overlay") { !app.buttons[game+".session.resume"].exists }
+        attach(app,game+"-restored-board")
+        var quickPause: XCUICoordinate?
+        if game == "snake" {
+            let frame = app.buttons[game+".session.pause"].frame, window = app.frame
+            XCTAssertTrue(window.contains(frame))
+            quickPause = app.coordinate(withNormalizedOffset: .zero).withOffset(
+                CGVector(dx: frame.midX-window.minX, dy: frame.midY-window.minY))
+        }
+        for action in actions { tap(action,app) }
+        let result = node(game+".session.result",app)
+        XCTAssertTrue(result.waitForExistence(timeout:20),"Real engine operations must reach a result.")
+        XCTAssertNotNil(node(game+".session.result.moves",app).value as? String)
+        XCTAssertTrue(app.buttons[game+".session.done"].isEnabled); XCTAssertTrue(app.buttons[game+".session.review"].isEnabled)
+        attach(app,game+"-result")
+        tap(game+".session.review",app)
+        wait("Review must hide the result") { !result.exists }
+        attach(app,game+"-board-review")
+        app.coordinate(withNormalizedOffset:CGVector(dx:0.5,dy:0.5)).tap()
+        XCTAssertTrue(result.waitForExistence(timeout:10)); tap(game+".session.done",app,double:true)
+        XCTAssertTrue(app.buttons[game+".continue"].waitForExistence(timeout:15))
+        records(game,app,expected:1)
+        let preserved = app.buttons[game+".continue"].label
+        tap(game+".start",app)
+        XCTAssertTrue(app.buttons[game+".new.cancel"].waitForExistence(timeout:45)); tap(game+".new.cancel",app,double:true)
+        wait("Cancel must dismiss new-game confirmation") { !app.buttons[game+".new.cancel"].exists }
+        XCTAssertEqual(app.buttons[game+".continue"].label,preserved,"Cancelled new game must not overwrite a finished board.")
+        tap(game+".start",app); XCTAssertTrue(app.buttons[game+".new.confirm"].waitForExistence(timeout:45))
+        tap(game+".new.confirm",app,double:true)
+        XCTAssertTrue(app.buttons[game+".session.pause"].waitForExistence(timeout:20))
+        if let quickPause {
+            quickPause.tap()
+            XCTAssertTrue(app.buttons[game+".session.resume"].waitForExistence(timeout:10),
+                          "The real fresh round must pause before slow screenshots and accessibility queries.")
+        }
+        attach(app,game+(game == "snake" ? "-fresh-board-paused" : "-fresh-board"))
+        if boardGames.contains(game) {
+            let opening: [String:[Int]] = ["gomoku":[112],"reversi":[19],"chess":[52,36],"xiangqi":[54,45],"shogi":[54,45],"banqi":[0]]
+            for cell in try XCTUnwrap(opening[game]) { tap(game+".cell.\(cell)",app) }
+            wait("The real offline computer must complete its reply",timeout:35) {
+                (Int(self.node(game+".moves",app).value as? String ?? "") ?? 0)>=2
+            }
+            XCTAssertFalse(node(game+".session.result",app).exists)
+            attach(app,game+"-computer-reply")
+        }
+        if game != "snake" { tap(game+".session.pause",app) }
+        XCTAssertTrue(app.buttons[game+".session.exit"].waitForExistence(timeout:10))
+        tap(game+".session.exit",app)
+        XCTAssertTrue(app.buttons[game+".continue"].waitForExistence(timeout:15))
+        cancelDeletion(game,app)
+        requestDeletion(game,app); tap(game+".delete.confirm",app,double:true)
+        wait("Only confirmed deletion may remove Continue") { !app.buttons[game+".continue"].exists }
+        app.terminate(); app.launch(); open(game,app)
+        XCTAssertFalse(app.buttons[game+".continue"].exists,"Deleted progress must not return from a seed or backup.")
+        records(game,app,expected:2) // The real result plus one abandoned new round.
+        }
     func testFallingBlocksCompleteSessionRestoresAndConfirmsDeletion() throws {
         executionTimeAllowance = 1800
         try exercise("fallingblocks")

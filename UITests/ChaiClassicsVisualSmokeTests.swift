@@ -875,12 +875,229 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
     }
 
     func testSudokuCommonSessionLifecycleAndContinueDeletion() throws { try exerciseSharedSession("sudoku") }
-    func testMinesweeperCommonSessionLifecycleAndContinueDeletion() throws { try exerciseSharedSession("minesweeper") }
+    func testMinesweeperCommonSessionLifecycleAndContinueDeletion() throws {
+        // The real result button is visible below the disabled zoom-board viewport.
+        // Use its foreground dialog, preserving the complete shared-session journey.
+        let game = "minesweeper"
+        func reviewMinesResult(_ game: String, app: XCUIApplication) {
+        let elapsed = node(game + ".session.result.elapsed", app: app).value as? String
+        let moves = node(game + ".session.result.moves", app: app).value as? String
+        let review = app.buttons[game + ".session.review"]
+        let dialog = app.scrollViews.matching(identifier: game + ".session.result").firstMatch
+        XCTAssertTrue(dialog.waitForExistence(timeout: 10))
+        XCTAssertTrue(review.waitForExistence(timeout: 10))
+        let window = app.frame
+        let top = app.navigationBars.firstMatch.frame.maxY
+        let viewport = CGRect(x: window.minX + 10, y: top, width: window.width - 20,
+                              height: window.maxY - 20 - top).intersection(dialog.frame)
+        XCTAssertTrue(viewport.contains(review.frame), "Review must fit the actual foreground result viewport.")
+        XCTAssertTrue(review.isHittable); XCTAssertTrue(review.isEnabled)
+        review.tap()
+        let shield = node(game + ".session.reviewBoard", app: app)
+        XCTAssertTrue(shield.waitForExistence(timeout: 10))
+        XCTAssertFalse(node(game + ".session.result", app: app).exists)
+        shield.tap()
+        assertResult(game, app: app)
+        XCTAssertEqual(node(game + ".session.result.elapsed", app: app).value as? String, elapsed)
+        XCTAssertEqual(node(game + ".session.result.moves", app: app).value as? String, moves)
+            }
+
+        executionTimeAllowance = 1800
+        let app = try launch(profile: "v022-session-" + game, allGames: true,
+                             fixture: game == "sliding" ? nil : game, language: "en")
+        openSavedSession(game, app: app)
+        if game == "memory" {
+            let cards = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'memory.card.'"))
+            XCTAssertEqual(cards.count, 16)
+            XCTAssertEqual(cards.allElementsBoundByIndex.filter(\.isEnabled).count, 2)
+        }
+        let beforePause = boardSnapshot(game, app: app)
+        let clock = node(game + ".timer", app: app)
+        let firstTime = try XCTUnwrap(clock.value as? String, "The shared clock must expose its displayed duration as an accessibility value.")
+        let firstSeconds = try XCTUnwrap(clockSeconds(firstTime), "The shared clock must provide a valid H:MM:SS duration.")
+        waitUI("The shared clock value must advance during actual play.", timeout: 10) {
+            guard clock.exists, let current = clock.value as? String,
+                  let seconds = self.clockSeconds(current) else { return false }
+            return seconds > firstSeconds
+        }
+        tap(game + ".session.pause", app: app)
+        let pausedClock = node(game + ".session.paused.elapsed", app: app)
+        XCTAssertTrue(pausedClock.waitForExistence(timeout: 10))
+        let frozenTime = pausedClock.value as? String
+        XCTAssertNotNil(frozenTime)
+        let changedWhilePaused = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            pausedClock.exists && pausedClock.value as? String != frozenTime
+        }, object: nil)
+        changedWhilePaused.isInverted = true
+        XCTAssertEqual(XCTWaiter.wait(for: [changedWhilePaused], timeout: 1.5), .completed)
+        screenshot(app, name: "v022-" + game + "-paused-blurred-board")
+        // A single compound event exercises the shell's actual touch isolation.
+        // It must not submit a second touch to the board under the resume button.
+        resumeSession(game, app: app, doubleTap: true)
+        XCTAssertEqual(boardSnapshot(game, app: app), beforePause)
+        tap(game + ".session.settings", app: app)
+        XCTAssertTrue(app.buttons["gameSettings.done"].waitForExistence(timeout: 10))
+        tap("gameSettings.done", app: app)
+        XCTAssertTrue(app.buttons[game + ".session.resume"].waitForExistence(timeout: 10))
+        resumeSession(game, app: app)
+        XCTAssertEqual(boardSnapshot(game, app: app), beforePause)
+        finishSessionFixture(game, app: app)
+        screenshot(app, name: "v022-" + game + "-shared-result")
+        reviewMinesResult(game, app: app)
+        let done = app.buttons[game + ".session.done"]
+        done.doubleTap()
+        let current = app.buttons.matching(identifier: continueID(game)).firstMatch
+        XCTAssertTrue(current.waitForExistence(timeout: 10), "Done must return to the game's menu.")
+        current.swipeRight()
+        XCTAssertTrue(current.exists,"A rightward swipe must stay on the menu.")
+        XCTAssertFalse(app.buttons[game+".session.pause"].exists)
+        XCTAssertFalse(node(game + ".session.result", app: app).exists)
+        let savedDetailBeforeRequest = current.label
+        tapContinueDelete(game, current: current, app: app)
+        XCTAssertTrue(app.buttons[game + ".delete.confirm"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons[game + ".delete.confirm"].isEnabled)
+        XCTAssertTrue(app.buttons[game + ".delete.cancel"].isEnabled)
+        tap(game + ".delete.cancel", app: app)
+        waitUI("Cancel must dismiss the actual deletion confirmation.") { !app.buttons[game + ".delete.confirm"].exists }
+        XCTAssertTrue(current.exists, "Cancelling deletion must preserve the saved round.")
+        XCTAssertEqual(current.label,savedDetailBeforeRequest,"Requesting deletion must not change the saved progress.")
+        app.terminate(); app.launch()
+        openMenu(game,app:app)
+        XCTAssertTrue(current.waitForExistence(timeout:10),"Cancellation must preserve actual on-disk progress after a fresh process.")
+        XCTAssertEqual(current.label,savedDetailBeforeRequest)
+        tapContinueDelete(game, current: current, app: app)
+        let confirm = app.buttons[game + ".delete.confirm"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10)); confirm.doubleTap()
+        waitUI("Confirmed deletion must remove only this Continue row.") { !current.exists }
+        screenshot(app, name: "v022-" + game + "-continue-deleted")
+
+        // Finishing, reviewing, reopening, double-Done, and deleting the board
+        // must all leave exactly one actual completion record.
+        tap(game + ".menu.settings", app: app)
+        tap("gameSettings.history", app: app)
+        let records = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'history.record.'"))
+        XCTAssertTrue(records.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertEqual(records.count, 1)
+        screenshot(app, name: "v022-" + game + "-single-retained-history-record")
+        back(app); tap("gameSettings.done", app: app)
+        goHome(app)
+        let otherGame = game == "sliding" ? "minesweeper" : "sliding"
+        openMenu(otherGame, app: app)
+        let otherSave = app.buttons[continueID(otherGame)]
+        XCTAssertTrue(otherSave.waitForExistence(timeout: 10), "Deleting one namespace must preserve the other released saves.")
+        XCTAssertTrue(otherSave.label.contains(otherGame == "sliding" ? "35" : "1 flags / 10 mines"))
+        if game == "sudoku" {
+            goHome(app); openMenu("sudoku", app: app)
+            tap("sudoku.difficulty.medium", app: app)
+            let sentinel = app.buttons["sudoku.medium.0001"]
+            XCTAssertTrue(sentinel.waitForExistence(timeout: 10))
+            XCTAssertTrue(sentinel.label.contains("In progress"), "Deleting the current Sudoku puzzle must retain other puzzle boards.")
+            sentinel.tap()
+            XCTAssertTrue(app.buttons["sudoku.session.resume"].waitForExistence(timeout: 10))
+        }
+        }
     func testSlidingCommonSessionLifecycleAndContinueDeletion() throws { try exerciseSharedSession("sliding") }
     func testTicTacToeCommonSessionLifecycleAndContinueDeletion() throws { try exerciseSharedSession("tictactoe") }
     func testConnectFourCommonSessionLifecycleAndContinueDeletion() throws { try exerciseSharedSession("connectfour") }
     func testTwentyFourCommonSessionLifecycleAndContinueDeletion() throws { try exerciseSharedSession("twentyfour") }
-    func testMemoryCommonSessionLifecycleAndContinueDeletion() throws { try exerciseSharedSession("memory") }
+    func testMemoryCommonSessionLifecycleAndContinueDeletion() throws {
+        // The unchanged complete journey measured 432s on Intel; retain every assertion.
+        let game = "memory"
+
+        executionTimeAllowance = 1800
+        let app = try launch(profile: "v022-session-" + game, allGames: true,
+                             fixture: game == "sliding" ? nil : game, language: "en")
+        openSavedSession(game, app: app)
+        if game == "memory" {
+            let cards = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'memory.card.'"))
+            XCTAssertEqual(cards.count, 16)
+            XCTAssertEqual(cards.allElementsBoundByIndex.filter(\.isEnabled).count, 2)
+        }
+        let beforePause = boardSnapshot(game, app: app)
+        let clock = node(game + ".timer", app: app)
+        let firstTime = try XCTUnwrap(clock.value as? String, "The shared clock must expose its displayed duration as an accessibility value.")
+        let firstSeconds = try XCTUnwrap(clockSeconds(firstTime), "The shared clock must provide a valid H:MM:SS duration.")
+        waitUI("The shared clock value must advance during actual play.", timeout: 10) {
+            guard clock.exists, let current = clock.value as? String,
+                  let seconds = self.clockSeconds(current) else { return false }
+            return seconds > firstSeconds
+        }
+        tap(game + ".session.pause", app: app)
+        let pausedClock = node(game + ".session.paused.elapsed", app: app)
+        XCTAssertTrue(pausedClock.waitForExistence(timeout: 10))
+        let frozenTime = pausedClock.value as? String
+        XCTAssertNotNil(frozenTime)
+        let changedWhilePaused = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            pausedClock.exists && pausedClock.value as? String != frozenTime
+        }, object: nil)
+        changedWhilePaused.isInverted = true
+        XCTAssertEqual(XCTWaiter.wait(for: [changedWhilePaused], timeout: 1.5), .completed)
+        screenshot(app, name: "v022-" + game + "-paused-blurred-board")
+        // A single compound event exercises the shell's actual touch isolation.
+        // It must not submit a second touch to the board under the resume button.
+        resumeSession(game, app: app, doubleTap: true)
+        XCTAssertEqual(boardSnapshot(game, app: app), beforePause)
+        tap(game + ".session.settings", app: app)
+        XCTAssertTrue(app.buttons["gameSettings.done"].waitForExistence(timeout: 10))
+        tap("gameSettings.done", app: app)
+        XCTAssertTrue(app.buttons[game + ".session.resume"].waitForExistence(timeout: 10))
+        resumeSession(game, app: app)
+        XCTAssertEqual(boardSnapshot(game, app: app), beforePause)
+        finishSessionFixture(game, app: app)
+        screenshot(app, name: "v022-" + game + "-shared-result")
+        reviewAndReopenResult(game, app: app)
+        let done = app.buttons[game + ".session.done"]
+        done.doubleTap()
+        let current = app.buttons.matching(identifier: continueID(game)).firstMatch
+        XCTAssertTrue(current.waitForExistence(timeout: 10), "Done must return to the game's menu.")
+        current.swipeRight()
+        XCTAssertTrue(current.exists,"A rightward swipe must stay on the menu.")
+        XCTAssertFalse(app.buttons[game+".session.pause"].exists)
+        XCTAssertFalse(node(game + ".session.result", app: app).exists)
+        let savedDetailBeforeRequest = current.label
+        tapContinueDelete(game, current: current, app: app)
+        XCTAssertTrue(app.buttons[game + ".delete.confirm"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons[game + ".delete.confirm"].isEnabled)
+        XCTAssertTrue(app.buttons[game + ".delete.cancel"].isEnabled)
+        tap(game + ".delete.cancel", app: app)
+        waitUI("Cancel must dismiss the actual deletion confirmation.") { !app.buttons[game + ".delete.confirm"].exists }
+        XCTAssertTrue(current.exists, "Cancelling deletion must preserve the saved round.")
+        XCTAssertEqual(current.label,savedDetailBeforeRequest,"Requesting deletion must not change the saved progress.")
+        app.terminate(); app.launch()
+        openMenu(game,app:app)
+        XCTAssertTrue(current.waitForExistence(timeout:10),"Cancellation must preserve actual on-disk progress after a fresh process.")
+        XCTAssertEqual(current.label,savedDetailBeforeRequest)
+        tapContinueDelete(game, current: current, app: app)
+        let confirm = app.buttons[game + ".delete.confirm"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10)); confirm.doubleTap()
+        waitUI("Confirmed deletion must remove only this Continue row.") { !current.exists }
+        screenshot(app, name: "v022-" + game + "-continue-deleted")
+
+        // Finishing, reviewing, reopening, double-Done, and deleting the board
+        // must all leave exactly one actual completion record.
+        tap(game + ".menu.settings", app: app)
+        tap("gameSettings.history", app: app)
+        let records = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'history.record.'"))
+        XCTAssertTrue(records.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertEqual(records.count, 1)
+        screenshot(app, name: "v022-" + game + "-single-retained-history-record")
+        back(app); tap("gameSettings.done", app: app)
+        goHome(app)
+        let otherGame = game == "sliding" ? "minesweeper" : "sliding"
+        openMenu(otherGame, app: app)
+        let otherSave = app.buttons[continueID(otherGame)]
+        XCTAssertTrue(otherSave.waitForExistence(timeout: 10), "Deleting one namespace must preserve the other released saves.")
+        XCTAssertTrue(otherSave.label.contains(otherGame == "sliding" ? "35" : "1 flags / 10 mines"))
+        if game == "sudoku" {
+            goHome(app); openMenu("sudoku", app: app)
+            tap("sudoku.difficulty.medium", app: app)
+            let sentinel = app.buttons["sudoku.medium.0001"]
+            XCTAssertTrue(sentinel.waitForExistence(timeout: 10))
+            XCTAssertTrue(sentinel.label.contains("In progress"), "Deleting the current Sudoku puzzle must retain other puzzle boards.")
+            sentinel.tap()
+            XCTAssertTrue(app.buttons["sudoku.session.resume"].waitForExistence(timeout: 10))
+        }
+        }
     func testMazeCommonSessionLifecycleAndContinueDeletion() throws { try exerciseSharedSession("maze") }
 
     func testPlayHistorySearchDismissesKeyboardWithoutSwallowingActions() throws {

@@ -641,8 +641,15 @@ final class ChaiClassicsV020UITests: XCTestCase {
         XCTAssertEqual(app.staticTexts["twentyfour.stage"].label, "3 · Choose your second number")
         tap("twentyfour.card.0", app: app)
         XCTAssertEqual(app.buttons["twentyfour.card.0"].value as? String, "Second number")
-        let timer = app.staticTexts["twentyfour.timer"], beforeTick = app.staticTexts["twentyfour.timer"].label
-        expectUI("A real timer tick must not clear the pending input.", timeout: 10) { timer.label != beforeTick }
+        let timer = app.descendants(matching: .any).matching(identifier: "twentyfour.timer").firstMatch
+        XCTAssertTrue(timer.waitForExistence(timeout: 10))
+        guard let beforeTick = timer.value as? String else {
+            XCTFail("The live shared timer must expose its displayed duration."); return
+        }
+        expectUI("A real timer tick must not clear the pending input.", timeout: 10) {
+            guard timer.exists, let current = timer.value as? String else { return false }
+            return current != beforeTick
+        }
         XCTAssertTrue(app.buttons["twentyfour.operator.add"].isSelected)
         XCTAssertEqual(app.buttons["twentyfour.card.1"].value as? String, "First number")
         XCTAssertEqual(app.buttons["twentyfour.card.0"].value as? String, "Second number")

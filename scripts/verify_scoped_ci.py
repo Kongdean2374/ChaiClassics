@@ -178,9 +178,9 @@ SESSION_BODY_PROFILES = {
     'ChaiClassicsVisualSmokeTests/testMazeCommonSessionLifecycleAndContinueDeletion': (
         '5ab88548f2be8c0a9067d5724be3dd8858bfc3e9b1a12f9c01cc37df4d925dd3', ('maze', 'sliding')),
     'ChaiClassicsVisualSmokeTests/testMemoryCommonSessionLifecycleAndContinueDeletion': (
-        '4668996e5d0155662f28deac7ea6b8ddb69da149f4a5b4a913fa3380bb6637ab', ('memory', 'sliding')),
+        'f3b6e7a1bd48cfcff6bd70a5d70077e388d531f28f27e9a5890e99d74f9a2746', ('memory', 'sliding')),
     'ChaiClassicsVisualSmokeTests/testMinesweeperCommonSessionLifecycleAndContinueDeletion': (
-        '2e34e2eec5daa7d288a7531b68195f58015fdf8d0dbfba13854debadb523f41c', ('mines', 'sliding')),
+        '8e96921261e240240f51fcc3a63e83d592a67d86dda99d1a143666f3a08af2a4', ('mines', 'sliding')),
     'ChaiClassicsVisualSmokeTests/testPlayHistorySearchDismissesKeyboardWithoutSwallowingActions': (
         'bc50d5283f2dd005f2bf60e7b8bdd6bc2469e5e20e5232fc78bf23c68403adf6', ('sliding',)),
     'ChaiClassicsVisualSmokeTests/testReducedMotionSuppressesCelebrationButStillCompletesGame': (
