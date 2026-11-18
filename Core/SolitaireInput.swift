@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
 
 public enum SolitaireDragSource: Equatable, Sendable {
     case pile(CardPlace, index: Int)
@@ -33,7 +36,7 @@ public struct SolitaireTableLayout {
     public init(board: SolitaireBoard) {
         let cardSize = Self.cardSize
         func topFrame(_ index: Int) -> CGRect {
-            CGRect(origin: CGPoint(x: 4 + index * 64, y: 6), size: cardSize)
+            CGRect(origin: CGPoint(x: CGFloat(4 + index * 64), y: 6), size: cardSize)
         }
         stock = topFrame(0)
         let places: [(CardPlace, Int)]
@@ -99,18 +102,22 @@ public struct SolitaireTableLayout {
             var row = 0
             while (row + 1) * (row + 2) / 2 <= index { row += 1 }
             let column = index - row * (row + 1) / 2
-            return CGPoint(x: (6 - row) * 29 + column * 58 + 8, y: 116 + row * 44)
+            let x = (6 - row) * 29 + column * 58 + 8
+            let y = 116 + row * 44
+            return CGPoint(x: CGFloat(x), y: CGFloat(y))
         }
-        if index < 3 { return CGPoint(x: index * 174 + 64, y: 116) }
+        if index < 3 { return CGPoint(x: CGFloat(index * 174 + 64), y: 116) }
         if index < 9 {
             let offset = index - 3
-            return CGPoint(x: (offset / 2) * 174 + (offset % 2) * 58 + 35, y: 157)
+            let x = (offset / 2) * 174 + (offset % 2) * 58 + 35
+            return CGPoint(x: CGFloat(x), y: 157)
         }
         if index < 18 {
             let offset = index - 9
-            return CGPoint(x: (offset / 3) * 174 + (offset % 3) * 58 + 6, y: 198)
+            let x = (offset / 3) * 174 + (offset % 3) * 58 + 6
+            return CGPoint(x: CGFloat(x), y: 198)
         }
-        return CGPoint(x: (index - 18) * 58 + 6, y: 239)
+        return CGPoint(x: CGFloat((index - 18) * 58 + 6), y: 239)
     }
 }
 
