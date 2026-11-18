@@ -326,7 +326,7 @@
 "twentyfour.card.hint" = "Choose your first number, then an operator, then your second number. Tap the first number again to clear the input.";
 "twentyfour.card.label" = "Card %d, value %@, expression %@";
 "twentyfour.chooseTwo" = "Choose two cards in order";
-"twentyfour.controls" = "Choose a number, an operator, then another number. Press = Calculate. New results appear first, ready for your next calculation.";
+"twentyfour.controls" = "Choose a number, an operator, then another number. Use the result in your next calculation.";
 "twentyfour.difficulty" = "Difficulty";
 "twentyfour.difficulty.easy" = "A solution needs only +, − and ×, with nonnegative whole numbers at every step. 1,163 different puzzles.";
 "twentyfour.difficulty.hard" = "Every solution needs a fraction or negative intermediate value. 16 different puzzles; all appear before the cycle repeats.";
@@ -353,7 +353,7 @@
 "twentyfour.unselected" = "Not selected";
 "twentyfour.won" = "You made 24!";
 "twentyfour.won.detail" = "All four cards used exactly once. Ready for the next puzzle?";
-"twentyfour.zeroDivision" = "Cannot divide by zero. Swap the order or choose another operator.";
+"twentyfour.zeroDivision" = "Cannot divide by zero. Choose a different second number or operator.";
 
 "settings.graphics" = "Visual detail";
 
@@ -409,7 +409,7 @@
 
 "twentyfour.input.second" = "3 · Choose your second number";
 
-"twentyfour.input.ready" = "Ready? Press = Calculate";
+"twentyfour.input.ready" = "Check your calculation";
 
 "twentyfour.input.firstLabel" = "1 · First";
 

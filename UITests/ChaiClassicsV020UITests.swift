@@ -627,81 +627,52 @@ final class ChaiClassicsV020UITests: XCTestCase {
         let app = launch("v021-twentyfour", fixture: "twentyfour-fresh")
         open("twentyfour", app: app); continueGame("twentyfour", app: app)
         let originalCards = (0..<4).map { app.buttons["twentyfour.card.\($0)"].label }
-        for operation in ["add", "subtract", "multiply", "divide"] {
-            XCTAssertFalse(app.buttons["twentyfour.operator." + operation].isEnabled)
-            XCTAssertFalse(app.buttons["twentyfour.operator." + operation].isSelected)
-        }
-        XCTAssertFalse(app.buttons["twentyfour.apply"].isEnabled)
+        XCTAssertFalse(app.buttons["twentyfour.apply"].exists)
         tap("twentyfour.card.0", app: app)
-        XCTAssertEqual(app.staticTexts["twentyfour.stage"].label, "2 · Choose an operator")
         tap("twentyfour.card.1", app: app)
         XCTAssertEqual(app.buttons["twentyfour.card.1"].value as? String, "First number")
-        XCTAssertEqual(app.buttons["twentyfour.card.0"].value as? String, "Not selected")
         tap("twentyfour.operator.add", app: app)
         XCTAssertEqual(app.staticTexts["twentyfour.stage"].label, "3 · Choose your second number")
-        tap("twentyfour.card.0", app: app)
-        XCTAssertEqual(app.buttons["twentyfour.card.0"].value as? String, "Second number")
         let timer = app.descendants(matching: .any).matching(identifier: "twentyfour.timer").firstMatch
-        XCTAssertTrue(timer.waitForExistence(timeout: 10))
         guard let beforeTick = timer.value as? String else {
-            XCTFail("The live shared timer must expose its displayed duration."); return
+            XCTFail("The live timer must expose its duration."); return
         }
-        expectUI("A real timer tick must not clear the pending input.", timeout: 10) {
-            guard timer.exists, let current = timer.value as? String else { return false }
-            return current != beforeTick
+        expectUI("The timer keeps the pending expression.", timeout: 10) {
+            (timer.value as? String).map { $0 != beforeTick } == true
         }
         XCTAssertTrue(app.buttons["twentyfour.operator.add"].isSelected)
-        XCTAssertEqual(app.buttons["twentyfour.card.1"].value as? String, "First number")
-        XCTAssertEqual(app.buttons["twentyfour.card.0"].value as? String, "Second number")
-        tap("twentyfour.apply", app: app)
+
+        let second = app.buttons["twentyfour.card.0"]
+        let undo = app.buttons["twentyfour.undo"]
+        XCTAssertTrue(app.frame.contains(second.frame))
+        XCTAssertTrue(app.frame.contains(undo.frame))
+        XCTAssertTrue(second.isHittable)
+        second.tap()
         let result = app.buttons["twentyfour.card.4"]
-        XCTAssertTrue(result.waitForExistence(timeout: 5)); show(result, app: app)
-        XCTAssertEqual(result.frame.minY, app.buttons["twentyfour.card.2"].frame.minY, accuracy: 2)
+        XCTAssertTrue(result.waitForExistence(timeout: 5))
         XCTAssertLessThan(result.frame.minX, app.buttons["twentyfour.card.2"].frame.minX)
-        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'twentyfour.card.'")).count, 3)
-        // Assert the real readable calculation. SwiftUI propagates the history
-        // container's identifier to its noninteractive combined text rows.
-        let history0 = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "2 + 1 = 3")).firstMatch
-        show(history0, app: app, requireHittable: false)
-        XCTAssertTrue(history0.label.contains("2 + 1 = 3"))
-        let firstHistory = XCTAttachment(string: app.debugDescription)
-        firstHistory.name = "v021-twentyfour-readable-first-calculation"
-        firstHistory.lifetime = .keepAlways; add(firstHistory)
-        capture(app, "v021-twentyfour-first-calculation")
-        tap("twentyfour.card.4", app: app); tap("twentyfour.operator.divide", app: app)
-        tap("twentyfour.card.3", app: app); tap("twentyfour.apply", app: app)
-        XCTAssertTrue(app.buttons["twentyfour.card.5"].waitForExistence(timeout: 5))
-        let history1 = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "3 ÷ 4 = 3/4")).firstMatch
-        show(history1, app: app, requireHittable: false)
-        XCTAssertTrue(history1.label.contains("3 ÷ 4 = 3/4"))
+        let first = app.staticTexts["twentyfour.history.step.0"]
+        XCTAssertEqual(first.label, "2 + 1 = 3")
+        XCTAssertTrue(app.frame.contains(first.frame))
+
+        tap("twentyfour.card.4", app: app)
+        tap("twentyfour.operator.divide", app: app)
+        tap("twentyfour.card.3", app: app)
+        let secondStep = app.staticTexts["twentyfour.history.step.1"]
+        XCTAssertEqual(secondStep.label, "3 ÷ 4 = 3/4")
         tap("twentyfour.undo", app: app)
-        expectUI("Undo must remove the last real calculation and restore its operands.") {
-            !history1.exists && app.buttons["twentyfour.card.4"].exists && app.buttons["twentyfour.card.3"].exists
+        expectUI("Undo restores the operands.") {
+            !secondStep.exists && app.buttons["twentyfour.card.4"].exists && app.buttons["twentyfour.card.3"].exists
         }
-        tap("twentyfour.card.4", app: app); tap("twentyfour.clear", app: app)
-        XCTAssertEqual(app.staticTexts["twentyfour.stage"].label, "1 · Choose your first number")
-        let undo = app.buttons.matching(identifier: "twentyfour.undo").firstMatch
-        show(undo, app: app)
-        XCTAssertTrue(undo.isEnabled && undo.isHittable)
-        undo.tap()
-        let emptyHistory = app.staticTexts.matching(NSPredicate(format: "label == %@", "Each calculation will appear here. Undo removes the last step.")).firstMatch
-        show(emptyHistory, app: app, requireHittable: false)
-        XCTAssertTrue(emptyHistory.exists)
-        XCTAssertFalse(history0.exists); XCTAssertFalse(history1.exists)
-        let resetHistory = XCTAttachment(string: app.debugDescription)
-        resetHistory.name = "v022-twentyfour-undo-visible-empty-calculation-history"
-        resetHistory.lifetime = .keepAlways; add(resetHistory)
-        capture(app, "v022-twentyfour-undo-empty-history")
-        for _ in 0..<6 {
-            if app.buttons["twentyfour.card.0"].exists { break }
-            app.swipeDown()
-        }
-        show(app.buttons["twentyfour.card.0"], app: app)
-        expectUI("Undoing every real calculation must restore the original four cards and clear history.") {
-            !history0.exists && app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'twentyfour.card.'")).count == 4
+        tap("twentyfour.card.4", app: app)
+        tap("twentyfour.undo", app: app)
+        XCTAssertTrue(first.exists, "Backing out of input leaves saved moves intact.")
+        tap("twentyfour.undo", app: app)
+        expectUI("The last undo restores the four original cards.") {
+            !first.exists && app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'twentyfour.card.'")).count == 4
         }
         XCTAssertEqual((0..<4).map { app.buttons["twentyfour.card.\($0)"].label }, originalCards)
-        capture(app, "v021-twentyfour-ordered-input-and-history")
+        capture(app, "twentyfour-compact-undo")
         app.terminate()
 
         let zero = launch("v021-twentyfour", fixture: "twentyfour-zero")
@@ -709,14 +680,13 @@ final class ChaiClassicsV020UITests: XCTestCase {
         tap("twentyfour.card.3", app: zero); tap("twentyfour.operator.divide", app: zero)
         tap("twentyfour.card.5", app: zero)
         let explanation = zero.staticTexts["twentyfour.zeroDivision"]
-        show(explanation, app: zero, requireHittable: false)
+        XCTAssertTrue(explanation.exists)
         XCTAssertTrue(explanation.label.contains("Cannot divide by zero"))
-        XCTAssertFalse(zero.buttons["twentyfour.apply"].isEnabled)
         XCTAssertEqual(zero.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'twentyfour.card.'")).count, 2)
-        tap("twentyfour.swap", app: zero)
-        XCTAssertTrue(zero.buttons["twentyfour.apply"].isEnabled)
+        tap("twentyfour.operator.add", app: zero)
         XCTAssertFalse(explanation.exists)
-        capture(zero, "v021-twentyfour-zero-division-order")
+        XCTAssertTrue(zero.buttons["twentyfour.card.5"].exists)
+        capture(zero, "twentyfour-zero-division-recovery")
     }
 
     func testTwentyFourRestoresExactCardsCompletesAndStartsNextPuzzle() {
@@ -729,7 +699,7 @@ final class ChaiClassicsV020UITests: XCTestCase {
         restore("twentyfour", app: app)
         XCTAssertEqual(labels, [3, 5].map { app.buttons["twentyfour.card.\($0)"].label })
         tap("twentyfour.card.3", app: app); tap("twentyfour.operator.multiply", app: app)
-        tap("twentyfour.card.5", app: app); tap("twentyfour.apply", app: app)
+        tap("twentyfour.card.5", app: app)
         finishReviewAndReturnToMenu("twentyfour", moves: 3, app: app, screenshot: "v020-twentyfour-win")
         XCTAssertTrue(app.buttons["twentyfour.continue"].label.contains("3 operations · 1 solved"))
         startNew("twentyfour", app: app)
@@ -797,7 +767,7 @@ final class ChaiClassicsV020UITests: XCTestCase {
                 XCTAssertTrue(app.staticTexts["memory.pairs"].label.contains("0/18"))
             } else if game == "twentyfour" {
                 XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'twentyfour.card.'")).count, 4)
-                XCTAssertFalse(app.buttons["twentyfour.apply"].isEnabled)
+                XCTAssertFalse(app.buttons["twentyfour.apply"].exists)
             } else {
                 XCTAssertTrue(app.staticTexts["maze.position"].label.contains("21×21"))
                 XCTAssertTrue(app.staticTexts["maze.moves"].label.contains("0"))

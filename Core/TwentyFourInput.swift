@@ -35,14 +35,25 @@ public struct TwentyFourInput: Equatable, Sendable {
         return true
     }
     public mutating func clear() { firstID = nil; operation = nil; secondID = nil }
+    @discardableResult public mutating func stepBack() -> Bool {
+        if secondID != nil { secondID = nil }
+        else if operation != nil { operation = nil }
+        else if firstID != nil { firstID = nil }
+        else { return false }
+        return true
+    }
     public mutating func reconcile(with board: TwentyFourBoard) {
         guard board.isValidSave, !board.isEnded,
               firstID.map({ id in board.cards.contains { $0.id == id } }) ?? true else { clear(); return }
         if let secondID, !board.cards.contains(where: { $0.id == secondID }) { self.secondID = nil }
     }
     public func canApply(to board: TwentyFourBoard) -> Bool {
-        guard let firstID, let operation, let secondID else { return false }
-        return board.canCombine(firstID: firstID, secondID: secondID, operation: operation)
+        resolvedMove(in: board) != nil
+    }
+    public func resolvedMove(in board: TwentyFourBoard) -> TwentyFourMove? {
+        guard let firstID, let operation, let secondID,
+              board.canCombine(firstID: firstID, secondID: secondID, operation: operation) else { return nil }
+        return TwentyFourMove(firstID: firstID, secondID: secondID, operation: operation)
     }
     public func result(in board: TwentyFourBoard) -> Rational? {
         guard canApply(to: board), let first = board.cards.first(where: { $0.id == firstID }),

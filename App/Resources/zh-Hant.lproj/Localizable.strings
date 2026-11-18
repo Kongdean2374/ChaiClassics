@@ -326,7 +326,7 @@
 "twentyfour.card.hint" = "先選第一個數字，再選運算符號，最後選第二個數字。再點第一個數字可清除輸入。";
 "twentyfour.card.label" = "第 %d 張牌，數值 %@，算式 %@";
 "twentyfour.chooseTwo" = "依序選取兩張牌";
-"twentyfour.controls" = "依序選數字、運算符號、另一個數字，再按＝計算。結果會排在最前方，可接著用來運算。";
+"twentyfour.controls" = "依序點選數字、運算符號、另一個數字，結果可直接用在下一步。";
 "twentyfour.difficulty" = "難度";
 "twentyfour.difficulty.easy" = "至少有一解只需＋、－、×，且每一步都是非負整數，共 1,163 種題目。";
 "twentyfour.difficulty.hard" = "所有解法都需要分數或負數的中間值，共 16 種題目；全數出現後才會重複。";
@@ -353,7 +353,7 @@
 "twentyfour.unselected" = "尚未選取";
 "twentyfour.won" = "成功算出 24！";
 "twentyfour.won.detail" = "四張牌都恰好使用一次。準備好挑戰下一題了嗎？";
-"twentyfour.zeroDivision" = "不能除以零。請交換順序或選擇其他運算符號。";
+"twentyfour.zeroDivision" = "不能除以零。請改選第二個數字或其他運算符號。";
 
 "settings.graphics" = "圖形強度";
 
@@ -409,7 +409,7 @@
 
 "twentyfour.input.second" = "3・選擇第二個數字";
 
-"twentyfour.input.ready" = "準備好了嗎？按＝計算";
+"twentyfour.input.ready" = "請確認算式";
 
 "twentyfour.input.firstLabel" = "1・第一個數";
 

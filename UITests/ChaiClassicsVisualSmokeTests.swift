@@ -763,7 +763,7 @@ final class ChaiClassicsVisualSmokeTests: XCTestCase {
         case "connectfour": tap("connectfour.column.3", app: app)
         case "twentyfour":
             tap("twentyfour.card.3", app: app); tap("twentyfour.operator.multiply", app: app)
-            tap("twentyfour.card.5", app: app); tap("twentyfour.apply", app: app)
+            tap("twentyfour.card.5", app: app)
         case "memory":
             let cards = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'memory.card.'"))
             XCTAssertEqual(cards.count, 16)

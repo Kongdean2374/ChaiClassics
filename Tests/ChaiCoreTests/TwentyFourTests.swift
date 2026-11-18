@@ -2,6 +2,27 @@ import XCTest
 @testable import ChaiCore
 
 final class TwentyFourTests: XCTestCase {
+    func testThirdChoiceResolvesOneMoveAndBackCanUndoInputOrCalculation() throws {
+        var board = try TwentyFourBoard(numbers: [1, 2, 3, 4], seed: 24)
+        let original = board.cards
+        var input = TwentyFourInput()
+        XCTAssertTrue(input.selectCard(1, in: board))
+        XCTAssertTrue(input.selectOperator(.add))
+        XCTAssertNil(input.resolvedMove(in: board))
+        XCTAssertTrue(input.stepBack())
+        XCTAssertEqual(input.stage, .operation)
+        XCTAssertEqual(board.cards, original)
+
+        XCTAssertTrue(input.selectOperator(.add))
+        XCTAssertTrue(input.selectCard(0, in: board))
+        let move = try XCTUnwrap(input.resolvedMove(in: board))
+        XCTAssertTrue(board.combine(firstID: move.firstID, secondID: move.secondID, operation: move.operation))
+        XCTAssertNil(input.resolvedMove(in: board))
+        XCTAssertEqual(board.displayCards.first?.value, Rational(3))
+        XCTAssertEqual(board.moves, 1)
+        XCTAssertTrue(board.undo())
+        XCTAssertEqual(board.cards, original)
+    }
     func testNaturalInputHasNoDefaultOperatorAndRequiresOrderedChoices() throws {
         let board = try TwentyFourBoard(numbers: [1, 2, 3, 4], seed: 24)
         var input = TwentyFourInput()
@@ -66,6 +87,7 @@ final class TwentyFourTests: XCTestCase {
         input.selectCard(4, in: board)
         XCTAssertEqual(input.stage, .ready)
         XCTAssertFalse(input.canApply(to: board))
+        XCTAssertNil(input.resolvedMove(in: board))
         XCTAssertNil(input.result(in: board))
         XCTAssertEqual(input.secondID, 4)
         XCTAssertTrue(input.swap())
