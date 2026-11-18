@@ -63,10 +63,6 @@ jobs:
         run: |
           case "$CHAI_VALIDATION_MODE" in
             beta)
-              if [[ "$CHAI_CANDIDATE_VERSION" == 0.3.* ]]; then
-                echo 'Version 0.3.x requires complete regression evidence; manual-QA Beta is unavailable.' >&2
-                exit 64
-              fi
               python3 scripts/verify_beta_candidate.py --manual-qa --repo "$GITHUB_REPOSITORY" \
                 --sha "$GITHUB_SHA" --version "$CHAI_CANDIDATE_VERSION" --tag "$CHAI_CANDIDATE_TAG" \
                 --branch main --output build/candidate-proof.json

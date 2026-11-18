@@ -154,6 +154,37 @@ class BetaCandidateTests(unittest.TestCase):
             beta.verify(self.repo, self.sha, self.version, self.tag, manual_qa=True,
                         read=self.read, tree_reader=lambda sha: self.tree)
 
+    def test_current_030_manual_beta_preserves_all_71_tests_and_26_session_journeys(self):
+        self.tree = {path: ('100644', (candidate.ROOT / path).read_bytes()) for path in beta.SOURCE_FILES}
+        self.tree.update({path: ('100644', (candidate.ROOT / path).read_bytes())
+                          for path in beta.scopes.EXPANDED_RUNTIME_FILES})
+        self.tree.update({str(path.relative_to(candidate.ROOT)): ('100644', path.read_bytes())
+                          for path in (candidate.ROOT / 'UITests').glob('*.swift')})
+        tag = 'v0.3.0-rc.1'
+        self.responses[f'repos/{self.repo}/git/ref/tags/{tag}'] = {
+            'ref': 'refs/tags/' + tag, 'object': {'type': 'commit', 'sha': self.sha}}
+        def identity_only(path, **kwargs):
+            self.assertNotIn('/actions/', path)
+            return self.read(path, **kwargs)
+        proof = beta.verify(self.repo, self.sha, '0.3.0', tag, manual_qa=True,
+                            read=identity_only, tree_reader=lambda sha: self.tree)
+        self.assertEqual(proof['declared_ui_test_count'], 71)
+        self.assertEqual(len(proof['required_session_journeys']), 26)
+        self.assertEqual(proof['status'], 'manual_beta_ready')
+        self.assertEqual(proof['executed_ui_tests'], [])
+        self.assertFalse(proof['full_regression_complete'])
+        self.assertFalse(proof['app_store_release_eligible'])
+        path = 'UITests/ChaiClassicsV030UITests.swift'
+        original = self.tree.pop(path)
+        with self.assertRaises(candidate.CandidateError):
+            beta.verify(self.repo, self.sha, '0.3.0', tag, manual_qa=True,
+                        read=identity_only, tree_reader=lambda sha: self.tree)
+        self.tree[path] = original
+        self.responses[f'repos/{self.repo}/git/ref/heads/main']['object']['sha'] = 'b' * 40
+        with self.assertRaises(candidate.CandidateError):
+            beta.verify(self.repo, self.sha, '0.3.0', tag, manual_qa=True,
+                        read=identity_only, tree_reader=lambda sha: self.tree)
+
     def test_manual_cli_accepts_no_ci_run_and_reports_pending_instead_of_passed_tests(self):
         proof = {'status': 'manual_beta_ready', 'beta_eligible': True, 'full_regression_complete': False}
         console = io.StringIO(); output = self.cache / 'manual-proof.json'

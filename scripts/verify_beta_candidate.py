@@ -61,8 +61,9 @@ def validate_source(tree, version):
                 and isinstance(item[1], bytes) for item in tree.values()), 'Beta source symlinks/submodules are not trusted.')
     tests = sorted(scoped.fingerprints(tree))
     sessions = scopes.required_session_tests_for_paths(tree)
-    require(len(tests) == 50 and len(sessions) == 9 and sessions.issubset(tests),
-            'Beta policy preserves all 50 declared UI tests and all nine session/history journeys.')
+    expected_tests, expected_sessions = (71, 26) if version.startswith('0.3.') else (50, 9)
+    require(len(tests) == expected_tests and len(sessions) == expected_sessions and sessions.issubset(tests),
+            'Beta policy preserves the version-specific complete UI and session/history inventory.')
     require(set(BETA_TESTS).issubset(tests), 'A mandatory Beta journey is no longer declared.')
     try:
         project = tree['ChaiClassics.xcodeproj/project.pbxproj'][1].decode('utf-8')
@@ -154,8 +155,8 @@ def original_results(repo, sha, run_id, source_branch, read):
 def validate_candidate_source(repo, sha, version, tag, *, branch, read, root, tree_reader):
     require(repo == REPOSITORY and branch == 'main', 'TestFlight Beta verification only authorizes this repository main branch.')
     require(isinstance(sha, str) and re.fullmatch(r'[0-9a-f]{40}', sha) is not None
-            and isinstance(version, str) and re.fullmatch(r'0\.2\.\d+', version) is not None,
-            'A full SHA and explicit numeric 0.2.x Beta version are required.')
+            and isinstance(version, str) and re.fullmatch(r'0\.(?:2|3)\.\d+', version) is not None,
+            'A full SHA and explicit numeric 0.2.x or 0.3.x Beta version are required.')
     require(isinstance(tag, str) and re.fullmatch(re.escape('v' + version) + r'-rc\.[1-9]\d*', tag) is not None,
             'An explicit version-matched vVERSION-rc.N tag is required.')
     head = read(f'repos/{repo}/git/ref/heads/main')

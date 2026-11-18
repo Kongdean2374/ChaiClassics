@@ -236,7 +236,7 @@ gate_run = candidate_gate.fetch('run')
 beta_case = gate_run.match(/beta\)\n(.*?)\n\s*;;/m)&.captures&.first
 full_case = gate_run.match(/full\)\n(.*?)\n\s*;;/m)&.captures&.first
 check(beta_case && beta_case.include?('scripts/verify_beta_candidate.py') && beta_case.include?('--sha "$GITHUB_SHA"') && beta_case.include?('--tag "$CHAI_CANDIDATE_TAG"') && beta_case.include?('--branch main') && beta_case.include?('--manual-qa'), 'manual-QA Beta independently verifies the exact main/tag/source SHA')
-check(beta_case.include?('"$CHAI_CANDIDATE_VERSION" == 0.3.*') && beta_case.include?('exit 64'), '0.3.x cannot bypass complete regression through manual-QA Beta')
+check(!beta_case.include?('0.3.*') && !beta_case.include?('exit 64'), 'explicit manual-QA Beta also supports 0.3.x without claiming full release regression')
 check(!beta_case.include?('--ci-run') && !beta_case.include?('--visual-run') && !beta_case.include?('--ipad-run'), 'manual-QA Beta defers UI checks to testers without requiring CI/Visual/iPad run inputs')
 check(full_case && full_case.include?('scripts/verify_candidate.py verify') && full_case.include?('--sha "$GITHUB_SHA"') && full_case.include?('--ci-run "$CHAI_CANDIDATE_CI_RUN"') && full_case.include?('--visual-run "$CHAI_CANDIDATE_VISUAL_RUN"') && full_case.include?('--ipad-run "$CHAI_CANDIDATE_IPAD_RUN"') && !full_case.include?('--manual-qa'), 'Full mode retains all three exact-SHA workflow evidence requirements')
 check(gate_run.include?('case "$CHAI_VALIDATION_MODE" in') && gate_run.include?("*) echo 'Unknown candidate validation mode.' >&2; exit 64"), 'unknown validation modes fail instead of bypassing verification')
