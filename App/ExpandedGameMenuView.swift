@@ -133,7 +133,10 @@ struct ExpandedGamePlayView: View {
             else if SolitaireVariant(rawValue:game.rawValue) != nil { ExpandedSolitaireView(game:game) }
             else if [.snake,.fallingBlocks,.brickBreaker].contains(game) { ExpandedArcadeView(game:game) }
             else { ExpandedPuzzleView(game:game) }
-        }.background(GameCanvas()).tint(GamePalette.tint(game))
+        }.background {
+            if SolitaireVariant(rawValue: game.rawValue) != nil { SolitaireFelt() }
+            else { GameCanvas() }
+        }.tint(GamePalette.tint(game))
             .gameSessionScreen(game,resultReady:true)
     }
 }

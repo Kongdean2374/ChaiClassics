@@ -13,6 +13,52 @@ final class V030InteractionTests: XCTestCase {
         return try v030Fixture(SolitaireBoard(variant:variant,seed:1),[
             "columns":columns.map(cards),"stock":cards(stock),"faceUp":columns.flatMap{$0}])
     }
+
+    func testSolitaireLiftsOnlyTheTopCardWhenFingerStartsOnItsVisibleFace() throws {
+        var board = try arranged(.klondike, columns: [[2, 14, 0], [16]])
+        let table = SolitaireTableLayout(board: board)
+        let top = table.columns[0][2]
+        let picked = try XCTUnwrap(table.source(at: CGPoint(x: top.midX, y: top.minY + 3), in: board))
+        let single = try XCTUnwrap(SolitaireDragIntent(board: board, source: picked.0))
+        XCTAssertEqual(single.cards.map(\.id), [0])
+        XCTAssertEqual(picked.1, top)
+
+        let first = table.columns[0][0]
+        let earlier = try XCTUnwrap(table.source(at: CGPoint(x: first.midX, y: first.minY + 3), in: board))
+        XCTAssertEqual(SolitaireDragIntent(board: board, source: earlier.0)?.cards.map(\.id), [2, 14, 0])
+
+        let wrongDrop = table.columns[1][0]
+        let target = try XCTUnwrap(table.target(at: CGPoint(x: wrongDrop.midX, y: wrongDrop.midY), in: board))
+        let before = board
+        XCTAssertFalse(single.apply(on: target, to: &board))
+        XCTAssertEqual(board, before)
+
+        let foundation = try XCTUnwrap(table.slots.last)
+        let rightmost = try XCTUnwrap(table.target(at: CGPoint(x: foundation.frame.midX, y: foundation.frame.midY), in: board))
+        XCTAssertEqual(rightmost, .pile(.foundation(3)))
+        XCTAssertTrue(single.apply(on: rightmost, to: &board))
+        XCTAssertEqual(board.foundations[3].map(\.id), [0])
+        XCTAssertEqual(board.columns[0].map(\.id), [2, 14])
+    }
+
+    func testSolitaireDoubleTapOnlyCollectsOneCardWhenFoundationAllowsIt() throws {
+        for variant in [SolitaireVariant.klondike, .freecell] {
+            var board = try arranged(variant, columns: [[0], [1], [15]])
+            let ace = try XCTUnwrap(SolitaireDragIntent(board: board, source: .pile(.column(0), index: 0)))
+            let earlyTwo = try XCTUnwrap(SolitaireDragIntent(board: board, source: .pile(.column(1), index: 0)))
+            XCTAssertNil(earlyTwo.foundationTarget(in: board))
+            let target = try XCTUnwrap(ace.foundationTarget(in: board))
+            XCTAssertTrue(ace.apply(on: target, to: &board))
+            let two = try XCTUnwrap(SolitaireDragIntent(board: board, source: .pile(.column(1), index: 0)))
+            XCTAssertEqual(two.foundationTarget(in: board), target)
+            XCTAssertTrue(two.apply(on: target, to: &board))
+            XCTAssertEqual(board.foundations[0].map(\.id), [0, 1])
+            let wrongSuit = try XCTUnwrap(SolitaireDragIntent(board: board, source: .pile(.column(2), index: 0)))
+            XCTAssertNil(wrongSuit.foundationTarget(in: board))
+            let collected = try XCTUnwrap(SolitaireDragIntent(board: board, source: .pile(.foundation(0), index: 1)))
+            XCTAssertNil(collected.foundationTarget(in: board))
+        }
+    }
     func testCardDragMovesWholeSequenceOnceAndInvalidDropIsAtomic() throws {
         var board = try arranged(.klondike,columns:[[2,14,0],[16]])
         let before = board

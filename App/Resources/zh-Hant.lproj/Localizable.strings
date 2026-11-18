@@ -719,7 +719,8 @@
 "expanded.suit.1" = "紅心";
 "expanded.suit.2" = "梅花";
 "expanded.suit.3" = "方塊";
-"expanded.solitaire.help" = "長按拖曳一張牌或連續牌組到目標牌堆，也可先點選再點目標。放開在無效位置不會搬牌；長牌堆可縮放。";
+"expanded.solitaire.help" = "直接拉動牌面，也可點一張牌再點目標。雙指可縮放牌桌。";
+"expanded.solitaire.foundationGesture" = "直接拉動牌面。雙擊可將符合規則的單張牌送到右上收牌區。";
 "expanded.solitaire.foundationHelp" = "收牌區從 A 開始，依相同花色由小到大收牌，每次移動一張。";
 "expanded.solitaire.cellHelp" = "每個暫存格只能放一張牌，請選擇空格。";
 "expanded.solitaire.kingHelp" = "空牌列只能放 K，或以 K 開頭的紅黑交錯遞減牌組。";

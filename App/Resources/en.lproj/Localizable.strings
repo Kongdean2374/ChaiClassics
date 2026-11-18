@@ -719,7 +719,8 @@
 "expanded.suit.1" = "hearts";
 "expanded.suit.2" = "clubs";
 "expanded.suit.3" = "diamonds";
-"expanded.solitaire.help" = "Touch and hold to drag a card or sequence onto a pile, or tap a card then its destination. Invalid drops leave the cards in place. Pinch to inspect long columns.";
+"expanded.solitaire.help" = "Drag a card directly, or tap a card and its destination. Pinch to zoom the table.";
+"expanded.solitaire.foundationGesture" = "Drag a card directly. Double-tap a single card to send it to a foundation when the move is legal.";
 "expanded.solitaire.foundationHelp" = "Start a foundation with an ace, then build up in the same suit, one card at a time.";
 "expanded.solitaire.cellHelp" = "Each free cell holds one card. Choose an empty cell.";
 "expanded.solitaire.kingHelp" = "An empty column accepts a king, or a descending alternating-color sequence starting with a king.";
